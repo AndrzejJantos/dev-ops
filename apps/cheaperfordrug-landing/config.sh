@@ -9,7 +9,7 @@ export APP_NAME="cheaperfordrug-landing"
 export APP_DISPLAY_NAME="CheaperForDrug Landing Page"
 
 # Repository configuration
-export REPO_URL="https://github.com/AndrzejJantos/cheaperfordrug-landing.git"
+export REPO_URL="git@github.com:AndrzejJantos/cheaperfordrug-landing.git"
 export REPO_BRANCH="master"
 
 # Server paths
