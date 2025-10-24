@@ -96,7 +96,7 @@ check_database_exists() {
 create_database() {
     local db_name="$1"
     local db_user="${2:-postgres}"
-    local db_password="$3"
+    local db_password="${3:-}"
 
     log_info "Creating database: ${db_name}"
 
