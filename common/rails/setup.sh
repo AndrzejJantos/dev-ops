@@ -210,7 +210,15 @@ rails_setup_workflow() {
 
     # Build initial Docker image
     log_info "Building initial Docker image..."
-    docker build -t "${DOCKER_IMAGE_NAME}:latest" "$REPO_DIR"
+    docker build \
+        --build-arg MAILGUN_API_KEY=dummy_key_for_build \
+        --build-arg STRIPE_PUBLISHABLE_KEY=pk_test_dummy \
+        --build-arg STRIPE_SECRET_KEY=sk_test_dummy \
+        --build-arg GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX \
+        --build-arg GOOGLE_TAG_MANAGER_ID=GTM-XXXXXXX \
+        --build-arg FACEBOOK_PIXEL_ID=000000000000000 \
+        --build-arg ROLLBAR_ACCESS_TOKEN=dummy_token \
+        -t "${DOCKER_IMAGE_NAME}:latest" "$REPO_DIR"
 
     if [ $? -ne 0 ]; then
         log_error "Failed to build Docker image"
