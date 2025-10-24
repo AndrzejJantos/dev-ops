@@ -14,9 +14,45 @@ build_docker_image() {
 
     cd "$repo_path" || return 1
 
-    docker build -t "${app_name}:${image_tag}" .
+    # Create temporary .env file with dummy values for Docker build
+    # This prevents errors when Rails/Node loads environment during build
+    log_info "Creating temporary .env file for Docker build..."
+    cat > "${repo_path}/.env" << 'DOCKER_BUILD_ENV'
+# Temporary environment file for Docker build
+# These dummy values are used during asset precompilation
+# Real values will be provided at runtime via Docker run --env-file
 
-    if [ $? -eq 0 ]; then
+# Database (not used during build)
+DATABASE_URL=postgresql://dummy:dummy@localhost/dummy
+REDIS_URL=redis://localhost:6379/0
+
+# API Keys (dummy values for build)
+MAILGUN_API_KEY=dummy_key_for_build
+STRIPE_PUBLISHABLE_KEY=pk_test_dummy_for_build
+STRIPE_SECRET_KEY=sk_test_dummy_for_build
+GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX
+GOOGLE_TAG_MANAGER_ID=GTM-XXXXXXX
+FACEBOOK_PIXEL_ID=000000000000000
+ROLLBAR_ACCESS_TOKEN=dummy_token_for_build
+SECRET_KEY_BASE=dummy_secret_key_base_for_build_only
+
+# Rails environment
+RAILS_ENV=production
+RAILS_LOG_TO_STDOUT=true
+RAILS_SERVE_STATIC_FILES=true
+
+# Node.js environment
+NODE_ENV=production
+DOCKER_BUILD_ENV
+
+    docker build -t "${app_name}:${image_tag}" .
+    local build_result=$?
+
+    # Remove temporary .env file after build
+    rm -f "${repo_path}/.env"
+    log_info "Removed temporary build .env file"
+
+    if [ $build_result -eq 0 ]; then
         log_success "Docker image built successfully"
         return 0
     else

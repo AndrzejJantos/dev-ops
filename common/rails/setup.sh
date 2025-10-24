@@ -210,15 +210,40 @@ rails_setup_workflow() {
 
     # Build initial Docker image
     log_info "Building initial Docker image..."
-    docker build \
-        --build-arg MAILGUN_API_KEY=dummy_key_for_build \
-        --build-arg STRIPE_PUBLISHABLE_KEY=pk_test_dummy \
-        --build-arg STRIPE_SECRET_KEY=sk_test_dummy \
-        --build-arg GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX \
-        --build-arg GOOGLE_TAG_MANAGER_ID=GTM-XXXXXXX \
-        --build-arg FACEBOOK_PIXEL_ID=000000000000000 \
-        --build-arg ROLLBAR_ACCESS_TOKEN=dummy_token \
-        -t "${DOCKER_IMAGE_NAME}:latest" "$REPO_DIR"
+
+    # Create temporary .env file with dummy values for Docker build
+    # This prevents errors when Rails loads environment during asset precompilation
+    log_info "Creating temporary .env file for Docker build..."
+    cat > "${REPO_DIR}/.env" << 'DOCKER_BUILD_ENV'
+# Temporary environment file for Docker build
+# These dummy values are used during asset precompilation
+# Real values will be provided at runtime via Docker run --env-file
+
+# Database (not used during build)
+DATABASE_URL=postgresql://dummy:dummy@localhost/dummy
+REDIS_URL=redis://localhost:6379/0
+
+# API Keys (dummy values for build)
+MAILGUN_API_KEY=dummy_key_for_build
+STRIPE_PUBLISHABLE_KEY=pk_test_dummy_for_build
+STRIPE_SECRET_KEY=sk_test_dummy_for_build
+GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX
+GOOGLE_TAG_MANAGER_ID=GTM-XXXXXXX
+FACEBOOK_PIXEL_ID=000000000000000
+ROLLBAR_ACCESS_TOKEN=dummy_token_for_build
+SECRET_KEY_BASE=dummy_secret_key_base_for_build_only
+
+# Rails environment
+RAILS_ENV=production
+RAILS_LOG_TO_STDOUT=true
+RAILS_SERVE_STATIC_FILES=true
+DOCKER_BUILD_ENV
+
+    docker build -t "${DOCKER_IMAGE_NAME}:latest" "$REPO_DIR"
+
+    # Remove temporary .env file after build
+    rm -f "${REPO_DIR}/.env"
+    log_info "Removed temporary build .env file"
 
     if [ $? -ne 0 ]; then
         log_error "Failed to build Docker image"
