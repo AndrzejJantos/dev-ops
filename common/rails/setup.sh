@@ -50,7 +50,7 @@ rails_setup_database() {
     if [ -n "$DB_PASSWORD" ]; then
         DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost/${DB_NAME}"
     else
-        DATABASE_URL="postgresql://localhost/${DB_NAME}"
+        DATABASE_URL="postgresql://${DEPLOY_USER}@localhost/${DB_NAME}"
     fi
 
     log_success "Database configured: ${DB_NAME}"
@@ -88,9 +88,9 @@ RAILS_SERVE_STATIC_FILES=true
 REDIS_URL=${REDIS_URL}
 
 # Mailgun Configuration (for application emails)
-MAILGUN_API_KEY=${MAILGUN_API_KEY}
-MAILGUN_DOMAIN=${MAILGUN_DOMAIN}
-MAILGUN_FROM_EMAIL=${MAILGUN_FROM_EMAIL}
+MAILGUN_API_KEY=${MAILGUN_API_KEY:-dummy_mailgun_key}
+MAILGUN_DOMAIN=${MAILGUN_DOMAIN:-mg.example.com}
+MAILGUN_FROM_EMAIL=${MAILGUN_FROM_EMAIL:-noreply@example.com}
 MAIL_DELIVERY_METHOD=mailgun_api
 
 # Application Port
@@ -98,6 +98,7 @@ PORT=80
 WEB_CONCURRENCY=2
 RAILS_MAX_THREADS=5
 
+# App-specific environment variables
 EOF
 
     # Add app-specific environment variables if defined
@@ -131,9 +132,14 @@ rails_setup_native_environment() {
         gem install bundler
     fi
 
+    # Configure bundler to use vendor/bundle
+    log_info "Configuring bundler to use vendor/bundle..."
+    bundle config set --local path 'vendor/bundle'
+    bundle config set --local without 'development test'
+
     # Install application gems for production use
     log_info "Installing application gems (this may take a few minutes)..."
-    RAILS_ENV=production bundle install --path vendor/bundle --without development test
+    RAILS_ENV=production bundle install
 
     if [ $? -eq 0 ]; then
         log_success "Gems installed successfully"
@@ -225,6 +231,8 @@ REDIS_URL=redis://localhost:6379/0
 
 # API Keys (dummy values for build)
 MAILGUN_API_KEY=dummy_key_for_build
+MAILGUN_DOMAIN=dummy.example.com
+MAILGUN_FROM_EMAIL=noreply@dummy.example.com
 STRIPE_PUBLISHABLE_KEY=pk_test_dummy_for_build
 STRIPE_SECRET_KEY=sk_test_dummy_for_build
 GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX
@@ -232,6 +240,7 @@ GOOGLE_TAG_MANAGER_ID=GTM-XXXXXXX
 FACEBOOK_PIXEL_ID=000000000000000
 ROLLBAR_ACCESS_TOKEN=dummy_token_for_build
 SECRET_KEY_BASE=dummy_secret_key_base_for_build_only
+ADMIN_EMAIL=admin@dummy.example.com
 
 # Rails environment
 RAILS_ENV=production
