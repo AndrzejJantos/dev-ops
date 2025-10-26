@@ -25,14 +25,14 @@ export REPO_BRANCH="master"
 # ============================================================================
 # CONTAINER ARCHITECTURE
 # ============================================================================
-# API typically needs workers for background processing and scheduler for recurring tasks
-export DEFAULT_SCALE=3              # 3 web containers for API load
-export WORKER_COUNT=2               # 2 worker containers for background jobs
+# API needs workers for background processing and scheduler for recurring tasks
+export DEFAULT_SCALE=2              # 2 web containers for API
+export WORKER_COUNT=1               # 1 worker container for background jobs
 export SCHEDULER_ENABLED=true       # Enable Clockwork scheduler for recurring tasks
 
 # Architecture note:
-# - 3 web containers handle API requests with load balancing
-# - 2 workers process background jobs (emails, data processing, external API calls)
+# - 2 web containers handle API requests with load balancing
+# - 1 worker processes background jobs (emails, data processing, external API calls)
 # - 1 scheduler enqueues recurring tasks (cleanup, reports, notifications)
 
 # ============================================================================

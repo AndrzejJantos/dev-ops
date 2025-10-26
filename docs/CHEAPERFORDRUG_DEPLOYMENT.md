@@ -23,22 +23,24 @@ This guide covers deployment of the complete CheaperForDrug platform consisting 
 │  taniejpolek.pl  │  │  taniejpolek.pl  │
 │                  │  │                  │
 │  Rails 8.0       │  │  Next.js         │
-│  2 containers    │  │  2 containers    │
-│  Ports 3010-3011 │  │  Ports 3030-3031 │
+│  2 containers    │  │  3 containers    │
+│  Ports 3010-3011 │  │  Ports 3030-3032 │
 └──────────────────┘  └─────────┬────────┘
                                 │
                                 │ API Calls
                                 ▼
                       ┌──────────────────┐
                       │   API Backend    │
-                      │  cheaperfordrug  │
-                      │     .com         │
+                      │  api-public &    │
+                      │  api-internal    │
+                      │  .cheaperfor     │
+                      │  drug.com        │
                       │                  │
                       │  Rails API       │
-                      │  3 web containers│
-                      │  2 workers       │
+                      │  2 web containers│
+                      │  1 worker        │
                       │  1 scheduler     │
-                      │  Ports 3020-3022 │
+                      │  Ports 3020-3021 │
                       └─────────┬────────┘
                                 │
                        ┌────────┴─────────┐
@@ -117,7 +119,7 @@ cd ~/DevOps/apps/cheaperfordrug-landing
   - `api-public.cheaperfordrug.com` - Public API (no auth)
   - `api-internal.cheaperfordrug.com` - Internal API (JWT auth)
 - **Purpose**: Backend API for web frontend
-- **Architecture**: 3 web + 2 workers + 1 scheduler (both subdomains use same containers)
+- **Architecture**: 2 web + 1 worker + 1 scheduler (both subdomains use same containers)
 - **Status**: 🆕 Ready to deploy
 
 ### Initial Setup
@@ -186,24 +188,24 @@ Follow certbot prompts to complete the setup.
 This will:
 - Pull latest code from repository
 - Build Docker image
-- Start 3 web containers (ports 3020-3022)
+- Start 2 web containers (ports 3020-3021)
 - Run database migrations
-- Start 2 worker containers (Sidekiq)
+- Start 1 worker container (Sidekiq)
 - Start 1 scheduler container (Clockwork)
 - Configure nginx with load balancing
 
 ### Container Architecture
 
-**Web Containers (3)**
-- Handle API requests
-- Ports: 3020, 3021, 3022
+**Web Containers (2)**
+- Handle API requests for both subdomains
+- Ports: 3020, 3021
 - Behind nginx load balancer
 - Zero-downtime deployments
 
-**Worker Containers (2)**
-- Process background jobs via Sidekiq
+**Worker Container (1)**
+- Processes background jobs via Sidekiq
 - Connected to Redis
-- Handle emails, data processing, external API calls
+- Handles emails, data processing, external API calls
 - No port exposure
 
 **Scheduler Container (1)**
@@ -257,7 +259,7 @@ docker exec -it cheaperfordrug-api_web_1 rails console
 - **Type**: Next.js frontend application
 - **Domain**: premiera.taniejpolek.pl
 - **Purpose**: User-facing web application
-- **Architecture**: 2 web containers (no workers/scheduler)
+- **Architecture**: 3 web containers (no workers/scheduler)
 - **Status**: 🆕 Ready to deploy
 
 ### Initial Setup
@@ -347,14 +349,14 @@ Follow certbot prompts to configure SSL for:
 This will:
 - Pull latest code from repository
 - Build Next.js Docker image
-- Start 2 web containers (ports 3030-3031)
+- Start 3 web containers (ports 3030-3032)
 - Configure nginx with load balancing
 
 ### Container Architecture
 
-**Web Containers (2)**
+**Web Containers (3)**
 - Serve Next.js application
-- Ports: 3030, 3031
+- Ports: 3030, 3031, 3032
 - Behind nginx load balancer
 - Zero-downtime deployments
 - Static assets cached by nginx
@@ -617,11 +619,11 @@ ls -lh ~/apps/<app-name>/docker-images/
 ```
 Application              Ports          Purpose
 ─────────────────────────────────────────────────────
-Landing Page            3010-3011      Web containers
-API Backend             3020-3022      Web containers
-API Workers             (no port)      Background jobs
-API Scheduler           (no port)      Recurring tasks
-Web Frontend            3030-3031      Web containers
+Landing Page            3010-3011      2 web containers
+API Backend             3020-3021      2 web containers
+API Worker              (no port)      1 background job processor
+API Scheduler           (no port)      1 recurring task scheduler
+Web Frontend            3030-3032      3 web containers
 
 External Ports          80, 443        Nginx (HTTP/HTTPS)
 Database                5432           PostgreSQL

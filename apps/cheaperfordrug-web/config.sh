@@ -19,14 +19,14 @@ export REPO_BRANCH="master"
 # ============================================================================
 # CONTAINER ARCHITECTURE
 # ============================================================================
-# Frontend typically doesn't need workers or schedulers (all handled by backend API)
-export DEFAULT_SCALE=2              # 2 web containers for frontend
+# Frontend doesn't need workers or schedulers (all handled by backend API)
+export DEFAULT_SCALE=3              # 3 web containers for frontend
 export WORKER_COUNT=0               # No workers needed
 export SCHEDULER_ENABLED=false      # No scheduler needed
 
 # Architecture note:
-# - 2 web containers serve the Next.js frontend with load balancing
-# - All API calls go to cheaperfordrug.com backend
+# - 3 web containers serve the Next.js frontend with load balancing
+# - All API calls go to api-*.cheaperfordrug.com backend
 # - No background processing needed in frontend
 
 # ============================================================================
