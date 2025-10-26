@@ -449,6 +449,112 @@ The site is now available at: https://${DOMAIN}" \
     fi
 }
 
+# Handle status command
+handle_status() {
+    log_info "Checking status of ${APP_DISPLAY_NAME} containers"
+    echo ""
+
+    # Get all containers (running and stopped)
+    local all_containers=($(docker ps -a --filter "name=${APP_NAME}" --format "{{.Names}}" 2>/dev/null))
+
+    if [ ${#all_containers[@]} -eq 0 ]; then
+        log_warning "No containers found for ${APP_NAME}"
+        echo ""
+        log_info "Run './deploy.sh deploy' to start the application"
+        exit 0
+    fi
+
+    # Print nice header
+    echo "================================================================================"
+    echo "                    APPLICATION STATUS: ${APP_DISPLAY_NAME}"
+    echo "================================================================================"
+    echo ""
+
+    # Container status table
+    printf "%-35s %-20s %-25s %-10s\n" "CONTAINER NAME" "STATUS" "PORTS" "UPTIME"
+    echo "--------------------------------------------------------------------------------"
+
+    for container in "${all_containers[@]}"; do
+        local status=$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null)
+        local ports=$(docker port "$container" 2>/dev/null | grep -oP '\d+:\d+' | head -1 || echo "-")
+        local uptime=$(docker inspect -f '{{.State.StartedAt}}' "$container" 2>/dev/null | xargs -I {} date -d {} +"%Y-%m-%d %H:%M" 2>/dev/null || echo "-")
+        local running_time=""
+
+        if [ "$status" = "running" ]; then
+            local started=$(docker inspect -f '{{.State.StartedAt}}' "$container" 2>/dev/null)
+            local now=$(date -u +"%Y-%m-%dT%H:%M:%S")
+            local seconds=$(( $(date -d "$now" +%s) - $(date -d "$started" +%s) ))
+
+            if [ $seconds -lt 60 ]; then
+                running_time="${seconds}s"
+            elif [ $seconds -lt 3600 ]; then
+                running_time="$(($seconds / 60))m"
+            elif [ $seconds -lt 86400 ]; then
+                running_time="$(($seconds / 3600))h $(($seconds % 3600 / 60))m"
+            else
+                running_time="$(($seconds / 86400))d $(($seconds % 86400 / 3600))h"
+            fi
+
+            printf "%-35s \033[32m%-20s\033[0m %-25s %-10s\n" "$container" "$status" "$ports" "$running_time"
+        else
+            printf "%-35s \033[31m%-20s\033[0m %-25s %-10s\n" "$container" "$status" "$ports" "-"
+        fi
+    done
+
+    echo "--------------------------------------------------------------------------------"
+    echo ""
+
+    # Summary
+    local running_count=$(docker ps --filter "name=${APP_NAME}" --format "{{.Names}}" 2>/dev/null | wc -l | tr -d ' ')
+    local total_count=${#all_containers[@]}
+
+    echo "SUMMARY:"
+    echo "  Running: ${running_count} / ${total_count} containers"
+    echo "  Domain: https://${DOMAIN}"
+    echo "  Health Check: https://${DOMAIN}${HEALTH_CHECK_PATH}"
+    echo ""
+
+    # Show web containers
+    local web_containers=($(docker ps --filter "name=${APP_NAME}_web" --format "{{.Names}}" 2>/dev/null))
+    if [ ${#web_containers[@]} -gt 0 ]; then
+        echo "WEB CONTAINERS: ${#web_containers[@]}"
+        for container in "${web_containers[@]}"; do
+            local port=$(docker port "$container" 80 2>/dev/null | cut -d ':' -f2)
+            echo "  - ${container} (port ${port})"
+        done
+        echo ""
+    fi
+
+    # Show worker containers if any
+    local worker_containers=($(docker ps --filter "name=${APP_NAME}_worker" --format "{{.Names}}" 2>/dev/null))
+    if [ ${#worker_containers[@]} -gt 0 ]; then
+        echo "WORKER CONTAINERS: ${#worker_containers[@]}"
+        for container in "${worker_containers[@]}"; do
+            echo "  - ${container}"
+        done
+        echo ""
+    fi
+
+    # Show scheduler if any
+    local scheduler="${APP_NAME}_scheduler"
+    if docker ps --filter "name=${scheduler}" --format "{{.Names}}" 2>/dev/null | grep -q "^${scheduler}$"; then
+        echo "SCHEDULER CONTAINER: 1"
+        echo "  - ${scheduler}"
+        echo ""
+    fi
+
+    # Quick commands
+    echo "QUICK COMMANDS:"
+    echo "  View logs:       docker logs ${APP_NAME}_web_1 -f"
+    echo "  Rails console:   docker exec -it ${APP_NAME}_web_1 rails console"
+    echo "  Restart:         ./deploy.sh restart"
+    echo "  Stop:            ./deploy.sh stop"
+    echo ""
+    echo "================================================================================"
+
+    exit 0
+}
+
 # Display help
 show_help() {
     cat << EOF
@@ -459,6 +565,7 @@ Commands:
   restart             Restart containers with current image
   scale <number>      Scale to specified number of instances
   stop                Stop all containers
+  status              Show status of all containers in a nice table
   rollback [file]     Rollback to a previous image backup
   list-images         List available image backups for rollback
   ssl-setup           Setup SSL certificate with Let's Encrypt
@@ -470,6 +577,7 @@ Examples:
   $0 restart
   $0 scale 4
   $0 stop
+  $0 status                     # Show container status table
   $0 list-images
   $0 rollback -1                # Rollback to previous version
   $0 rollback -2                # Rollback 2 versions back
@@ -512,6 +620,9 @@ main() {
             ;;
         stop)
             handle_stop
+            ;;
+        status)
+            handle_status
             ;;
         rollback)
             handle_rollback "$SCALE"
