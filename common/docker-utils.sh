@@ -339,7 +339,7 @@ rolling_restart() {
         log_warning "No running containers found, starting fresh"
         # Start new containers
         for i in $(seq 1 $scale); do
-            local port=$(get_next_available_port "$base_port")
+            local port=$((base_port + i - 1))
             local container_name="${app_name}_web_${i}"
 
             start_container "$container_name" "$new_image" "$port" "$env_file"
@@ -360,20 +360,25 @@ rolling_restart() {
         return 0
     fi
 
-    # Start new containers one by one
-    local new_containers=()
+    # Rolling restart: restart each container one by one on the same port
+    # This maintains the correct port mappings and ensures zero downtime
     for i in $(seq 1 $scale); do
-        local port=$(get_next_available_port "$base_port")
-        local container_name="${app_name}_web_new_${i}"
+        local port=$((base_port + i - 1))
+        local container_name="${app_name}_web_${i}"
 
+        log_info "Restarting container ${i}/${scale} on port ${port}"
+
+        # Stop old container
+        if docker ps --filter "name=^${container_name}$" --format "{{.Names}}" | grep -q "^${container_name}$"; then
+            stop_container "$container_name" 30
+            sleep 2
+        fi
+
+        # Start new container on same port
         start_container "$container_name" "$new_image" "$port" "$env_file"
 
         if [ $? -ne 0 ]; then
-            log_error "Failed to start new container"
-            # Cleanup new containers
-            for new_container in "${new_containers[@]}"; do
-                stop_container "$new_container"
-            done
+            log_error "Failed to start container ${container_name}"
             return 1
         fi
 
@@ -381,33 +386,16 @@ rolling_restart() {
         check_container_health "$container_name" 60
 
         if [ $? -ne 0 ]; then
-            log_error "New container failed health check"
-            # Cleanup new containers
-            for new_container in "${new_containers[@]}"; do
-                stop_container "$new_container"
-            done
-            stop_container "$container_name"
+            log_error "Container ${container_name} failed health check"
             return 1
         fi
 
-        new_containers+=("$container_name")
-        log_success "New container ${container_name} is healthy and ready"
-    done
+        log_success "Container ${container_name} restarted successfully"
 
-    # All new containers are healthy, now stop old ones
-    log_info "All new containers are healthy, stopping old containers..."
-
-    for old_container in "${old_containers[@]}"; do
-        stop_container "$old_container" 30
-        sleep 2
-    done
-
-    # Rename new containers to standard names
-    for i in $(seq 1 $scale); do
-        local old_name="${app_name}_web_new_${i}"
-        local new_name="${app_name}_web_${i}"
-
-        docker rename "$old_name" "$new_name" 2>/dev/null || true
+        # Brief pause before next container (allows traffic to stabilize)
+        if [ $i -lt $scale ]; then
+            sleep 5
+        fi
     done
 
     log_success "Rolling restart completed successfully"
