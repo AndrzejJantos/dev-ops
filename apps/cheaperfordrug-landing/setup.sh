@@ -61,12 +61,79 @@ pre_setup_hook() {
 # POST-SETUP HOOKS
 # ============================================================================
 
+# Function: Setup SSL certificate
+setup_ssl_certificate() {
+    log_info "Setting up SSL certificate for ${DOMAIN}..."
+
+    # Check if certbot is installed
+    if ! command -v certbot >/dev/null 2>&1; then
+        log_info "Installing certbot..."
+        sudo apt-get update -qq
+        sudo apt-get install -y certbot python3-certbot-nginx
+    fi
+
+    # Check if DNS is configured
+    log_info "Checking DNS configuration for ${DOMAIN}..."
+    local server_ip=$(curl -s ifconfig.me)
+    local domain_ip=$(dig +short "$DOMAIN" | tail -1)
+
+    if [ -z "$domain_ip" ]; then
+        log_warning "DNS not configured for ${DOMAIN}"
+        log_info "Please configure DNS A record: ${DOMAIN} -> ${server_ip}"
+        log_info "You can setup SSL later by running: sudo certbot --nginx -d ${DOMAIN}"
+        return 0
+    fi
+
+    if [ "$domain_ip" != "$server_ip" ]; then
+        log_warning "DNS mismatch: ${DOMAIN} points to ${domain_ip}, but server IP is ${server_ip}"
+        log_info "Please update DNS A record: ${DOMAIN} -> ${server_ip}"
+        log_info "You can setup SSL later by running: sudo certbot --nginx -d ${DOMAIN}"
+        return 0
+    fi
+
+    log_success "DNS correctly configured: ${DOMAIN} -> ${server_ip}"
+
+    # Check if certificate already exists
+    if sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${DOMAIN}"; then
+        log_info "SSL certificate already exists for ${DOMAIN}"
+        return 0
+    fi
+
+    # Obtain SSL certificate
+    log_info "Obtaining SSL certificate from Let's Encrypt..."
+    if sudo certbot --nginx \
+        -d "$DOMAIN" \
+        --email "${NOTIFICATION_EMAIL}" \
+        --agree-tos \
+        --non-interactive \
+        --redirect; then
+        log_success "SSL certificate obtained successfully"
+        log_success "Site is now available at: https://${DOMAIN}"
+
+        # Setup auto-renewal
+        if ! sudo systemctl is-active --quiet certbot.timer; then
+            sudo systemctl enable certbot.timer
+            sudo systemctl start certbot.timer
+            log_success "SSL auto-renewal enabled"
+        fi
+    else
+        log_warning "Failed to obtain SSL certificate"
+        log_info "You can try manually: sudo certbot --nginx -d ${DOMAIN}"
+        return 0
+    fi
+
+    return 0
+}
+
 # Custom post-setup tasks
 post_setup_hook() {
     log_info "Running post-setup tasks for ${APP_DISPLAY_NAME}..."
 
     # Generate Nginx configuration
     generate_nginx_config
+
+    # Setup SSL certificate (optional, checks DNS first)
+    setup_ssl_certificate
 
     # Create deployment info file
     create_deployment_info

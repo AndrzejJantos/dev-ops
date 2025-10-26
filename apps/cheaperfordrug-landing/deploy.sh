@@ -359,6 +359,68 @@ handle_list_images() {
     exit 0
 }
 
+# Handle ssl-setup command
+handle_ssl_setup() {
+    # Check if setup has been run
+    if [ ! -f "$ENV_FILE" ]; then
+        log_error "Application not set up. Please run setup.sh first."
+        exit 1
+    fi
+
+    # Load environment variables
+    load_env_file "$ENV_FILE"
+
+    log_info "Setting up SSL certificate for ${DOMAIN}..."
+
+    # Check if certbot is installed
+    if ! command -v certbot >/dev/null 2>&1; then
+        log_info "Installing certbot..."
+        sudo apt-get update -qq
+        sudo apt-get install -y certbot python3-certbot-nginx
+    fi
+
+    # Get SSL certificate
+    log_info "Obtaining SSL certificate from Let's Encrypt..."
+    if sudo certbot --nginx \
+        -d "$DOMAIN" \
+        --email "${NOTIFICATION_EMAIL}" \
+        --agree-tos \
+        --non-interactive \
+        --redirect; then
+        log_success "SSL certificate obtained successfully"
+        log_success "Site is now available at: https://${DOMAIN}"
+
+        # Setup auto-renewal
+        if ! sudo systemctl is-active --quiet certbot.timer; then
+            sudo systemctl enable certbot.timer
+            sudo systemctl start certbot.timer
+            log_success "SSL auto-renewal enabled"
+        fi
+
+        send_mailgun_notification \
+            "${APP_DISPLAY_NAME} - SSL Certificate Installed" \
+            "SSL certificate has been installed successfully.
+
+Domain: ${DOMAIN}
+Certificate: Let's Encrypt
+Auto-renewal: Enabled
+
+The site is now available at: https://${DOMAIN}" \
+            "$MAILGUN_API_KEY" \
+            "$MAILGUN_DOMAIN" \
+            "$NOTIFICATION_EMAIL"
+
+        exit 0
+    else
+        log_error "Failed to obtain SSL certificate"
+        log_info "Common issues:"
+        echo "  - DNS not pointing to this server"
+        echo "  - Port 80 not accessible"
+        echo "  - Domain not reachable"
+        exit 1
+    fi
+}
+
 # Display help
 show_help() {
     cat << EOF
@@ -371,6 +433,7 @@ Commands:
   stop                Stop all containers
   rollback [file]     Rollback to a previous image backup
   list-images         List available image backups for rollback
+  ssl-setup           Setup SSL certificate with Let's Encrypt
   help                Show this help message
 
 Examples:
@@ -381,6 +444,7 @@ Examples:
   $0 stop
   $0 list-images
   $0 rollback ~/apps/${APP_NAME}/docker-images/${APP_NAME}_20250126_143022.tar.gz
+  $0 ssl-setup
 
 Configuration:
   App: ${APP_DISPLAY_NAME}
@@ -424,6 +488,9 @@ main() {
             ;;
         list-images)
             handle_list_images
+            ;;
+        ssl-setup)
+            handle_ssl_setup
             ;;
         help|--help|-h)
             show_help
