@@ -231,6 +231,58 @@ handle_restart() {
     fi
 }
 
+# Function: Update Nginx upstream configuration for scaling
+update_nginx_upstream() {
+    local new_scale="$1"
+
+    log_info "Updating Nginx upstream configuration for ${new_scale} containers..."
+
+    # Generate new upstream servers list
+    local UPSTREAM_SERVERS=""
+    for i in $(seq 1 $new_scale); do
+        local PORT=$((BASE_PORT + i - 1))
+        UPSTREAM_SERVERS="${UPSTREAM_SERVERS}    server localhost:${PORT} max_fails=3 fail_timeout=30s;\n"
+    done
+
+    # Regenerate nginx config from template
+    local nginx_config="/etc/nginx/sites-available/${APP_NAME}"
+    local nginx_template="${APP_CONFIG_DIR}/nginx.conf.template"
+
+    if [ ! -f "$nginx_template" ]; then
+        log_error "Nginx template not found: ${nginx_template}"
+        return 1
+    fi
+
+    # Create backup of current config
+    sudo cp "$nginx_config" "${nginx_config}.backup"
+    log_info "Created backup: ${nginx_config}.backup"
+
+    # Generate new config from template
+    cat "$nginx_template" | \
+        sed "s|{{NGINX_UPSTREAM_NAME}}|${NGINX_UPSTREAM_NAME}|g" | \
+        sed "s|{{UPSTREAM_SERVERS}}|${UPSTREAM_SERVERS}|g" | \
+        sed "s|{{DOMAIN}}|${DOMAIN}|g" | \
+        sed "s|{{APP_NAME}}|${APP_NAME}|g" | \
+        sudo tee "$nginx_config" > /dev/null
+
+    # Test nginx configuration
+    if sudo nginx -t 2>&1 | grep -q "successful"; then
+        log_success "Nginx configuration updated successfully"
+        sudo systemctl reload nginx
+        log_success "Nginx reloaded with new upstream configuration"
+
+        # Show what was updated
+        log_info "Nginx now routing to ${new_scale} containers (ports ${BASE_PORT}-$((BASE_PORT + new_scale - 1)))"
+
+        return 0
+    else
+        log_error "Nginx configuration test failed, restoring backup"
+        sudo mv "${nginx_config}.backup" "$nginx_config"
+        sudo systemctl reload nginx
+        return 1
+    fi
+}
+
 # Handle scale command
 handle_scale() {
     local target_scale="$1"
@@ -254,8 +306,19 @@ handle_scale() {
 
     # Run scaling
     if rails_scale_application "$target_scale"; then
-        send_scale_notification "$old_scale" "$target_scale"
-        exit 0
+        # Update nginx upstream configuration
+        update_nginx_upstream "$target_scale"
+
+        if [ $? -eq 0 ]; then
+            log_success "Scaling completed: ${old_scale} → ${target_scale} containers"
+            log_success "Nginx now routing to all ${target_scale} containers"
+            send_scale_notification "$old_scale" "$target_scale"
+            exit 0
+        else
+            log_warning "Containers scaled but nginx update failed"
+            log_info "Please update nginx manually or run setup again"
+            exit 1
+        fi
     else
         send_deploy_failure_notification "Scaling failed"
         exit 1
