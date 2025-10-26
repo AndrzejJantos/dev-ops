@@ -60,8 +60,14 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    # CORS headers (configure based on your frontend domain)
-    add_header 'Access-Control-Allow-Origin' 'https://premiera.taniejpolek.pl' always;
+    # CORS headers - Allow requests from frontend domains
+    # Note: nginx doesn't support multiple origins in one header, use $http_origin variable
+    set $cors_origin "";
+    if ($http_origin ~* "^https://(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
+        set $cors_origin $http_origin;
+    }
+
+    add_header 'Access-Control-Allow-Origin' $cors_origin always;
     add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
     add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
     add_header 'Access-Control-Allow-Credentials' 'true' always;
@@ -84,7 +90,13 @@ server {
     # Handle preflight OPTIONS requests for CORS
     location / {
         if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' 'https://premiera.taniejpolek.pl' always;
+            # Check if origin is allowed
+            set $cors_origin "";
+            if ($http_origin ~* "^https://(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
+                set $cors_origin $http_origin;
+            }
+
+            add_header 'Access-Control-Allow-Origin' $cors_origin always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
             add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
             add_header 'Access-Control-Allow-Credentials' 'true' always;
@@ -150,8 +162,14 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    # CORS headers (configure based on your frontend domain)
-    add_header 'Access-Control-Allow-Origin' 'https://premiera.taniejpolek.pl' always;
+    # CORS headers - Allow requests from frontend domains
+    # Note: nginx doesn't support multiple origins in one header, use $http_origin variable
+    set $cors_origin "";
+    if ($http_origin ~* "^https://(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
+        set $cors_origin $http_origin;
+    }
+
+    add_header 'Access-Control-Allow-Origin' $cors_origin always;
     add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
     add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
     add_header 'Access-Control-Allow-Credentials' 'true' always;
@@ -174,7 +192,13 @@ server {
     # Handle preflight OPTIONS requests for CORS
     location / {
         if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' 'https://premiera.taniejpolek.pl' always;
+            # Check if origin is allowed
+            set $cors_origin "";
+            if ($http_origin ~* "^https://(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
+                set $cors_origin $http_origin;
+            }
+
+            add_header 'Access-Control-Allow-Origin' $cors_origin always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
             add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
             add_header 'Access-Control-Allow-Credentials' 'true' always;

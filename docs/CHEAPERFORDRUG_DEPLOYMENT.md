@@ -163,10 +163,12 @@ Update the following:
   STRIPE_SECRET_KEY=
   ```
 
-- **CORS** (already configured for premiera.taniejpolek.pl):
+- **CORS** (configure allowed frontend origins):
   ```
-  ALLOWED_ORIGINS=https://premiera.taniejpolek.pl
+  ALLOWED_ORIGINS=https://taniejpolek.pl,https://premiera.taniejpolek.pl
   ```
+
+  Note: Include all domains that will make API requests from the browser.
 
 #### 4. Setup SSL Certificates
 ```bash
