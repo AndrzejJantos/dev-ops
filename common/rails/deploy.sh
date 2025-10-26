@@ -70,17 +70,13 @@ rails_build_image() {
 }
 
 # Function: Check for pending Rails migrations
+# Note: check_pending_migrations() already handles all logging
 rails_check_pending_migrations() {
     local test_container="$1"
 
-    # Don't log here - check_pending_migrations() already logs
-    if check_pending_migrations "$test_container"; then
-        log_info "Pending migrations detected"
-        return 0  # Migrations are pending
-    else
-        log_info "No pending migrations"
-        return 1  # No migrations pending
-    fi
+    # Simply call check_pending_migrations - it handles all logging
+    check_pending_migrations "$test_container"
+    return $?
 }
 
 # Function: Run Rails migrations with backup
