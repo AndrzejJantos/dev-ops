@@ -8,7 +8,7 @@ set -euo pipefail
 
 # Parse arguments
 COMMAND="${1:-deploy}"
-SCALE="${2}"
+SCALE="${2:-}"
 
 # Get script directory and DevOps root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

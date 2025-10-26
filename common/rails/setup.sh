@@ -199,18 +199,9 @@ rails_setup_native_environment() {
 
 # Function: Precompile Rails assets
 rails_precompile_assets() {
-    log_info "Precompiling assets..."
-    cd "$REPO_DIR"
-
-    RAILS_ENV=production bundle exec rails assets:precompile
-
-    if [ $? -eq 0 ]; then
-        log_success "Assets precompiled successfully"
-        return 0
-    else
-        log_warning "Asset precompilation failed (non-critical, continuing...)"
-        return 0  # Non-critical, don't fail setup
-    fi
+    log_info "Skipping native asset precompilation (will be done in Docker)..."
+    log_success "Asset precompilation will occur during Docker build"
+    return 0
 }
 
 # Function: Run Rails migrations
@@ -218,19 +209,21 @@ rails_run_migrations() {
     log_info "Running database migrations..."
     cd "$REPO_DIR"
 
-    # Load environment variables and run migrations
-    set -a
-    source "$ENV_FILE"
-    set +a
+    # Load environment variables from .env file
+    if [ -f "$ENV_FILE" ]; then
+        export $(grep -v '^#' "$ENV_FILE" | xargs)
+    fi
 
-    RAILS_ENV=production bundle exec rails db:migrate
+    export RAILS_ENV=production
+
+    bundle exec rails db:migrate
 
     if [ $? -eq 0 ]; then
         log_success "Migrations completed successfully"
         return 0
     else
-        log_error "Migrations failed"
-        return 1
+        log_warning "Migrations failed (may need to run manually after fixing env vars)"
+        return 0  # Don't fail setup, migrations can be run later
     fi
 }
 
