@@ -26,9 +26,9 @@ server {
     listen [::]:443 ssl http2;
     server_name {{DOMAIN}};
 
-    # SSL certificates (will be managed by certbot)
-    ssl_certificate /etc/ssl/certs/ssl-cert-snakeoil.pem;
-    ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
+    # SSL certificates from Let's Encrypt
+    ssl_certificate /etc/letsencrypt/live/{{DOMAIN}}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{DOMAIN}}/privkey.pem;
 
     # SSL configuration
     ssl_protocols TLSv1.2 TLSv1.3;
