@@ -172,11 +172,15 @@ rails_deploy_fresh() {
 }
 
 # Function: Deploy Rails application with zero downtime (rolling restart)
+# Returns 0 on success, sets RAILS_MIGRATIONS_RUN environment variable to "true" if migrations were executed
 rails_deploy_rolling() {
     local scale="$1"
     local image_tag="$2"
 
     log_info "Running containers detected, performing zero-downtime deployment"
+
+    # Initialize migrations flag
+    export RAILS_MIGRATIONS_RUN="false"
 
     # Create a test container to check migrations
     local test_container="${APP_NAME}_migration_check"
@@ -198,6 +202,9 @@ rails_deploy_rolling() {
                 docker rm -f "$test_container"
                 return 1
             fi
+
+            # Mark that migrations were run
+            export RAILS_MIGRATIONS_RUN="true"
         fi
 
         docker rm -f "$test_container"
@@ -428,19 +435,12 @@ rails_deploy_application() {
         # Containers already running - restart ALL of them, not just default scale
         log_info "Found ${current_count} running containers, will restart all of them"
 
-        # Check if migrations will run
-        local test_container="${APP_NAME}_migration_check"
-        if [ "$MIGRATION_BACKUP_ENABLED" = "true" ]; then
-            docker run -d --name "$test_container" --env-file "$ENV_FILE" "${DOCKER_IMAGE_NAME}:${image_tag}" sleep infinity 2>/dev/null
-            sleep 2
-            if rails_check_pending_migrations "$test_container" 2>/dev/null; then
-                migrations_run="true"
-            fi
-            docker rm -f "$test_container" 2>/dev/null
-        fi
-
         # Use current_count for rolling restart to update ALL containers
+        # rails_deploy_rolling will set RAILS_MIGRATIONS_RUN if migrations are executed
         rails_deploy_rolling "$current_count" "$image_tag" || return 1
+
+        # Get migration status from rolling deployment
+        migrations_run="${RAILS_MIGRATIONS_RUN:-false}"
     fi
 
     # Clean up old images
