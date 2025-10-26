@@ -301,21 +301,13 @@ nano ~/apps/cheaperfordrug-web/.env.production
 ```
 
 Update the following:
-- **API URLs** (two types for optimal performance):
+- **API URL** (backend):
   ```
-  # Public API - Used by browser (client-side)
   NEXT_PUBLIC_API_URL=https://cheaperfordrug.com
   NEXT_PUBLIC_API_BASE_URL=https://cheaperfordrug.com/api/v1
-
-  # Internal API - Used by Next.js server (SSR/SSG) - MUCH FASTER!
-  API_INTERNAL_URL=http://localhost:3020
-  API_INTERNAL_BASE_URL=http://localhost:3020/api/v1
   ```
 
-  **Why two URLs?**
-  - Browser requests use public HTTPS domain (goes through internet)
-  - Server-side Next.js requests use localhost (stays internal, no SSL overhead)
-  - This is **10-100x faster** for server-side API calls!
+  Note: All API calls are client-side (browser), so we use the public HTTPS domain.
 
 - **Google Maps** (if used):
   ```
@@ -376,49 +368,29 @@ cd ~/DevOps/apps/cheaperfordrug-web
 ### No Database or Workers
 Frontend application has no database or background processing. All data operations go through the API backend.
 
-### Internal vs External API Communication
+### Client-Side API Communication
 
-The web frontend uses **two different API URLs** for optimal performance:
+All API calls are **client-side** (happen in the browser):
 
-**1. Client-Side (Browser) → Public API**
 ```javascript
-// In React components (client-side)
-// Uses NEXT_PUBLIC_API_URL (goes through internet with HTTPS)
-const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/drugs`, {
-  headers: { 'Authorization': `Bearer ${token}` }
-});
+// In React components, hooks, event handlers
+// Browser makes direct HTTPS requests to API
+const response = await fetch(
+  `${process.env.NEXT_PUBLIC_API_BASE_URL}/drugs`,
+  {
+    headers: { 'Authorization': `Bearer ${token}` }
+  }
+);
 ```
-
-**2. Server-Side (Next.js SSR/SSG) → Internal API**
-```javascript
-// In getServerSideProps, getStaticProps, API routes
-// Uses API_INTERNAL_URL (localhost, 10-100x faster!)
-export async function getServerSideProps() {
-  const response = await fetch(`${process.env.API_INTERNAL_BASE_URL}/drugs`);
-  // This goes to http://localhost:3020 - internal network!
-  return { props: { data: await response.json() } };
-}
-```
-
-**Benefits:**
-- ⚡ **Much faster** - No external routing, no SSL handshake
-- 🔒 **More secure** - API traffic stays on internal network
-- 💰 **Lower latency** - Direct localhost connection (< 1ms)
-- 📉 **Less bandwidth** - No external traffic for SSR
 
 **Architecture:**
 ```
-Browser → Internet → Nginx → Next.js Container
-                               ↓ (uses NEXT_PUBLIC_API_URL)
-                          Internet (HTTPS)
-                               ↓
-                          API Container
-
-Next.js Server → localhost:3020 (direct, internal)
-                        ↓ (uses API_INTERNAL_URL)
-                   API Container
-                   (< 1ms latency!)
+User's Browser → Internet (HTTPS) → cheaperfordrug.com (API)
+                 ↑
+            (all API calls)
 ```
+
+Note: This is a **SPA (Single Page Application)** architecture, not SSR. The Next.js containers serve static/pre-rendered content, and the browser handles all API communication.
 
 ---
 
