@@ -81,6 +81,7 @@ rails_setup_database() {
     # Export for use in env file creation
     export DB_APP_USER
     export DB_APP_PASSWORD
+    export DATABASE_URL
 
     log_success "Database configured: ${DB_NAME}"
     log_success "Database user: ${DB_APP_USER}"
@@ -92,13 +93,22 @@ rails_setup_database() {
 rails_create_env_file() {
     log_info "Creating Rails environment file: ${ENV_FILE}"
 
+    # Check if we need to preserve existing SECRET_KEY_BASE
+    EXISTING_SECRET=""
     if [ -f "$ENV_FILE" ]; then
         log_warning "Environment file already exists. Backing up..."
+        EXISTING_SECRET=$(grep "^SECRET_KEY_BASE=" "$ENV_FILE" 2>/dev/null | cut -d '=' -f2-)
         cp "$ENV_FILE" "${ENV_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
     fi
 
-    # Generate SECRET_KEY_BASE
-    SECRET_KEY_BASE=$(get_or_generate_secret "$ENV_FILE" "SECRET_KEY_BASE" "openssl rand -hex 64")
+    # Generate or reuse SECRET_KEY_BASE
+    if [ -n "$EXISTING_SECRET" ]; then
+        SECRET_KEY_BASE="$EXISTING_SECRET"
+        log_info "Reusing existing SECRET_KEY_BASE"
+    else
+        SECRET_KEY_BASE=$(openssl rand -hex 64)
+        log_info "Generated new SECRET_KEY_BASE"
+    fi
 
     # Create production env file
     cat > "$ENV_FILE" << EOF
@@ -146,8 +156,17 @@ EOF
         done
     fi
 
+    # Validate that SECRET_KEY_BASE was written
+    if grep -q "^SECRET_KEY_BASE=.\+" "$ENV_FILE"; then
+        log_success "SECRET_KEY_BASE generated and written to env file"
+    else
+        log_error "Failed to write SECRET_KEY_BASE to env file"
+        return 1
+    fi
+
     log_success "Environment file created: ${ENV_FILE}"
-    log_warning "IMPORTANT: Edit ${ENV_FILE} and update the credentials marked with 'your_' prefixes!"
+    log_info "Database URL: postgresql://${DB_APP_USER}:***@localhost/${DB_NAME}"
+    log_warning "IMPORTANT: Edit ${ENV_FILE} and update the credentials marked with dummy_ or your_ prefixes!"
 
     return 0
 }
@@ -209,9 +228,15 @@ rails_run_migrations() {
     log_info "Running database migrations..."
     cd "$REPO_DIR"
 
-    # Load environment variables from .env file
+    # Load environment variables from .env file properly
     if [ -f "$ENV_FILE" ]; then
-        export $(grep -v '^#' "$ENV_FILE" | xargs)
+        set -a  # Automatically export all variables
+        source "$ENV_FILE"
+        set +a  # Turn off automatic export
+        log_info "Loaded environment variables from $ENV_FILE"
+    else
+        log_error "Environment file not found: $ENV_FILE"
+        return 0  # Don't fail setup
     fi
 
     export RAILS_ENV=production
