@@ -471,13 +471,13 @@ handle_status() {
     echo ""
 
     # Container status table
-    printf "%-35s %-20s %-25s %-10s\n" "CONTAINER NAME" "STATUS" "PORTS" "UPTIME"
-    echo "--------------------------------------------------------------------------------"
+    printf "%-35s %-15s %-20s %-20s %-15s\n" "CONTAINER NAME" "STATUS" "PORTS" "STARTED" "UPTIME"
+    echo "---------------------------------------------------------------------------------------------------"
 
     for container in "${all_containers[@]}"; do
         local status=$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null)
         local ports=$(docker port "$container" 2>/dev/null | grep -oP '\d+:\d+' | head -1 || echo "-")
-        local uptime=$(docker inspect -f '{{.State.StartedAt}}' "$container" 2>/dev/null | xargs -I {} date -d {} +"%Y-%m-%d %H:%M" 2>/dev/null || echo "-")
+        local started_time=""
         local running_time=""
 
         if [ "$status" = "running" ]; then
@@ -486,26 +486,35 @@ handle_status() {
             local started_ts=$(date -d "$started" +%s 2>/dev/null || echo "$now_ts")
             local seconds=$(( now_ts - started_ts ))
 
-            # Handle negative or invalid times
+            # Format start time
+            started_time=$(date -d "$started" +"%Y-%m-%d %H:%M" 2>/dev/null || echo "-")
+
+            # Format uptime
             if [ $seconds -lt 0 ] || [ $seconds -gt 31536000 ]; then
                 running_time="?"
             elif [ $seconds -lt 60 ]; then
                 running_time="${seconds}s"
             elif [ $seconds -lt 3600 ]; then
-                running_time="$(($seconds / 60))m"
+                local mins=$(($seconds / 60))
+                running_time="${mins}m"
             elif [ $seconds -lt 86400 ]; then
-                running_time="$(($seconds / 3600))h $(($seconds % 3600 / 60))m"
+                local hours=$(($seconds / 3600))
+                local mins=$(($seconds % 3600 / 60))
+                running_time="${hours}h ${mins}m"
             else
-                running_time="$(($seconds / 86400))d $(($seconds % 86400 / 3600))h"
+                local days=$(($seconds / 86400))
+                local hours=$(($seconds % 86400 / 3600))
+                running_time="${days}d ${hours}h"
             fi
 
-            printf "%-35s \033[32m%-20s\033[0m %-25s %-10s\n" "$container" "$status" "$ports" "$running_time"
+            printf "%-35s \033[32m%-15s\033[0m %-20s %-20s %-15s\n" "$container" "$status" "$ports" "$started_time" "$running_time"
         else
-            printf "%-35s \033[31m%-20s\033[0m %-25s %-10s\n" "$container" "$status" "$ports" "-"
+            started_time=$(docker inspect -f '{{.State.StartedAt}}' "$container" 2>/dev/null | xargs -I {} date -d {} +"%Y-%m-%d %H:%M" 2>/dev/null || echo "-")
+            printf "%-35s \033[31m%-15s\033[0m %-20s %-20s %-15s\n" "$container" "$status" "$ports" "$started_time" "-"
         fi
     done
 
-    echo "--------------------------------------------------------------------------------"
+    echo "---------------------------------------------------------------------------------------------------"
     echo ""
 
     # Summary
