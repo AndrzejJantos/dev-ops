@@ -104,6 +104,36 @@ start_worker_container() {
     fi
 }
 
+# Start scheduler container (no port exposure)
+start_scheduler_container() {
+    local container_name="$1"
+    local image_name="$2"
+    local env_file="$3"
+    local scheduler_command="${4:-bundle exec clockwork config/clock.rb}"
+    local network="${5:-bridge}"
+
+    log_info "Starting scheduler container: ${container_name}"
+
+    # Remove existing container if it exists
+    docker rm -f "$container_name" 2>/dev/null || true
+
+    docker run -d \
+        --name "$container_name" \
+        --network "$network" \
+        --restart unless-stopped \
+        --env-file "$env_file" \
+        "$image_name" \
+        /bin/bash -c "cd /rails && $scheduler_command"
+
+    if [ $? -eq 0 ]; then
+        log_success "Scheduler container started successfully"
+        return 0
+    else
+        log_error "Failed to start scheduler container"
+        return 1
+    fi
+}
+
 # Gracefully stop container
 stop_container() {
     local container_name="$1"

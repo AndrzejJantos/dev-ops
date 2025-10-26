@@ -227,6 +227,7 @@ Network:
   Port Range: ${BASE_PORT}-${PORT_RANGE_END}
   Default Scale: ${DEFAULT_SCALE}
   Worker Count: ${WORKER_COUNT}
+  Scheduler: ${SCHEDULER_ENABLED}
 
 Automated Tasks:
   Database Backup:  Every 30 minutes
@@ -235,16 +236,17 @@ Automated Tasks:
   Retention:        ${BACKUP_RETENTION_DAYS} days
 
 Useful Commands:
-  Edit Nginx:       sudo vim ${APP_DIR}/nginx.conf
-  Edit Env Vars:    vim ${ENV_FILE}
-  Deploy:           ${APP_CONFIG_DIR}/deploy.sh deploy
-  Rollback App:     ${APP_CONFIG_DIR}/deploy.sh rollback -1
-  Restore DB:       ${APP_CONFIG_DIR}/restore.sh
-  View Web Logs:    docker logs ${APP_NAME}_web_1 -f
-  View Worker Logs: docker logs ${APP_NAME}_worker_1 -f
-  Rails Console:    docker exec -it ${APP_NAME}_web_1 rails console
-  Manual Backup:    ${APP_DIR}/backup-db.sh
-  View Backups:     ls -lh ${BACKUP_DIR}
+  Edit Nginx:         sudo vim ${APP_DIR}/nginx.conf
+  Edit Env Vars:      vim ${ENV_FILE}
+  Deploy:             ${APP_CONFIG_DIR}/deploy.sh deploy
+  Rollback App:       ${APP_CONFIG_DIR}/deploy.sh rollback -1
+  Restore DB:         ${APP_CONFIG_DIR}/restore.sh
+  View Web Logs:      docker logs ${APP_NAME}_web_1 -f
+  View Worker Logs:   docker logs ${APP_NAME}_worker_1 -f
+  View Scheduler:     docker logs ${APP_NAME}_scheduler -f
+  Rails Console:      docker exec -it ${APP_NAME}_web_1 rails console
+  Manual Backup:      ${APP_DIR}/backup-db.sh
+  View Backups:       ls -lh ${BACKUP_DIR}
 
 Cron Jobs:
   Check status:     crontab -l

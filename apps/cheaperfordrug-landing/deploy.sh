@@ -480,7 +480,7 @@ Configuration:
   App: ${APP_DISPLAY_NAME}
   Config: ${APP_CONFIG_DIR}/config.sh
   Domain: ${DOMAIN}
-  Default Scale: ${DEFAULT_SCALE} web + ${WORKER_COUNT} worker
+  Default Scale: ${DEFAULT_SCALE} web + ${WORKER_COUNT} worker + scheduler
   Port Range: ${BASE_PORT}-${PORT_RANGE_END}
   Image Backups: ${IMAGE_BACKUP_DIR}
   Max Backups: ${MAX_IMAGE_BACKUPS}

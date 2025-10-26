@@ -155,6 +155,19 @@ rails_deploy_fresh() {
         log_success "Worker containers started successfully"
     fi
 
+    # Start scheduler container if enabled
+    if [ "${SCHEDULER_ENABLED:-false}" = "true" ]; then
+        log_info "Starting scheduler container..."
+        local scheduler_name="${APP_NAME}_scheduler"
+        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE"
+
+        if [ $? -ne 0 ]; then
+            log_error "Failed to start scheduler ${scheduler_name}"
+            return 1
+        fi
+        log_success "Scheduler container started successfully"
+    fi
+
     log_success "Fresh deployment completed successfully"
     return 0
 }
@@ -229,6 +242,26 @@ rails_deploy_rolling() {
         log_success "Worker containers restarted successfully"
     fi
 
+    # Restart scheduler container if enabled
+    if [ "${SCHEDULER_ENABLED:-false}" = "true" ]; then
+        log_info "Restarting scheduler container..."
+        local scheduler_name="${APP_NAME}_scheduler"
+
+        # Stop old scheduler
+        if docker ps -a --filter "name=${scheduler_name}" --format "{{.Names}}" | grep -q "^${scheduler_name}$"; then
+            stop_container "$scheduler_name"
+        fi
+
+        # Start new scheduler
+        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE"
+
+        if [ $? -ne 0 ]; then
+            log_error "Failed to start scheduler ${scheduler_name}"
+            return 1
+        fi
+        log_success "Scheduler container restarted successfully"
+    fi
+
     return 0
 }
 
@@ -289,6 +322,17 @@ rails_display_deployment_summary() {
             local status=$(docker inspect -f '{{.State.Status}}' "$worker" 2>/dev/null)
             echo "    - ${worker} (status: ${status})"
         done
+        echo ""
+    fi
+
+    # Scheduler Information (if applicable)
+    local scheduler_container="${APP_NAME}_scheduler"
+    if docker ps --filter "name=${scheduler_container}" --format "{{.Names}}" 2>/dev/null | grep -q "^${scheduler_container}$"; then
+        echo "SCHEDULER CONTAINER:"
+        local status=$(docker inspect -f '{{.State.Status}}' "$scheduler_container" 2>/dev/null)
+        echo "  Container: ${scheduler_container}"
+        echo "  Status: ${status}"
+        echo "  Type: Clockwork (scheduled tasks)"
         echo ""
     fi
 
@@ -458,6 +502,26 @@ rails_restart_application() {
             fi
         done
         log_success "Worker containers restarted successfully"
+    fi
+
+    # Restart scheduler container if enabled
+    if [ "${SCHEDULER_ENABLED:-false}" = "true" ]; then
+        log_info "Restarting scheduler container..."
+        local scheduler_name="${APP_NAME}_scheduler"
+
+        # Stop old scheduler
+        if docker ps -a --filter "name=${scheduler_name}" --format "{{.Names}}" | grep -q "^${scheduler_name}$"; then
+            stop_container "$scheduler_name"
+        fi
+
+        # Start new scheduler
+        start_scheduler_container "$scheduler_name" "$current_image" "$ENV_FILE"
+
+        if [ $? -ne 0 ]; then
+            log_error "Failed to start scheduler ${scheduler_name}"
+            return 1
+        fi
+        log_success "Scheduler container restarted successfully"
     fi
 
     log_success "Restart completed successfully"
