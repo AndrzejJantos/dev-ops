@@ -410,7 +410,7 @@ rails_deploy_application() {
     local image_tag="$(date +%Y%m%d_%H%M%S)"
     local migrations_run="false"
 
-    log_info "Starting Rails deployment of ${APP_DISPLAY_NAME} with scale=${scale}"
+    log_info "Starting Rails deployment of ${APP_DISPLAY_NAME}"
 
     # Pull latest code
     rails_pull_code || return 1
@@ -423,13 +423,16 @@ rails_deploy_application() {
 
     if [ $current_count -eq 0 ]; then
         # No containers running - use provided scale for fresh deployment
+        log_info "No existing containers found, deploying fresh with ${scale} container(s)"
         rails_deploy_fresh "$scale" "$image_tag" || return 1
         if [ "$MIGRATION_BACKUP_ENABLED" = "true" ]; then
             migrations_run="true"
         fi
+        # Set actual scale used
+        local actual_scale="$scale"
     else
         # Containers already running - restart ALL of them, not just default scale
-        log_info "Found ${current_count} running containers, will restart all of them"
+        log_info "Found ${current_count} running container(s), will restart all of them"
 
         # Use current_count for rolling restart to update ALL containers
         # rails_deploy_rolling will set RAILS_MIGRATIONS_RUN if migrations are executed
@@ -437,6 +440,8 @@ rails_deploy_application() {
 
         # Get migration status from rolling deployment
         migrations_run="${RAILS_MIGRATIONS_RUN:-false}"
+        # Set actual scale used
+        local actual_scale="$current_count"
     fi
 
     # Clean up old images
@@ -444,13 +449,13 @@ rails_deploy_application() {
         cleanup_old_images "$DOCKER_IMAGE_NAME" "$MAX_IMAGE_VERSIONS"
     fi
 
-    # Log deployment
-    echo "[$(date)] Deployed ${DOCKER_IMAGE_NAME}:${image_tag} with scale=${scale}, migrations=${migrations_run}" >> "${LOG_DIR}/deployments.log"
+    # Log deployment with actual scale used
+    echo "[$(date)] Deployed ${DOCKER_IMAGE_NAME}:${image_tag} with scale=${actual_scale}, migrations=${migrations_run}" >> "${LOG_DIR}/deployments.log"
 
     log_success "Rails deployment completed successfully!"
 
-    # Display comprehensive summary
-    rails_display_deployment_summary "$scale" "$image_tag" "$migrations_run"
+    # Display comprehensive summary with actual scale used
+    rails_display_deployment_summary "$actual_scale" "$image_tag" "$migrations_run"
 
     return 0
 }
