@@ -301,13 +301,19 @@ nano ~/apps/cheaperfordrug-web/.env.production
 ```
 
 Update the following:
-- **API URL** (backend):
+- **API URLs** (backend - both public and internal use same domain):
   ```
-  NEXT_PUBLIC_API_URL=https://cheaperfordrug.com
-  NEXT_PUBLIC_API_BASE_URL=https://cheaperfordrug.com/api/v1
+  NEXT_PUBLIC_API_PUBLIC_URL=https://cheaperfordrug.com
+  NEXT_PUBLIC_API_INTERNAL_URL=https://cheaperfordrug.com
   ```
 
-  Note: All API calls are client-side (browser), so we use the public HTTPS domain.
+  Note:
+  - All API calls are client-side (browser)
+  - Public API: `/api/public/*` (no auth)
+  - Internal API: `/api/internal/*` (JWT auth required)
+  - Examples:
+    - `https://cheaperfordrug.com/api/public/drugs`
+    - `https://cheaperfordrug.com/api/internal/auth/signin`
 
 - **Google Maps** (if used):
   ```
@@ -370,24 +376,39 @@ Frontend application has no database or background processing. All data operatio
 
 ### Client-Side API Communication
 
-All API calls are **client-side** (happen in the browser):
+All API calls are **client-side** (happen in the browser). The API has two types:
 
+**1. Public API (No Authentication)**
 ```javascript
-// In React components, hooks, event handlers
-// Browser makes direct HTTPS requests to API
+// Public endpoints: /api/public/*
+// Used for: Drug search, pharmacy listings, public data
 const response = await fetch(
-  `${process.env.NEXT_PUBLIC_API_BASE_URL}/drugs`,
+  `${process.env.NEXT_PUBLIC_API_PUBLIC_URL}/api/public/drugs`
+);
+```
+
+**2. Internal API (JWT Authentication)**
+```javascript
+// Internal endpoints: /api/internal/*
+// Used for: Authentication, user profile, shopping lists, subscriptions
+const response = await fetch(
+  `${process.env.NEXT_PUBLIC_API_INTERNAL_URL}/api/internal/auth/signin`,
   {
-    headers: { 'Authorization': `Bearer ${token}` }
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`  // JWT token
+    },
+    body: JSON.stringify({ email, password })
   }
 );
 ```
 
 **Architecture:**
 ```
-User's Browser → Internet (HTTPS) → cheaperfordrug.com (API)
-                 ↑
-            (all API calls)
+User's Browser → Internet (HTTPS) → cheaperfordrug.com
+                                      ├── /api/public/*   (no auth)
+                                      └── /api/internal/* (JWT auth)
 ```
 
 Note: This is a **SPA (Single Page Application)** architecture, not SSR. The Next.js containers serve static/pre-rendered content, and the browser handles all API communication.
