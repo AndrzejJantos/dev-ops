@@ -91,8 +91,9 @@ RUN rm -f .env .env.production .env.local .env.*.local
 # Copy precompiled assets from builder
 COPY --from=builder --chown=app:app /app/public/assets ./public/assets
 
-# Set proper permissions
-RUN chown -R app:app /app && \
+# Create necessary Rails directories
+RUN mkdir -p tmp/pids tmp/cache tmp/sockets log && \
+    chown -R app:app /app && \
     chmod -R 755 /app
 
 # Switch to non-root user
