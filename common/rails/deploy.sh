@@ -190,10 +190,134 @@ rails_deploy_rolling() {
     return 0
 }
 
+# Function: Display deployment summary
+rails_display_deployment_summary() {
+    local scale="$1"
+    local image_tag="$2"
+    local migrations_run="${3:-false}"
+
+    echo ""
+    echo "================================================================================"
+    echo "                     DEPLOYMENT SUMMARY"
+    echo "================================================================================"
+    echo ""
+
+    # Application Information
+    echo "APPLICATION:"
+    echo "  Name: ${APP_DISPLAY_NAME}"
+    echo "  App ID: ${APP_NAME}"
+    echo "  Git Commit: ${CURRENT_COMMIT:0:7}"
+    echo "  Image Tag: ${image_tag}"
+    echo ""
+
+    # Deployment Status
+    echo "DEPLOYMENT STATUS:"
+    echo "  Status: SUCCESS ✓"
+    echo "  Timestamp: $(date)"
+    echo "  Migrations: $([ "$migrations_run" = "true" ] && echo "Executed ✓" || echo "Not needed")"
+    echo ""
+
+    # URLs and Access
+    echo "AVAILABILITY:"
+    echo "  Primary URL: https://${DOMAIN}"
+    if [[ "$DOMAIN" != www.* ]]; then
+        echo "  Alternative: https://www.${DOMAIN}"
+    fi
+    echo "  Health Check: https://${DOMAIN}${HEALTH_CHECK_PATH}"
+    echo ""
+
+    # Container Information
+    echo "WEB CONTAINERS:"
+    local containers=($(get_running_containers "$APP_NAME"))
+    echo "  Count: ${#containers[@]} instances"
+    echo "  Containers:"
+    for container in "${containers[@]}"; do
+        local port=$(docker port "$container" 80 2>/dev/null | cut -d ':' -f2)
+        local status=$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null)
+        echo "    - ${container} (port ${port}, status: ${status})"
+    done
+    echo ""
+
+    # Worker Information (if applicable)
+    local worker_containers=($(docker ps --filter "name=${APP_NAME}_worker" --format "{{.Names}}" 2>/dev/null))
+    if [ ${#worker_containers[@]} -gt 0 ]; then
+        echo "WORKER CONTAINERS:"
+        echo "  Count: ${#worker_containers[@]} instances"
+        for worker in "${worker_containers[@]}"; do
+            local status=$(docker inspect -f '{{.State.Status}}' "$worker" 2>/dev/null)
+            echo "    - ${worker} (status: ${status})"
+        done
+        echo ""
+    fi
+
+    # Image Backups
+    echo "IMAGE BACKUPS:"
+    if [ -d "$IMAGE_BACKUP_DIR" ]; then
+        local backup_count=$(ls -1 "${IMAGE_BACKUP_DIR}"/*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
+        echo "  Available: ${backup_count} backups"
+        echo "  Location: ${IMAGE_BACKUP_DIR}"
+        echo "  Latest: ${APP_NAME}_${image_tag}.tar.gz"
+    else
+        echo "  Status: Disabled"
+    fi
+    echo ""
+
+    # Rollback Instructions
+    echo "ROLLBACK:"
+    echo "  To rollback to the previous version:"
+    if [ -d "$IMAGE_BACKUP_DIR" ]; then
+        local previous_backup=$(ls -t "${IMAGE_BACKUP_DIR}"/*.tar.gz 2>/dev/null | sed -n '2p')
+        if [ -n "$previous_backup" ]; then
+            echo "    ./deploy.sh rollback $previous_backup"
+        else
+            echo "    ./deploy.sh list-images  # List available versions"
+            echo "    ./deploy.sh rollback <image-file>"
+        fi
+    else
+        echo "    Image backups not enabled"
+    fi
+    echo ""
+
+    # Useful Commands
+    echo "USEFUL COMMANDS:"
+    echo "  View logs:        docker logs ${APP_NAME}_web_1 -f"
+    echo "  Rails console:    docker exec -it ${APP_NAME}_web_1 rails console"
+    echo "  Check health:     curl https://${DOMAIN}${HEALTH_CHECK_PATH}"
+    echo "  Scale up:         ./deploy.sh scale $((scale + 1))"
+    echo "  Scale down:       ./deploy.sh scale $((scale - 1))"
+    echo "  Restart:          ./deploy.sh restart"
+    echo "  Stop:             ./deploy.sh stop"
+    echo ""
+
+    # Database Information
+    echo "DATABASE:"
+    echo "  Name: ${DB_NAME}"
+    echo "  Latest Backup: $(ls -t ${BACKUP_DIR}/*.sql.gz 2>/dev/null | head -1 | xargs -r basename)"
+    echo "  Backup Location: ${BACKUP_DIR}"
+    echo ""
+
+    # Next Steps
+    echo "NEXT STEPS:"
+    echo "  1. Verify the application is working:"
+    echo "     curl https://${DOMAIN}"
+    echo ""
+    echo "  2. Monitor the logs for any issues:"
+    echo "     docker logs ${APP_NAME}_web_1 -f"
+    echo ""
+    echo "  3. If something went wrong, rollback immediately:"
+    echo "     ./deploy.sh list-images"
+    echo "     ./deploy.sh rollback <previous-image>"
+    echo ""
+
+    echo "================================================================================"
+    echo ""
+}
+
 # Function: Main Rails deployment workflow
 rails_deploy_application() {
     local scale="$1"
     local image_tag="$(date +%Y%m%d_%H%M%S)"
+    local migrations_run="false"
 
     log_info "Starting Rails deployment of ${APP_DISPLAY_NAME} with scale=${scale}"
 
@@ -208,7 +332,21 @@ rails_deploy_application() {
 
     if [ $current_count -eq 0 ]; then
         rails_deploy_fresh "$scale" "$image_tag" || return 1
+        if [ "$MIGRATION_BACKUP_ENABLED" = "true" ]; then
+            migrations_run="true"
+        fi
     else
+        # Check if migrations will run
+        local test_container="${APP_NAME}_migration_check"
+        if [ "$MIGRATION_BACKUP_ENABLED" = "true" ]; then
+            docker run -d --name "$test_container" --env-file "$ENV_FILE" "${DOCKER_IMAGE_NAME}:${image_tag}" sleep infinity 2>/dev/null
+            sleep 2
+            if rails_check_pending_migrations "$test_container" 2>/dev/null; then
+                migrations_run="true"
+            fi
+            docker rm -f "$test_container" 2>/dev/null
+        fi
+
         rails_deploy_rolling "$scale" "$image_tag" || return 1
     fi
 
@@ -218,9 +356,12 @@ rails_deploy_application() {
     fi
 
     # Log deployment
-    echo "[$(date)] Deployed ${DOCKER_IMAGE_NAME}:${image_tag} with scale=${scale}" >> "${LOG_DIR}/deployments.log"
+    echo "[$(date)] Deployed ${DOCKER_IMAGE_NAME}:${image_tag} with scale=${scale}, migrations=${migrations_run}" >> "${LOG_DIR}/deployments.log"
 
     log_success "Rails deployment completed successfully!"
+
+    # Display comprehensive summary
+    rails_display_deployment_summary "$scale" "$image_tag" "$migrations_run"
 
     return 0
 }
