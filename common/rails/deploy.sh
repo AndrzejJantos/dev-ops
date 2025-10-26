@@ -39,6 +39,13 @@ rails_build_image() {
 
     log_info "Building Docker image with tag: ${image_tag}"
 
+    # Ensure Dockerfile from DevOps template is used (in case git pull overwrote it)
+    if [ -f "${DEVOPS_DIR}/common/rails/Dockerfile.template" ]; then
+        log_info "Copying Dockerfile from DevOps template..."
+        cp "${DEVOPS_DIR}/common/rails/Dockerfile.template" "${REPO_DIR}/Dockerfile"
+        cp "${DEVOPS_DIR}/common/rails/.dockerignore.template" "${REPO_DIR}/.dockerignore"
+    fi
+
     build_docker_image "$DOCKER_IMAGE_NAME" "$REPO_DIR" "$image_tag"
 
     if [ $? -ne 0 ]; then
