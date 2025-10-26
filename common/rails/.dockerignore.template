@@ -1,0 +1,79 @@
+# .dockerignore for Rails Applications
+# This file tells Docker which files to exclude from the build context
+# Reduces build time and prevents sensitive files from being copied
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+CHANGELOG.md
+*.md
+
+# Environment files (except .env which is needed for build)
+# Note: .env is copied explicitly in Dockerfile, then removed
+.env.local
+.env.*.local
+.env.development
+.env.test
+
+# Dependencies (will be installed during build)
+vendor/bundle
+node_modules
+
+# Rails temporary files
+tmp/*
+log/*
+*.log
+*.pid
+
+# Rails cache
+tmp/cache
+public/assets/.sprockets-manifest-*
+
+# Storage
+storage/*
+
+# Test files
+spec/
+test/
+features/
+coverage/
+
+# Development tools
+.byebug_history
+.ruby-version
+.rubocop.yml
+.rspec
+.bundle
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.env.example
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+circle.yml
+
+# Docker
+Dockerfile.dev
+docker-compose.yml
+docker-compose.*.yml
+.dockerignore
+
+# Deployment
+config/deploy.rb
+config/deploy/
+
+# Credentials (use Rails encrypted credentials instead)
+config/master.key
+config/credentials.yml.enc

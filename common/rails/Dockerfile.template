@@ -1,0 +1,115 @@
+# =============================================================================
+# Multi-stage Dockerfile for Rails Applications
+# =============================================================================
+# This Dockerfile uses a multi-stage build to:
+# 1. Build assets with environment variables from .env file
+# 2. Create a clean production image without .env file
+# 3. Minimize final image size and security risks
+#
+# The setup script copies .env.production to .env before build and removes it after.
+# This Dockerfile uses .env during asset precompilation but excludes it from final image.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Builder - Precompile assets with full environment
+# -----------------------------------------------------------------------------
+FROM ruby:3.3.4-slim AS builder
+
+# Install build dependencies
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    nodejs \
+    npm \
+    git \
+    curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy Gemfile and install gems
+COPY Gemfile Gemfile.lock ./
+RUN bundle config set --local deployment 'true' && \
+    bundle config set --local without 'development test' && \
+    bundle install --jobs 4 --retry 3
+
+# Copy package files and install Node packages if they exist
+COPY package*.json ./
+RUN if [ -f package.json ]; then npm ci --production; fi
+
+# Copy the entire application
+COPY . .
+
+# IMPORTANT: Copy .env file for asset precompilation
+# The setup script creates this file before running docker build
+# This file contains all necessary environment variables for Rails.application.config
+COPY .env .env
+
+# Precompile assets with environment variables loaded from .env
+# Export all variables from .env file and use them during asset precompilation
+# The --env-file approach doesn't work in RUN, so we source the .env file
+RUN set -a && \
+    . ./.env && \
+    set +a && \
+    RAILS_ENV=production bundle exec rails assets:precompile
+
+# Clean up build artifacts
+RUN rm -rf node_modules tmp/cache vendor/bundle/ruby/*/cache
+
+# -----------------------------------------------------------------------------
+# Stage 2: Production - Clean runtime image without .env file
+# -----------------------------------------------------------------------------
+FROM ruby:3.3.4-slim
+
+# Install runtime dependencies only
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    tzdata && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create app user for security (don't run as root)
+RUN groupadd -r app && useradd -r -g app app
+
+# Set working directory
+WORKDIR /app
+
+# Copy installed gems from builder
+COPY --from=builder /usr/local/bundle /usr/local/bundle
+
+# Copy application code from builder (without .env file)
+COPY --from=builder --chown=app:app /app ./
+
+# SECURITY: Explicitly remove .env file from final image
+# This ensures no environment secrets are baked into the image
+RUN rm -f .env .env.production .env.local .env.*.local
+
+# Copy precompiled assets from builder
+COPY --from=builder --chown=app:app /app/public/assets ./public/assets
+
+# Set proper permissions
+RUN chown -R app:app /app && \
+    chmod -R 755 /app
+
+# Switch to non-root user
+USER app
+
+# Expose port
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:80/health || exit 1
+
+# Set environment variables for runtime
+# These will be provided by docker run --env-file at runtime
+ENV RAILS_ENV=production \
+    RAILS_LOG_TO_STDOUT=true \
+    RAILS_SERVE_STATIC_FILES=true \
+    PORT=80
+
+# Start Puma server
+CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]
