@@ -38,7 +38,7 @@ export PORT_RANGE_END=3019 # Ending port (supports 10 instances)
 export DEFAULT_SCALE=2     # Default number of container instances
 
 # Mailgun configuration for notifications
-export MAILGUN_API_KEY="your_mailgun_api_key_here"
+export MAILGUN_API_KEY="dummy_mailgun_key_change_me"
 export MAILGUN_DOMAIN="mg.taniejpolek.pl"
 export MAILGUN_FROM_EMAIL="noreply@${MAILGUN_DOMAIN}"
 export NOTIFICATION_EMAIL="andrzej@webet.pl"
@@ -55,12 +55,12 @@ export DOCKER_NETWORK="bridge"
 # Application-specific environment variables
 # These will be written to .env.production during setup
 export APP_ENV_VARS=(
-    "STRIPE_PUBLISHABLE_KEY=pk_live_your_production_publishable_key"
-    "STRIPE_SECRET_KEY=sk_live_your_production_secret_key"
-    "GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX"
-    "GOOGLE_TAG_MANAGER_ID=GTM-XXXXXXX"
-    "FACEBOOK_PIXEL_ID=1234567890123456"
-    "ROLLBAR_ACCESS_TOKEN=your_rollbar_token_here"
+    "STRIPE_PUBLISHABLE_KEY=pk_test_dummy_change_me"
+    "STRIPE_SECRET_KEY=sk_test_dummy_change_me"
+    "GOOGLE_ANALYTICS_ID=G-DUMMY000000"
+    "GOOGLE_TAG_MANAGER_ID=GTM-DUMMY00"
+    "FACEBOOK_PIXEL_ID=000000000000000"
+    "ROLLBAR_ACCESS_TOKEN=dummy_rollbar_token_change_me"
     "ADMIN_EMAIL=andrzej@webet.pl"
 )
 
