@@ -93,7 +93,7 @@ start_worker_container() {
         --restart unless-stopped \
         --env-file "$env_file" \
         "$image_name" \
-        /bin/bash -c "cd /rails && $worker_command"
+        /bin/bash -c "cd /app && $worker_command"
 
     if [ $? -eq 0 ]; then
         log_success "Worker container started successfully"
@@ -123,7 +123,7 @@ start_scheduler_container() {
         --restart unless-stopped \
         --env-file "$env_file" \
         "$image_name" \
-        /bin/bash -c "cd /rails && $scheduler_command"
+        /bin/bash -c "cd /app && $scheduler_command"
 
     if [ $? -eq 0 ]; then
         log_success "Scheduler container started successfully"
@@ -165,7 +165,7 @@ run_migrations() {
 
     log_info "Running database migrations in ${container_name}"
 
-    docker exec "$container_name" /bin/bash -c "cd /rails && bundle exec rails db:migrate"
+    docker exec "$container_name" /bin/bash -c "cd /app && bundle exec rails db:migrate"
 
     if [ $? -eq 0 ]; then
         log_success "Migrations completed successfully"
@@ -182,7 +182,7 @@ check_pending_migrations() {
 
     log_info "Checking for pending migrations..."
 
-    local output=$(docker exec "$container_name" /bin/bash -c "cd /rails && bundle exec rails db:migrate:status 2>&1")
+    local output=$(docker exec "$container_name" /bin/bash -c "cd /app && bundle exec rails db:migrate:status 2>&1")
 
     if echo "$output" | grep -q "down"; then
         log_warning "Pending migrations detected"

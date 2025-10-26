@@ -590,7 +590,7 @@ rails_run_console() {
     fi
 
     log_info "Starting Rails console in ${container_name}..."
-    docker exec -it "$container_name" /bin/bash -c "cd /rails && bundle exec rails console"
+    docker exec -it "$container_name" /bin/bash -c "cd /app && bundle exec rails console"
 
     return 0
 }
@@ -607,7 +607,7 @@ rails_run_task() {
     fi
 
     log_info "Running Rails task in ${container_name}: ${task}"
-    docker exec -it "$container_name" /bin/bash -c "cd /rails && bundle exec rails ${task}"
+    docker exec -it "$container_name" /bin/bash -c "cd /app && bundle exec rails ${task}"
 
     return 0
 }
