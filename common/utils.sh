@@ -169,6 +169,25 @@ grant_database_privileges() {
     fi
 }
 
+# Reset database user password
+reset_db_user_password() {
+    local db_user="$1"
+    local db_password="$2"
+
+    log_info "Resetting password for database user: ${db_user}"
+
+    # Use ALTER USER to change password
+    sudo -u postgres psql -c "ALTER USER ${db_user} WITH PASSWORD '${db_password}';" 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+        log_success "Password reset for ${db_user}"
+        return 0
+    else
+        log_error "Failed to reset password for ${db_user}"
+        return 1
+    fi
+}
+
 # Get or generate secret
 get_or_generate_secret() {
     local env_file="$1"

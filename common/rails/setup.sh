@@ -44,7 +44,7 @@ rails_setup_database() {
 
     log_info "Database user will be: ${DB_APP_USER}"
 
-    # Create database user if it doesn't exist
+    # Create database user if it doesn't exist, or reset password if it does
     if ! check_db_user_exists "$DB_APP_USER"; then
         create_db_user "$DB_APP_USER" "$DB_APP_PASSWORD"
         if [ $? -ne 0 ]; then
@@ -53,6 +53,12 @@ rails_setup_database() {
         fi
     else
         log_info "Database user ${DB_APP_USER} already exists"
+        # Reset password to match the one in .env file
+        reset_db_user_password "$DB_APP_USER" "$DB_APP_PASSWORD"
+        if [ $? -ne 0 ]; then
+            log_error "Failed to reset database user password"
+            return 1
+        fi
     fi
 
     # Create database if it doesn't exist
