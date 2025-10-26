@@ -66,10 +66,10 @@ Before deploying, ensure your server has:
 ### DNS Configuration Required
 
 Ensure DNS A records point to your server IP:
-- `presale.taniejpolek.pl` → Server IP
-- `premiera.taniejpolek.pl` → Server IP
-- `cheaperfordrug.com` → Server IP
-- `www.cheaperfordrug.com` → Server IP (optional)
+- `presale.taniejpolek.pl` → Server IP (Landing page)
+- `premiera.taniejpolek.pl` → Server IP (Web frontend)
+- `api-public.cheaperfordrug.com` → Server IP (Public API)
+- `api-internal.cheaperfordrug.com` → Server IP (Internal API)
 
 ---
 
@@ -113,9 +113,11 @@ cd ~/DevOps/apps/cheaperfordrug-landing
 
 ### Overview
 - **Type**: Rails API with full background processing
-- **Domain**: cheaperfordrug.com
+- **Domains**:
+  - `api-public.cheaperfordrug.com` - Public API (no auth)
+  - `api-internal.cheaperfordrug.com` - Internal API (JWT auth)
 - **Purpose**: Backend API for web frontend
-- **Architecture**: 3 web + 2 workers + 1 scheduler
+- **Architecture**: 3 web + 2 workers + 1 scheduler (both subdomains use same containers)
 - **Status**: 🆕 Ready to deploy
 
 ### Initial Setup
@@ -170,9 +172,11 @@ cd ~/DevOps/apps/cheaperfordrug-api
 ./deploy.sh ssl-setup
 ```
 
-Follow certbot prompts to configure SSL for:
-- cheaperfordrug.com
-- www.cheaperfordrug.com
+This will configure SSL for BOTH API subdomains:
+- api-public.cheaperfordrug.com
+- api-internal.cheaperfordrug.com
+
+Follow certbot prompts to complete the setup.
 
 #### 5. Deploy Application
 ```bash
@@ -301,19 +305,19 @@ nano ~/apps/cheaperfordrug-web/.env.production
 ```
 
 Update the following:
-- **API URLs** (backend - both public and internal use same domain):
+- **API URLs** (backend - separate subdomains for public and internal):
   ```
-  NEXT_PUBLIC_API_PUBLIC_URL=https://cheaperfordrug.com
-  NEXT_PUBLIC_API_INTERNAL_URL=https://cheaperfordrug.com
+  NEXT_PUBLIC_API_PUBLIC_URL=https://api-public.cheaperfordrug.com
+  NEXT_PUBLIC_API_INTERNAL_URL=https://api-internal.cheaperfordrug.com
   ```
 
   Note:
   - All API calls are client-side (browser)
-  - Public API: `/api/public/*` (no auth)
-  - Internal API: `/api/internal/*` (JWT auth required)
+  - Public API: `api-public.cheaperfordrug.com/api/public/*` (no auth)
+  - Internal API: `api-internal.cheaperfordrug.com/api/internal/*` (JWT auth)
   - Examples:
-    - `https://cheaperfordrug.com/api/public/drugs`
-    - `https://cheaperfordrug.com/api/internal/auth/signin`
+    - `https://api-public.cheaperfordrug.com/api/public/drugs`
+    - `https://api-internal.cheaperfordrug.com/api/internal/auth/signin`
 
 - **Google Maps** (if used):
   ```
@@ -380,16 +384,19 @@ All API calls are **client-side** (happen in the browser). The API has two types
 
 **1. Public API (No Authentication)**
 ```javascript
-// Public endpoints: /api/public/*
+// Subdomain: api-public.cheaperfordrug.com
+// Routes: /api/public/*
 // Used for: Drug search, pharmacy listings, public data
 const response = await fetch(
   `${process.env.NEXT_PUBLIC_API_PUBLIC_URL}/api/public/drugs`
 );
+// Calls: https://api-public.cheaperfordrug.com/api/public/drugs
 ```
 
 **2. Internal API (JWT Authentication)**
 ```javascript
-// Internal endpoints: /api/internal/*
+// Subdomain: api-internal.cheaperfordrug.com
+// Routes: /api/internal/*
 // Used for: Authentication, user profile, shopping lists, subscriptions
 const response = await fetch(
   `${process.env.NEXT_PUBLIC_API_INTERNAL_URL}/api/internal/auth/signin`,
@@ -402,13 +409,18 @@ const response = await fetch(
     body: JSON.stringify({ email, password })
   }
 );
+// Calls: https://api-internal.cheaperfordrug.com/api/internal/auth/signin
 ```
 
 **Architecture:**
 ```
-User's Browser → Internet (HTTPS) → cheaperfordrug.com
-                                      ├── /api/public/*   (no auth)
+User's Browser → Internet (HTTPS) → api-public.cheaperfordrug.com
+                                      └── /api/public/* (no auth)
+
+User's Browser → Internet (HTTPS) → api-internal.cheaperfordrug.com
                                       └── /api/internal/* (JWT auth)
+
+Both subdomains → Same API backend containers (ports 3020-3022)
 ```
 
 Note: This is a **SPA (Single Page Application)** architecture, not SSR. The Next.js containers serve static/pre-rendered content, and the browser handles all API communication.

@@ -8,7 +8,13 @@
 # ============================================================================
 export APP_NAME="cheaperfordrug-api"
 export APP_DISPLAY_NAME="CheaperForDrug API"
-export DOMAIN="cheaperfordrug.com"
+
+# API uses two subdomains (both point to same backend containers)
+export DOMAIN_PUBLIC="api-public.cheaperfordrug.com"
+export DOMAIN_INTERNAL="api-internal.cheaperfordrug.com"
+
+# Primary domain for SSL setup (will include both subdomains)
+export DOMAIN="api-public.cheaperfordrug.com"
 
 # ============================================================================
 # REPOSITORY CONFIGURATION

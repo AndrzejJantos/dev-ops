@@ -238,8 +238,9 @@ case "${1:-help}" in
         handle_logs "$2"
         ;;
     ssl-setup)
-        log_info "Setting up SSL certificates for ${DOMAIN}"
-        sudo certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN"
+        log_info "Setting up SSL certificates for API subdomains"
+        log_info "Installing certificates for ${DOMAIN_PUBLIC} and ${DOMAIN_INTERNAL}"
+        sudo certbot --nginx -d "$DOMAIN_PUBLIC" -d "$DOMAIN_INTERNAL"
         ;;
     help|*)
         echo "CheaperForDrug API Deployment Script"
