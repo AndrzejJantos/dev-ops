@@ -168,6 +168,99 @@ cleanup_old_images() {
     fi
 }
 
+# Save Docker image as tar file
+save_docker_image() {
+    local image_name="$1"
+    local image_tag="$2"
+    local backup_dir="$3"
+
+    log_info "Saving Docker image as tar file: ${image_name}:${image_tag}"
+
+    # Create backup directory if it doesn't exist
+    mkdir -p "$backup_dir"
+
+    local tar_file="${backup_dir}/${image_name}_${image_tag}.tar"
+
+    # Save image to tar file
+    if docker save "${image_name}:${image_tag}" -o "$tar_file"; then
+        # Compress the tar file to save space
+        gzip -f "$tar_file"
+        log_success "Image saved to ${tar_file}.gz"
+
+        # Show file size
+        local file_size=$(du -h "${tar_file}.gz" | cut -f1)
+        log_info "Backup size: ${file_size}"
+        return 0
+    else
+        log_error "Failed to save Docker image"
+        return 1
+    fi
+}
+
+# Load Docker image from tar file
+load_docker_image() {
+    local tar_file="$1"
+
+    log_info "Loading Docker image from ${tar_file}"
+
+    # Check if file is gzipped
+    if [[ "$tar_file" == *.gz ]]; then
+        if gunzip -c "$tar_file" | docker load; then
+            log_success "Image loaded successfully"
+            return 0
+        else
+            log_error "Failed to load Docker image"
+            return 1
+        fi
+    else
+        if docker load -i "$tar_file"; then
+            log_success "Image loaded successfully"
+            return 0
+        else
+            log_error "Failed to load Docker image"
+            return 1
+        fi
+    fi
+}
+
+# Cleanup old image backups
+cleanup_old_image_backups() {
+    local backup_dir="$1"
+    local keep_count="${2:-5}"
+
+    log_info "Cleaning up old image backups in ${backup_dir}"
+
+    if [ ! -d "$backup_dir" ]; then
+        log_info "Backup directory doesn't exist"
+        return 0
+    fi
+
+    # Get list of tar.gz files sorted by modification time (oldest first)
+    local old_files=$(ls -t "${backup_dir}"/*.tar.gz 2>/dev/null | tail -n +$((keep_count + 1)))
+
+    if [ -n "$old_files" ]; then
+        echo "$old_files" | xargs rm -f
+        log_success "Old image backups cleaned up"
+    else
+        log_info "No old backups to clean up"
+    fi
+}
+
+# List available image backups
+list_image_backups() {
+    local backup_dir="$1"
+
+    if [ ! -d "$backup_dir" ]; then
+        log_warning "No backup directory found at ${backup_dir}"
+        return 1
+    fi
+
+    log_info "Available image backups:"
+    echo ""
+    ls -lh "${backup_dir}"/*.tar.gz 2>/dev/null | awk '{print "  " $9 " (" $5 ", " $6 " " $7 " " $8 ")"}'
+    echo ""
+}
+
 # Get next available port
 get_next_available_port() {
     local start_port="$1"

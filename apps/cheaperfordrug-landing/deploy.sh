@@ -286,17 +286,92 @@ handle_stop() {
     fi
 }
 
+# Handle rollback command
+handle_rollback() {
+    local image_file="$1"
+
+    # Check if setup has been run
+    if [ ! -f "$ENV_FILE" ]; then
+        log_error "Application not set up. Please run setup.sh first."
+        exit 1
+    fi
+
+    # Load environment variables
+    load_env_file "$ENV_FILE"
+
+    # If no image file specified, list available backups
+    if [ -z "$image_file" ]; then
+        log_info "Available image backups for rollback:"
+        list_image_backups "$IMAGE_BACKUP_DIR"
+        log_info "Usage: $0 rollback <image-file.tar.gz>"
+        exit 0
+    fi
+
+    # Check if file exists
+    if [ ! -f "$image_file" ]; then
+        log_error "Image file not found: ${image_file}"
+        exit 1
+    fi
+
+    # Load the image
+    log_info "Rolling back to image: ${image_file}"
+    if load_docker_image "$image_file"; then
+        # Restart with the loaded image (it will be tagged as latest)
+        log_info "Restarting application with rolled-back image..."
+        if rails_restart_application "$SCALE"; then
+            log_success "Rollback completed successfully"
+            send_mailgun_notification \
+                "${APP_DISPLAY_NAME} - Rollback Completed" \
+                "Application ${APP_NAME} has been rolled back.
+
+Timestamp: $(date)
+Host: $(hostname)
+Image File: ${image_file}
+
+All containers have been restarted with the previous version." \
+                "$MAILGUN_API_KEY" \
+                "$MAILGUN_DOMAIN" \
+                "$NOTIFICATION_EMAIL"
+            exit 0
+        else
+            log_error "Failed to restart after rollback"
+            exit 1
+        fi
+    else
+        log_error "Failed to load image for rollback"
+        exit 1
+    fi
+}
+
+# Handle list-images command
+handle_list_images() {
+    # Check if setup has been run
+    if [ ! -f "$ENV_FILE" ]; then
+        log_error "Application not set up. Please run setup.sh first."
+        exit 1
+    fi
+
+    # Load environment variables
+    load_env_file "$ENV_FILE"
+
+    # List available image backups
+    list_image_backups "$IMAGE_BACKUP_DIR"
+    exit 0
+}
+
 # Display help
 show_help() {
     cat << EOF
 Usage: $0 [command] [scale]
 
 Commands:
-  deploy          Pull code, build image, deploy with zero downtime (default)
-  restart         Restart containers with current image
-  scale <number>  Scale to specified number of instances
-  stop            Stop all containers
-  help            Show this help message
+  deploy              Pull code, build image, deploy with zero downtime (default)
+  restart             Restart containers with current image
+  scale <number>      Scale to specified number of instances
+  stop                Stop all containers
+  rollback [file]     Rollback to a previous image backup
+  list-images         List available image backups for rollback
+  help                Show this help message
 
 Examples:
   $0 deploy
@@ -304,6 +379,8 @@ Examples:
   $0 restart
   $0 scale 4
   $0 stop
+  $0 list-images
+  $0 rollback ~/apps/${APP_NAME}/docker-images/${APP_NAME}_20250126_143022.tar.gz
 
 Configuration:
   App: ${APP_DISPLAY_NAME}
@@ -311,6 +388,8 @@ Configuration:
   Domain: ${DOMAIN}
   Default Scale: ${DEFAULT_SCALE}
   Port Range: ${BASE_PORT}-${PORT_RANGE_END}
+  Image Backups: ${IMAGE_BACKUP_DIR}
+  Max Backups: ${MAX_IMAGE_BACKUPS}
 EOF
 }
 
@@ -339,6 +418,12 @@ main() {
             ;;
         stop)
             handle_stop
+            ;;
+        rollback)
+            handle_rollback "$SCALE"
+            ;;
+        list-images)
+            handle_list_images
             ;;
         help|--help|-h)
             show_help

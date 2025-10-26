@@ -50,6 +50,15 @@ rails_build_image() {
     docker tag "${DOCKER_IMAGE_NAME}:${image_tag}" "${DOCKER_IMAGE_NAME}:latest"
 
     log_success "Docker image built and tagged successfully"
+
+    # Save image as tar file backup if enabled
+    if [ "${SAVE_IMAGE_BACKUPS:-false}" = "true" ] && [ -n "${IMAGE_BACKUP_DIR:-}" ]; then
+        save_docker_image "$DOCKER_IMAGE_NAME" "$image_tag" "$IMAGE_BACKUP_DIR"
+
+        # Cleanup old image backups
+        cleanup_old_image_backups "$IMAGE_BACKUP_DIR" "${MAX_IMAGE_BACKUPS:-5}"
+    fi
+
     return 0
 }
 

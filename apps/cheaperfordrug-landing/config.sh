@@ -73,6 +73,11 @@ export HEALTH_CHECK_INTERVAL=2
 export BACKUP_RETENTION_DAYS=30
 export MAX_IMAGE_VERSIONS=3
 
+# Docker image backup (save images as tar files in app directory)
+export IMAGE_BACKUP_DIR="${APP_DIR}/docker-images"
+export SAVE_IMAGE_BACKUPS=true  # Save each built image as .tar file
+export MAX_IMAGE_BACKUPS=5      # Keep last 5 image tar files
+
 # Deployment configuration
 export MIGRATION_BACKUP_ENABLED=true
 export ZERO_DOWNTIME_ENABLED=true

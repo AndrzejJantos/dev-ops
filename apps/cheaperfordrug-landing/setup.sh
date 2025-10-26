@@ -189,6 +189,7 @@ main() {
     ensure_directory "$APP_DIR" "$DEPLOY_USER"
     ensure_directory "$BACKUP_DIR" "$DEPLOY_USER"
     ensure_directory "$LOG_DIR" "$DEPLOY_USER"
+    ensure_directory "$IMAGE_BACKUP_DIR" "$DEPLOY_USER"
 
     # Clone or update repository
     if [ ! -d "$REPO_DIR" ]; then
