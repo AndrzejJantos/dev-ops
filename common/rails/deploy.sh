@@ -287,11 +287,14 @@ rails_display_deployment_summary() {
     echo "  Scale down:       ./deploy.sh scale $((scale - 1))"
     echo "  Restart:          ./deploy.sh restart"
     echo "  Stop:             ./deploy.sh stop"
+    echo "  Restore DB:       ${APP_DIR}/restore.sh"
     echo ""
 
     # Database Information
     echo "DATABASE:"
     echo "  Name: ${DB_NAME}"
+    local backup_count=$(ls -1 ${BACKUP_DIR}/*.sql.gz 2>/dev/null | wc -l | tr -d ' ')
+    echo "  Available Backups: ${backup_count}"
     echo "  Latest Backup: $(ls -t ${BACKUP_DIR}/*.sql.gz 2>/dev/null | head -1 | xargs -r basename)"
     echo "  Backup Location: ${BACKUP_DIR}"
     echo ""

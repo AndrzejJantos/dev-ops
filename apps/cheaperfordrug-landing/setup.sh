@@ -237,7 +237,8 @@ Useful Commands:
   Edit Nginx:       sudo vim ${APP_DIR}/nginx.conf
   Edit Env Vars:    vim ${ENV_FILE}
   Deploy:           ${APP_CONFIG_DIR}/deploy.sh deploy
-  Rollback:         ${APP_CONFIG_DIR}/deploy.sh rollback -1
+  Rollback App:     ${APP_CONFIG_DIR}/deploy.sh rollback -1
+  Restore DB:       ${APP_CONFIG_DIR}/restore.sh
   View Logs:        docker logs ${APP_NAME}_web_1 -f
   Rails Console:    docker exec -it ${APP_NAME}_web_1 rails console
   Manual Backup:    ${APP_DIR}/backup-db.sh
@@ -247,6 +248,7 @@ Cron Jobs:
   Check status:     crontab -l
   Backup logs:      tail -f ${LOG_DIR}/backup.log
   Cleanup logs:     tail -f ${LOG_DIR}/cleanup.log
+  Restore logs:     tail -f ${LOG_DIR}/restore.log
 
 Setup completed: $(date)
 EOF
@@ -337,8 +339,17 @@ EOF
     # Update crontab
     echo -e "$current_crontab" | crontab -u "$DEPLOY_USER" -
 
+    # Copy restore script to app directory
+    if [ -f "${APP_CONFIG_DIR}/restore.sh" ]; then
+        cp "${APP_CONFIG_DIR}/restore.sh" "${APP_DIR}/restore.sh"
+        chmod +x "${APP_DIR}/restore.sh"
+        chown "${DEPLOY_USER}:${DEPLOY_USER}" "${APP_DIR}/restore.sh"
+        log_success "Restore script installed: ${APP_DIR}/restore.sh"
+    fi
+
     log_info "Backup script: ${backup_script}"
     log_info "Cleanup script: ${cleanup_script}"
+    log_info "Restore script: ${APP_DIR}/restore.sh"
     log_info "Backup logs: ${LOG_DIR}/backup.log"
     log_info "Cleanup logs: ${LOG_DIR}/cleanup.log"
 
