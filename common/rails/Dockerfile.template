@@ -31,7 +31,8 @@ WORKDIR /app
 
 # Copy Gemfile and install gems
 COPY Gemfile Gemfile.lock ./
-RUN bundle config set --local deployment 'true' && \
+RUN bundle config set --local path '.bundle/vendor' && \
+    bundle config set --local deployment 'true' && \
     bundle config set --local without 'development test' && \
     bundle install --jobs 4 --retry 3
 
@@ -56,7 +57,7 @@ RUN set -a && \
     RAILS_ENV=production bundle exec rails assets:precompile
 
 # Clean up build artifacts
-RUN rm -rf node_modules tmp/cache vendor/bundle/ruby/*/cache
+RUN rm -rf node_modules tmp/cache .bundle/vendor/ruby/*/cache
 
 # -----------------------------------------------------------------------------
 # Stage 2: Production - Clean runtime image without .env file

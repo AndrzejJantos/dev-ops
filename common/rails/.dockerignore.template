@@ -20,6 +20,7 @@ CHANGELOG.md
 .env.test
 
 # Dependencies (will be installed during build)
+.bundle/vendor
 vendor/bundle
 node_modules
 
@@ -47,7 +48,7 @@ coverage/
 .ruby-version
 .rubocop.yml
 .rspec
-.bundle
+.bundle/config
 
 # Editor files
 .vscode/

@@ -170,9 +170,9 @@ rails_setup_native_environment() {
         gem install bundler
     fi
 
-    # Configure bundler to use vendor/bundle
-    log_info "Configuring bundler to use vendor/bundle..."
-    bundle config set --local path 'vendor/bundle'
+    # Configure bundler to use .bundle/vendor
+    log_info "Configuring bundler to use .bundle/vendor..."
+    bundle config set --local path '.bundle/vendor'
     bundle config set --local without 'development test'
 
     # Install application gems for production use
