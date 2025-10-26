@@ -92,6 +92,37 @@ check_database_exists() {
     sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$db_name"
 }
 
+# Check if PostgreSQL user exists
+check_db_user_exists() {
+    local db_user="$1"
+
+    sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${db_user}'" | grep -q 1
+}
+
+# Create PostgreSQL user with password
+create_db_user() {
+    local db_user="$1"
+    local db_password="$2"
+
+    log_info "Creating database user: ${db_user}"
+
+    if check_db_user_exists "$db_user"; then
+        log_warning "Database user ${db_user} already exists"
+        return 0
+    fi
+
+    # Create user with password
+    sudo -u postgres psql -c "CREATE USER ${db_user} WITH PASSWORD '${db_password}';" 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+        log_success "Database user ${db_user} created successfully"
+        return 0
+    else
+        log_error "Failed to create database user ${db_user}"
+        return 1
+    fi
+}
+
 # Create PostgreSQL database
 create_database() {
     local db_name="$1"
@@ -113,6 +144,27 @@ create_database() {
         return 0
     else
         log_error "Failed to create database ${db_name}"
+        return 1
+    fi
+}
+
+# Grant database privileges to user
+grant_database_privileges() {
+    local db_name="$1"
+    local db_user="$2"
+
+    log_info "Granting privileges on ${db_name} to ${db_user}"
+
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${db_name} TO ${db_user};" 2>/dev/null
+    sudo -u postgres psql -d "${db_name}" -c "GRANT ALL ON SCHEMA public TO ${db_user};" 2>/dev/null
+    sudo -u postgres psql -d "${db_name}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${db_user};" 2>/dev/null
+    sudo -u postgres psql -d "${db_name}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${db_user};" 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+        log_success "Privileges granted to ${db_user} on ${db_name}"
+        return 0
+    else
+        log_error "Failed to grant privileges"
         return 1
     fi
 }

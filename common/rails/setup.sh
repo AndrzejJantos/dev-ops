@@ -36,24 +36,55 @@ rails_check_prerequisites() {
 rails_setup_database() {
     log_info "Setting up Rails database..."
 
+    # Generate database user name from app name
+    local DB_APP_USER="${APP_NAME//-/_}_user"
+
+    # Generate strong password for database user
+    local DB_APP_PASSWORD=$(get_or_generate_secret "$ENV_FILE" "DB_PASSWORD" "openssl rand -base64 32 | tr -d '/+=' | head -c 32")
+
+    log_info "Database user will be: ${DB_APP_USER}"
+
+    # Create database user if it doesn't exist
+    if ! check_db_user_exists "$DB_APP_USER"; then
+        create_db_user "$DB_APP_USER" "$DB_APP_PASSWORD"
+        if [ $? -ne 0 ]; then
+            log_error "Failed to create database user"
+            return 1
+        fi
+    else
+        log_info "Database user ${DB_APP_USER} already exists"
+    fi
+
+    # Create database if it doesn't exist
     if ! check_database_exists "$DB_NAME"; then
-        create_database "$DB_NAME" "$DB_USER"
+        create_database "$DB_NAME"
         if [ $? -ne 0 ]; then
             log_error "Failed to create database"
             return 1
         fi
+
+        # Grant privileges to the app user
+        grant_database_privileges "$DB_NAME" "$DB_APP_USER"
+        if [ $? -ne 0 ]; then
+            log_error "Failed to grant database privileges"
+            return 1
+        fi
     else
         log_info "Database ${DB_NAME} already exists"
+        # Still grant privileges in case user was created after database
+        grant_database_privileges "$DB_NAME" "$DB_APP_USER"
     fi
 
-    # Generate database URL
-    if [ -n "$DB_PASSWORD" ]; then
-        DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost/${DB_NAME}"
-    else
-        DATABASE_URL="postgresql://${DEPLOY_USER}@localhost/${DB_NAME}"
-    fi
+    # Generate database URL with dedicated user
+    DATABASE_URL="postgresql://${DB_APP_USER}:${DB_APP_PASSWORD}@localhost/${DB_NAME}"
+
+    # Export for use in env file creation
+    export DB_APP_USER
+    export DB_APP_PASSWORD
 
     log_success "Database configured: ${DB_NAME}"
+    log_success "Database user: ${DB_APP_USER}"
+    log_info "Database password stored in .env.production"
     return 0
 }
 
@@ -76,7 +107,14 @@ rails_create_env_file() {
 # Location: ${ENV_FILE}
 
 # Database Configuration
+# Database: ${DB_NAME}
+# Database User: ${DB_APP_USER}
 DATABASE_URL=${DATABASE_URL}
+
+# Database credentials (for reference - DO NOT commit to git)
+DB_NAME=${DB_NAME}
+DB_USER=${DB_APP_USER}
+DB_PASSWORD=${DB_APP_PASSWORD}
 
 # Rails Configuration
 SECRET_KEY_BASE=${SECRET_KEY_BASE}
