@@ -35,9 +35,17 @@ export REDIS_URL="redis://localhost:6379/${REDIS_DB_NUMBER}"
 export DOMAIN="presale.taniejpolek.pl"
 export BASE_PORT=3010      # Starting port for containers
 export PORT_RANGE_END=3019 # Ending port (supports 10 instances)
-export DEFAULT_SCALE=2     # Default number of web container instances
-export WORKER_COUNT=1      # Number of worker containers
-export SCHEDULER_ENABLED=true  # Enable Clockwork scheduler container
+
+# Container architecture configuration
+# Landing page: Only web containers needed (no background jobs)
+export DEFAULT_SCALE=2         # Default number of web container instances
+export WORKER_COUNT=0          # Number of worker containers (0 = disabled)
+export SCHEDULER_ENABLED=false # Enable Clockwork scheduler container (false = disabled)
+
+# Architecture examples:
+# Simple landing/marketing site:  DEFAULT_SCALE=2, WORKER_COUNT=0, SCHEDULER_ENABLED=false
+# Full application with jobs:     DEFAULT_SCALE=2, WORKER_COUNT=1, SCHEDULER_ENABLED=true
+# High-traffic app:               DEFAULT_SCALE=4, WORKER_COUNT=2, SCHEDULER_ENABLED=true
 
 # Mailgun configuration for notifications
 export MAILGUN_API_KEY="dummy_mailgun_key_change_me"

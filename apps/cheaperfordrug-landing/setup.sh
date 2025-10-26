@@ -221,13 +221,15 @@ Database:
   Name: ${DB_NAME}
   Redis DB: ${REDIS_DB_NUMBER}
 
-Network:
+Network & Architecture:
   Domain: ${DOMAIN}
   Base Port: ${BASE_PORT}
   Port Range: ${BASE_PORT}-${PORT_RANGE_END}
-  Default Scale: ${DEFAULT_SCALE}
-  Worker Count: ${WORKER_COUNT}
-  Scheduler: ${SCHEDULER_ENABLED}
+
+Container Architecture:
+  Web Containers: ${DEFAULT_SCALE} (Puma - handles HTTP requests)
+  Worker Containers: ${WORKER_COUNT} $([ "${WORKER_COUNT}" -eq 0 ] && echo "(disabled - no background jobs needed)" || echo "(Sidekiq - processes background jobs)")
+  Scheduler: ${SCHEDULER_ENABLED} $([ "${SCHEDULER_ENABLED}" = "false" ] && echo "(disabled - no scheduled tasks needed)" || echo "(Clockwork - scheduled recurring tasks)")
 
 Automated Tasks:
   Database Backup:  Every 30 minutes
@@ -241,9 +243,9 @@ Useful Commands:
   Deploy:             ${APP_CONFIG_DIR}/deploy.sh deploy
   Rollback App:       ${APP_CONFIG_DIR}/deploy.sh rollback -1
   Restore DB:         ${APP_CONFIG_DIR}/restore.sh
-  View Web Logs:      docker logs ${APP_NAME}_web_1 -f
-  View Worker Logs:   docker logs ${APP_NAME}_worker_1 -f
-  View Scheduler:     docker logs ${APP_NAME}_scheduler -f
+  View Web Logs:      docker logs ${APP_NAME}_web_1 -f$([ "${WORKER_COUNT}" -gt 0 ] && echo "
+  View Worker Logs:   docker logs ${APP_NAME}_worker_1 -f" || echo "")$([ "${SCHEDULER_ENABLED}" = "true" ] && echo "
+  View Scheduler:     docker logs ${APP_NAME}_scheduler -f" || echo "")
   Rails Console:      docker exec -it ${APP_NAME}_web_1 rails console
   Manual Backup:      ${APP_DIR}/backup-db.sh
   View Backups:       ls -lh ${BACKUP_DIR}

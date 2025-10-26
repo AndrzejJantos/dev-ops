@@ -480,7 +480,7 @@ Configuration:
   App: ${APP_DISPLAY_NAME}
   Config: ${APP_CONFIG_DIR}/config.sh
   Domain: ${DOMAIN}
-  Default Scale: ${DEFAULT_SCALE} web + ${WORKER_COUNT} worker + scheduler
+  Containers: ${DEFAULT_SCALE} web$([ "${WORKER_COUNT:-0}" -gt 0 ] && echo " + ${WORKER_COUNT} worker" || echo "")$([ "${SCHEDULER_ENABLED:-false}" = "true" ] && echo " + scheduler" || echo "")
   Port Range: ${BASE_PORT}-${PORT_RANGE_END}
   Image Backups: ${IMAGE_BACKUP_DIR}
   Max Backups: ${MAX_IMAGE_BACKUPS}
