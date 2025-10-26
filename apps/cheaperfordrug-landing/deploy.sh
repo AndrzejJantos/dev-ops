@@ -288,7 +288,7 @@ handle_stop() {
 
 # Handle rollback command
 handle_rollback() {
-    local image_file="$1"
+    local image_param="$1"
 
     # Check if setup has been run
     if [ ! -f "$ENV_FILE" ]; then
@@ -299,22 +299,49 @@ handle_rollback() {
     # Load environment variables
     load_env_file "$ENV_FILE"
 
-    # If no image file specified, list available backups
-    if [ -z "$image_file" ]; then
+    # If no parameter specified, list available backups
+    if [ -z "$image_param" ]; then
         log_info "Available image backups for rollback:"
         list_image_backups "$IMAGE_BACKUP_DIR"
-        log_info "Usage: $0 rollback <image-file.tar.gz>"
+        echo ""
+        log_info "Usage:"
+        echo "  $0 rollback -1              # Rollback to previous version"
+        echo "  $0 rollback -2              # Rollback 2 versions back"
+        echo "  $0 rollback <image-file>    # Rollback to specific image file"
         exit 0
     fi
 
-    # Check if file exists
-    if [ ! -f "$image_file" ]; then
-        log_error "Image file not found: ${image_file}"
-        exit 1
+    local image_file=""
+
+    # Check if parameter is a negative number (e.g., -1, -2)
+    if [[ "$image_param" =~ ^-[0-9]+$ ]]; then
+        local versions_back="${image_param#-}"  # Remove the minus sign
+        log_info "Rolling back ${versions_back} version(s)..."
+
+        # Get the Nth most recent backup (sorted by modification time)
+        image_file=$(ls -t "${IMAGE_BACKUP_DIR}"/*.tar.gz 2>/dev/null | sed -n "$((versions_back + 1))p")
+
+        if [ -z "$image_file" ]; then
+            log_error "No backup found ${versions_back} version(s) back"
+            log_info "Available backups:"
+            ls -t "${IMAGE_BACKUP_DIR}"/*.tar.gz 2>/dev/null | nl -v 0 | sed 's/^/  /'
+            exit 1
+        fi
+
+        log_info "Selected backup: $(basename $image_file)"
+    else
+        # Parameter is a file path
+        image_file="$image_param"
+
+        # Check if file exists
+        if [ ! -f "$image_file" ]; then
+            log_error "Image file not found: ${image_file}"
+            exit 1
+        fi
     fi
 
     # Load the image
-    log_info "Rolling back to image: ${image_file}"
+    log_info "Rolling back to image: $(basename $image_file)"
     if load_docker_image "$image_file"; then
         # Restart with the loaded image (it will be tagged as latest)
         log_info "Restarting application with rolled-back image..."
@@ -326,7 +353,8 @@ handle_rollback() {
 
 Timestamp: $(date)
 Host: $(hostname)
-Image File: ${image_file}
+Image File: $(basename $image_file)
+Rollback: ${image_param}
 
 All containers have been restarted with the previous version." \
                 "$MAILGUN_API_KEY" \
@@ -443,7 +471,9 @@ Examples:
   $0 scale 4
   $0 stop
   $0 list-images
-  $0 rollback ~/apps/${APP_NAME}/docker-images/${APP_NAME}_20250126_143022.tar.gz
+  $0 rollback -1                # Rollback to previous version
+  $0 rollback -2                # Rollback 2 versions back
+  $0 rollback <image-file>      # Rollback to specific file
   $0 ssl-setup
 
 Configuration:

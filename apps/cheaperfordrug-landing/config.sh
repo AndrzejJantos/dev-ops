@@ -76,7 +76,7 @@ export MAX_IMAGE_VERSIONS=3
 # Docker image backup (save images as tar files in app directory)
 export IMAGE_BACKUP_DIR="${APP_DIR}/docker-images"
 export SAVE_IMAGE_BACKUPS=true  # Save each built image as .tar file
-export MAX_IMAGE_BACKUPS=5      # Keep last 5 image tar files
+export MAX_IMAGE_BACKUPS=20     # Keep last 20 image tar files
 
 # Deployment configuration
 export MIGRATION_BACKUP_ENABLED=true

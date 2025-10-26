@@ -266,12 +266,12 @@ rails_display_deployment_summary() {
     echo "ROLLBACK:"
     echo "  To rollback to the previous version:"
     if [ -d "$IMAGE_BACKUP_DIR" ]; then
-        local previous_backup=$(ls -t "${IMAGE_BACKUP_DIR}"/*.tar.gz 2>/dev/null | sed -n '2p')
-        if [ -n "$previous_backup" ]; then
-            echo "    ./deploy.sh rollback $previous_backup"
+        local backup_count=$(ls -1 "${IMAGE_BACKUP_DIR}"/*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$backup_count" -gt 1 ]; then
+            echo "    ./deploy.sh rollback -1     # Rollback to previous version"
+            echo "    ./deploy.sh rollback -2     # Rollback 2 versions back"
         else
-            echo "    ./deploy.sh list-images  # List available versions"
-            echo "    ./deploy.sh rollback <image-file>"
+            echo "    ./deploy.sh list-images     # List available versions"
         fi
     else
         echo "    Image backups not enabled"
