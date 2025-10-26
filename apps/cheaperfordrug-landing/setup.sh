@@ -114,6 +114,14 @@ generate_nginx_config() {
         return 1
     fi
 
+    # Create symlink to nginx config in app directory for easy access
+    local nginx_link="${APP_DIR}/nginx.conf"
+    if [ ! -L "$nginx_link" ]; then
+        ln -s "$NGINX_CONF" "$nginx_link"
+        chown -h "${DEPLOY_USER}:${DEPLOY_USER}" "$nginx_link" 2>/dev/null || true
+        log_success "Created symlink: ${nginx_link} -> ${NGINX_CONF}"
+    fi
+
     return 0
 }
 
@@ -125,16 +133,36 @@ App Name: ${APP_NAME}
 Repository: ${REPO_URL}
 Branch: ${REPO_BRANCH}
 Deploy User: ${DEPLOY_USER}
-App Directory: ${APP_DIR}
-Environment File: ${ENV_FILE}
-Database: ${DB_NAME}
-Redis DB: ${REDIS_DB_NUMBER}
-Domain: ${DOMAIN}
-Base Port: ${BASE_PORT}
-Port Range: ${BASE_PORT}-${PORT_RANGE_END}
-Default Scale: ${DEFAULT_SCALE}
-Nginx Config: ${NGINX_CONF}
-DevOps Config: ${APP_CONFIG_DIR}/config.sh
+
+Directories:
+  App Directory: ${APP_DIR}
+  Repository: ${APP_DIR}/repo
+  Backups: ${APP_DIR}/backups
+  Logs: ${APP_DIR}/logs
+  Docker Images: ${APP_DIR}/docker-images
+
+Configuration Files:
+  Environment: ${ENV_FILE}
+  Nginx Config: ${NGINX_CONF}
+  Nginx Symlink: ${APP_DIR}/nginx.conf -> ${NGINX_CONF}
+  DevOps Config: ${APP_CONFIG_DIR}/config.sh
+
+Database:
+  Name: ${DB_NAME}
+  Redis DB: ${REDIS_DB_NUMBER}
+
+Network:
+  Domain: ${DOMAIN}
+  Base Port: ${BASE_PORT}
+  Port Range: ${BASE_PORT}-${PORT_RANGE_END}
+  Default Scale: ${DEFAULT_SCALE}
+
+Useful Commands:
+  Edit Nginx:     sudo vim ${APP_DIR}/nginx.conf
+  Edit Env Vars:  vim ${ENV_FILE}
+  Deploy:         ${APP_CONFIG_DIR}/deploy.sh deploy
+  View Logs:      docker logs ${APP_NAME}_web_1 -f
+  Rails Console:  docker exec -it ${APP_NAME}_web_1 rails console
 
 Setup completed: $(date)
 EOF
