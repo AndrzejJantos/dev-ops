@@ -482,10 +482,14 @@ handle_status() {
 
         if [ "$status" = "running" ]; then
             local started=$(docker inspect -f '{{.State.StartedAt}}' "$container" 2>/dev/null)
-            local now=$(date -u +"%Y-%m-%dT%H:%M:%S")
-            local seconds=$(( $(date -d "$now" +%s) - $(date -d "$started" +%s) ))
+            local now_ts=$(date +%s)
+            local started_ts=$(date -d "$started" +%s 2>/dev/null || echo "$now_ts")
+            local seconds=$(( now_ts - started_ts ))
 
-            if [ $seconds -lt 60 ]; then
+            # Handle negative or invalid times
+            if [ $seconds -lt 0 ] || [ $seconds -gt 31536000 ]; then
+                running_time="?"
+            elif [ $seconds -lt 60 ]; then
                 running_time="${seconds}s"
             elif [ $seconds -lt 3600 ]; then
                 running_time="$(($seconds / 60))m"
