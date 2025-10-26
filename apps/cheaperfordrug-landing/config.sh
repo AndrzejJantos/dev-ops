@@ -35,7 +35,8 @@ export REDIS_URL="redis://localhost:6379/${REDIS_DB_NUMBER}"
 export DOMAIN="presale.taniejpolek.pl"
 export BASE_PORT=3010      # Starting port for containers
 export PORT_RANGE_END=3019 # Ending port (supports 10 instances)
-export DEFAULT_SCALE=2     # Default number of container instances
+export DEFAULT_SCALE=2     # Default number of web container instances
+export WORKER_COUNT=1      # Number of worker containers
 
 # Mailgun configuration for notifications
 export MAILGUN_API_KEY="dummy_mailgun_key_change_me"

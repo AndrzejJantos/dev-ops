@@ -226,6 +226,7 @@ Network:
   Base Port: ${BASE_PORT}
   Port Range: ${BASE_PORT}-${PORT_RANGE_END}
   Default Scale: ${DEFAULT_SCALE}
+  Worker Count: ${WORKER_COUNT}
 
 Automated Tasks:
   Database Backup:  Every 30 minutes
@@ -239,7 +240,8 @@ Useful Commands:
   Deploy:           ${APP_CONFIG_DIR}/deploy.sh deploy
   Rollback App:     ${APP_CONFIG_DIR}/deploy.sh rollback -1
   Restore DB:       ${APP_CONFIG_DIR}/restore.sh
-  View Logs:        docker logs ${APP_NAME}_web_1 -f
+  View Web Logs:    docker logs ${APP_NAME}_web_1 -f
+  View Worker Logs: docker logs ${APP_NAME}_worker_1 -f
   Rails Console:    docker exec -it ${APP_NAME}_web_1 rails console
   Manual Backup:    ${APP_DIR}/backup-db.sh
   View Backups:     ls -lh ${BACKUP_DIR}

@@ -74,6 +74,36 @@ start_container() {
     fi
 }
 
+# Start worker container (no port exposure)
+start_worker_container() {
+    local container_name="$1"
+    local image_name="$2"
+    local env_file="$3"
+    local worker_command="${4:-bundle exec sidekiq}"
+    local network="${5:-bridge}"
+
+    log_info "Starting worker container: ${container_name}"
+
+    # Remove existing container if it exists
+    docker rm -f "$container_name" 2>/dev/null || true
+
+    docker run -d \
+        --name "$container_name" \
+        --network "$network" \
+        --restart unless-stopped \
+        --env-file "$env_file" \
+        "$image_name" \
+        /bin/bash -c "cd /rails && $worker_command"
+
+    if [ $? -eq 0 ]; then
+        log_success "Worker container started successfully"
+        return 0
+    else
+        log_error "Failed to start worker container"
+        return 1
+    fi
+}
+
 # Gracefully stop container
 stop_container() {
     local container_name="$1"

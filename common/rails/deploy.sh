@@ -112,7 +112,7 @@ rails_deploy_fresh() {
 
     log_info "No running containers found, starting fresh deployment"
 
-    # Start containers
+    # Start web containers
     for i in $(seq 1 $scale); do
         local port=$((BASE_PORT + i - 1))
         local container_name="${APP_NAME}_web_${i}"
@@ -137,6 +137,22 @@ rails_deploy_fresh() {
     if [ "$MIGRATION_BACKUP_ENABLED" = "true" ]; then
         log_info "Running database migrations..."
         run_migrations "${APP_NAME}_web_1"
+    fi
+
+    # Start worker containers if configured
+    local worker_count="${WORKER_COUNT:-0}"
+    if [ $worker_count -gt 0 ]; then
+        log_info "Starting ${worker_count} worker container(s)..."
+        for i in $(seq 1 $worker_count); do
+            local worker_name="${APP_NAME}_worker_${i}"
+            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE"
+
+            if [ $? -ne 0 ]; then
+                log_error "Failed to start worker ${worker_name}"
+                return 1
+            fi
+        done
+        log_success "Worker containers started successfully"
     fi
 
     log_success "Fresh deployment completed successfully"
@@ -175,7 +191,7 @@ rails_deploy_rolling() {
         docker rm -f "$test_container"
     fi
 
-    # Perform rolling restart
+    # Perform rolling restart for web containers
     if [ "$ZERO_DOWNTIME_ENABLED" = "true" ]; then
         rolling_restart "$APP_NAME" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "$BASE_PORT" "$scale"
 
@@ -185,6 +201,32 @@ rails_deploy_rolling() {
         fi
 
         log_success "Zero-downtime deployment completed successfully"
+    fi
+
+    # Restart worker containers if configured
+    local worker_count="${WORKER_COUNT:-0}"
+    if [ $worker_count -gt 0 ]; then
+        log_info "Restarting ${worker_count} worker container(s)..."
+
+        # Stop old workers
+        for i in $(seq 1 $worker_count); do
+            local worker_name="${APP_NAME}_worker_${i}"
+            if docker ps -a --filter "name=${worker_name}" --format "{{.Names}}" | grep -q "^${worker_name}$"; then
+                stop_container "$worker_name"
+            fi
+        done
+
+        # Start new workers
+        for i in $(seq 1 $worker_count); do
+            local worker_name="${APP_NAME}_worker_${i}"
+            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE"
+
+            if [ $? -ne 0 ]; then
+                log_error "Failed to start worker ${worker_name}"
+                return 1
+            fi
+        done
+        log_success "Worker containers restarted successfully"
     fi
 
     return 0
@@ -384,12 +426,38 @@ rails_restart_application() {
         return 1
     fi
 
-    # Perform rolling restart
+    # Perform rolling restart for web containers
     rolling_restart "$APP_NAME" "$current_image" "$ENV_FILE" "$BASE_PORT" "$scale"
 
     if [ $? -ne 0 ]; then
         log_error "Restart failed"
         return 1
+    fi
+
+    # Restart worker containers if configured
+    local worker_count="${WORKER_COUNT:-0}"
+    if [ $worker_count -gt 0 ]; then
+        log_info "Restarting ${worker_count} worker container(s)..."
+
+        # Stop old workers
+        for i in $(seq 1 $worker_count); do
+            local worker_name="${APP_NAME}_worker_${i}"
+            if docker ps -a --filter "name=${worker_name}" --format "{{.Names}}" | grep -q "^${worker_name}$"; then
+                stop_container "$worker_name"
+            fi
+        done
+
+        # Start new workers
+        for i in $(seq 1 $worker_count); do
+            local worker_name="${APP_NAME}_worker_${i}"
+            start_worker_container "$worker_name" "$current_image" "$ENV_FILE"
+
+            if [ $? -ne 0 ]; then
+                log_error "Failed to start worker ${worker_name}"
+                return 1
+            fi
+        done
+        log_success "Worker containers restarted successfully"
     fi
 
     log_success "Restart completed successfully"
@@ -429,7 +497,8 @@ rails_scale_application() {
 rails_stop_application() {
     log_info "Stopping all ${APP_NAME} containers"
 
-    local containers=($(get_running_containers "$APP_NAME"))
+    # Get all containers (web + workers)
+    local containers=($(docker ps --filter "name=${APP_NAME}" --format "{{.Names}}" 2>/dev/null))
 
     if [ ${#containers[@]} -eq 0 ]; then
         log_info "No running containers found"
