@@ -420,11 +420,15 @@ rails_deploy_application() {
     local current_count=$(get_container_count "$APP_NAME")
 
     if [ $current_count -eq 0 ]; then
+        # No containers running - use provided scale for fresh deployment
         rails_deploy_fresh "$scale" "$image_tag" || return 1
         if [ "$MIGRATION_BACKUP_ENABLED" = "true" ]; then
             migrations_run="true"
         fi
     else
+        # Containers already running - restart ALL of them, not just default scale
+        log_info "Found ${current_count} running containers, will restart all of them"
+
         # Check if migrations will run
         local test_container="${APP_NAME}_migration_check"
         if [ "$MIGRATION_BACKUP_ENABLED" = "true" ]; then
@@ -436,7 +440,8 @@ rails_deploy_application() {
             docker rm -f "$test_container" 2>/dev/null
         fi
 
-        rails_deploy_rolling "$scale" "$image_tag" || return 1
+        # Use current_count for rolling restart to update ALL containers
+        rails_deploy_rolling "$current_count" "$image_tag" || return 1
     fi
 
     # Clean up old images
