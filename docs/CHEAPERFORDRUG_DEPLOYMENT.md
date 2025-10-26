@@ -500,6 +500,55 @@ All applications are behind nginx with:
 - **Load Balancing**: least_conn algorithm
 - **Static Caching**: Optimized for Next.js assets
 - **CORS**: Configured for API
+- **Exact Domain Matching**: No wildcard subdomains (security)
+
+### Domain Routing (How Nginx Separates Apps)
+
+Each application has **exact `server_name` matching**:
+
+```nginx
+# Landing - ONLY this domain
+server_name presale.taniejpolek.pl;
+→ Routes to ports 3010-3011
+
+# Web Frontend - ONLY this domain
+server_name premiera.taniejpolek.pl;
+→ Routes to ports 3030-3032
+
+# API Public - ONLY this subdomain
+server_name api-public.cheaperfordrug.com;
+→ Routes to ports 3020-3021
+
+# API Internal - ONLY this subdomain
+server_name api-internal.cheaperfordrug.com;
+→ Routes to ports 3020-3021
+```
+
+**Security:** We use **exact matches**, NOT wildcards like `*.taniejpolek.pl`.
+- ✅ `presale.taniejpolek.pl` → Works
+- ❌ `random.taniejpolek.pl` → Rejected (404 or connection closed)
+- ❌ `hacker.taniejpolek.pl` → Rejected
+
+### Setup Default Server (Catch-All)
+
+To reject unknown domains/subdomains, install a catch-all server:
+
+```bash
+# Copy default server config
+sudo cp ~/DevOps/common/nginx/default-server.conf /etc/nginx/sites-available/000-default
+
+# Enable it
+sudo ln -sf /etc/nginx/sites-available/000-default /etc/nginx/sites-enabled/000-default
+
+# Test and reload
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+This will:
+- Return 444 (close connection) for unknown domains
+- Prevent random subdomains from accessing your apps
+- Still allow certbot challenges for SSL setup
 
 ### View Nginx Status
 ```bash
