@@ -36,11 +36,11 @@ rails_check_prerequisites() {
 rails_setup_database() {
     log_info "Setting up Rails database..."
 
-    # Generate database user name from app name
-    local DB_APP_USER="${APP_NAME//-/_}_user"
+    # Generate database user name from app name (don't use 'local' - we need to export these)
+    DB_APP_USER="${APP_NAME//-/_}_user"
 
     # Generate strong password for database user
-    local DB_APP_PASSWORD=$(get_or_generate_secret "$ENV_FILE" "DB_PASSWORD" "openssl rand -base64 32 | tr -d '/+=' | head -c 32")
+    DB_APP_PASSWORD=$(get_or_generate_secret "$ENV_FILE" "DB_PASSWORD" "openssl rand -base64 32 | tr -d '/+=' | head -c 32")
 
     log_info "Database user will be: ${DB_APP_USER}"
 
