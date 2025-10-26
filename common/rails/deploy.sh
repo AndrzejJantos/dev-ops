@@ -73,8 +73,7 @@ rails_build_image() {
 rails_check_pending_migrations() {
     local test_container="$1"
 
-    log_info "Checking for pending migrations..."
-
+    # Don't log here - check_pending_migrations() already logs
     if check_pending_migrations "$test_container"; then
         log_info "Pending migrations detected"
         return 0  # Migrations are pending
