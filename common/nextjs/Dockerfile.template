@@ -7,10 +7,19 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
 
 # Install ALL dependencies (needed for build, will be pruned later)
-RUN npm ci
+# Use legacy-peer-deps to handle peer dependency conflicts
+RUN if [ -f package-lock.json ]; then \
+        npm ci --legacy-peer-deps; \
+    elif [ -f yarn.lock ]; then \
+        yarn install --frozen-lockfile; \
+    elif [ -f pnpm-lock.yaml ]; then \
+        corepack enable pnpm && pnpm install --frozen-lockfile; \
+    else \
+        npm install --legacy-peer-deps; \
+    fi
 
 # Stage 2: Builder
 FROM node:20-alpine AS builder
