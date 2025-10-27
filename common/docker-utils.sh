@@ -58,12 +58,16 @@ start_container() {
     # Remove existing container if it exists
     docker rm -f "$container_name" 2>/dev/null || true
 
+    # Ensure logs directory exists
+    mkdir -p "${LOG_DIR}"
+
     docker run -d \
         --name "$container_name" \
         --network "$network" \
         --restart unless-stopped \
         -p "${host_port}:${container_port}" \
         --env-file "$env_file" \
+        -v "${LOG_DIR}:/app/log" \
         "$image_name"
 
     if [ $? -eq 0 ]; then
@@ -88,11 +92,15 @@ start_worker_container() {
     # Remove existing container if it exists
     docker rm -f "$container_name" 2>/dev/null || true
 
+    # Ensure logs directory exists
+    mkdir -p "${LOG_DIR}"
+
     docker run -d \
         --name "$container_name" \
         --network "$network" \
         --restart unless-stopped \
         --env-file "$env_file" \
+        -v "${LOG_DIR}:/app/log" \
         "$image_name" \
         /bin/bash -c "cd /app && $worker_command"
 
@@ -118,11 +126,15 @@ start_scheduler_container() {
     # Remove existing container if it exists
     docker rm -f "$container_name" 2>/dev/null || true
 
+    # Ensure logs directory exists
+    mkdir -p "${LOG_DIR}"
+
     docker run -d \
         --name "$container_name" \
         --network "$network" \
         --restart unless-stopped \
         --env-file "$env_file" \
+        -v "${LOG_DIR}:/app/log" \
         "$image_name" \
         /bin/bash -c "cd /app && $scheduler_command"
 

@@ -137,7 +137,6 @@ DB_PASSWORD=${DB_APP_PASSWORD}
 # Rails Configuration
 SECRET_KEY_BASE=${SECRET_KEY_BASE}
 RAILS_ENV=production
-RAILS_LOG_TO_STDOUT=true
 RAILS_SERVE_STATIC_FILES=true
 
 # Redis Configuration (Dedicated database)
@@ -357,7 +356,44 @@ rails_build_image() {
         cleanup_old_image_backups "$IMAGE_BACKUP_DIR" "${MAX_IMAGE_BACKUPS:-5}"
     fi
 
+    # Create console wrapper script
+    rails_create_console_wrapper
+
     return 0
+}
+
+# Create console wrapper script for easy Rails console access
+rails_create_console_wrapper() {
+    log_info "Creating Rails console wrapper script..."
+
+    cat > "${APP_DIR}/console.sh" << 'CONSOLE_WRAPPER'
+#!/bin/bash
+cd "$(dirname "$0")/repo"
+export RAILS_ENV=production
+set -a
+source .env.production 2>/dev/null || source ../.env.production
+set +a
+exec bundle exec rails console "$@"
+CONSOLE_WRAPPER
+
+    chmod +x "${APP_DIR}/console.sh"
+    log_success "Console wrapper created: ${APP_DIR}/console.sh"
+
+    # Create log viewing wrapper script
+    cat > "${APP_DIR}/logs.sh" << 'LOGS_WRAPPER'
+#!/bin/bash
+LOG_FILE="$(dirname "$0")/logs/production.log"
+if [ -f "$LOG_FILE" ]; then
+    tail -f "$LOG_FILE"
+else
+    echo "Log file not found: $LOG_FILE"
+    echo "Logs will be created when the application starts logging."
+    exit 1
+fi
+LOGS_WRAPPER
+
+    chmod +x "${APP_DIR}/logs.sh"
+    log_success "Log viewer created: ${APP_DIR}/logs.sh"
 }
 
 # Hook: Check for pending Rails migrations
@@ -651,14 +687,19 @@ rails_display_deployment_summary() {
 
     # Useful Commands
     echo "USEFUL COMMANDS:"
-    echo "  View logs:        docker logs ${APP_NAME}_web_1 -f"
-    echo "  Rails console:    cd ${REPO_DIR} && bundle exec rails console"
-    echo "  Console (Docker): docker exec -it ${APP_NAME}_web_1 rails console"
+    echo "  Rails console:    ${APP_DIR}/console.sh"
+    echo "  View app logs:    ${APP_DIR}/logs.sh"
+    echo "  Docker logs:      docker logs ${APP_NAME}_web_1 -f"
     echo "  Check health:     curl https://${DOMAIN}${HEALTH_CHECK_PATH}"
     echo "  Scale up:         ./deploy.sh scale $((scale + 1))"
     echo "  Scale down:       ./deploy.sh scale $((scale - 1))"
     echo "  Restart:          ./deploy.sh restart"
     echo "  Stop:             ./deploy.sh stop"
+    echo ""
+    echo "LOG FILES:"
+    echo "  Production logs:  ${LOG_DIR}/production.log"
+    echo "  Sidekiq logs:     ${LOG_DIR}/sidekiq.log"
+    echo "  All containers write to: ${LOG_DIR}/"
     echo ""
 
     echo "================================================================================"

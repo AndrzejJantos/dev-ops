@@ -184,7 +184,30 @@ nextjs_build_image() {
         cleanup_old_image_backups "$IMAGE_BACKUP_DIR" "${MAX_IMAGE_BACKUPS:-5}"
     fi
 
+    # Create log viewing wrapper script
+    nextjs_create_log_wrapper
+
     return 0
+}
+
+# Create log viewing wrapper script for easy access
+nextjs_create_log_wrapper() {
+    log_info "Creating log viewing wrapper script..."
+
+    cat > "${APP_DIR}/logs.sh" << 'LOGS_WRAPPER'
+#!/bin/bash
+LOG_FILE="$(dirname "$0")/logs/production.log"
+if [ -f "$LOG_FILE" ]; then
+    tail -f "$LOG_FILE"
+else
+    echo "Log file not found: $LOG_FILE"
+    echo "Logs will be created when the application starts logging."
+    exit 1
+fi
+LOGS_WRAPPER
+
+    chmod +x "${APP_DIR}/logs.sh"
+    log_success "Log viewer created: ${APP_DIR}/logs.sh"
 }
 
 # Hook: Deploy Next.js containers (fresh deployment)
@@ -289,12 +312,17 @@ nextjs_display_deployment_summary() {
     fi
     echo ""
     echo "USEFUL COMMANDS:"
-    echo "  View logs:        docker logs ${APP_NAME}_web_1 -f"
+    echo "  View app logs:    ${APP_DIR}/logs.sh"
+    echo "  Docker logs:      docker logs ${APP_NAME}_web_1 -f"
     echo "  Check health:     curl https://${DOMAIN}"
     echo "  Scale up:         ./deploy.sh scale $((scale + 1))"
     echo "  Scale down:       ./deploy.sh scale $((scale - 1))"
     echo "  Restart:          ./deploy.sh restart"
     echo "  Stop:             ./deploy.sh stop"
+    echo ""
+    echo "LOG FILES:"
+    echo "  Production logs:  ${LOG_DIR}/production.log"
+    echo "  All containers write to: ${LOG_DIR}/"
     echo ""
     echo "================================================================================"
     echo ""
