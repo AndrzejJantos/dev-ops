@@ -35,6 +35,21 @@ COPY .env.production .env.production
 # Build Next.js application
 RUN npm run build
 
+# Check if standalone output exists
+RUN if [ ! -d .next/standalone ]; then \
+        echo "ERROR: .next/standalone directory not found!"; \
+        echo ""; \
+        echo "Please add to your next.config.js:"; \
+        echo ""; \
+        echo "  module.exports = {"; \
+        echo "    output: 'standalone',"; \
+        echo "    // ... your other config"; \
+        echo "  }"; \
+        echo ""; \
+        echo "Then commit, push and redeploy."; \
+        exit 1; \
+    fi
+
 # Stage 3: Runner (Production)
 FROM node:20-alpine AS runner
 WORKDIR /app
