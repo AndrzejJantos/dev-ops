@@ -90,19 +90,18 @@ nginx_config="/etc/nginx/sites-available/$APP_NAME"
 UPSTREAM_SERVERS=""
 for i in $(seq 1 $DEFAULT_SCALE); do
     PORT=$((BASE_PORT + i - 1))
-    UPSTREAM_SERVERS="${UPSTREAM_SERVERS}    server localhost:${PORT} max_fails=3 fail_timeout=30s;\n"
+    UPSTREAM_SERVERS="${UPSTREAM_SERVERS}    server localhost:${PORT} max_fails=3 fail_timeout=30s;
+"
 done
 
-# Remove trailing newline
-UPSTREAM_SERVERS=$(echo -e "$UPSTREAM_SERVERS" | sed '$ s/\\n$//')
-
-# Generate nginx config
-cat "$nginx_template" | \
-    sed "s|{{NGINX_UPSTREAM_NAME}}|${NGINX_UPSTREAM_NAME}|g" | \
-    sed "s|{{UPSTREAM_SERVERS}}|${UPSTREAM_SERVERS}|g" | \
-    sed "s|{{DOMAIN}}|${DOMAIN}|g" | \
-    sed "s|{{APP_NAME}}|${APP_NAME}|g" | \
-    sudo tee "$nginx_config" > /dev/null
+# Generate nginx config using perl for safer multiline substitution
+perl -pe "
+    s|{{NGINX_UPSTREAM_NAME}}|${NGINX_UPSTREAM_NAME}|g;
+    s|{{DOMAIN}}|${DOMAIN}|g;
+    s|{{APP_NAME}}|${APP_NAME}|g;
+" "$nginx_template" | \
+perl -pe "BEGIN{undef $/;} s|{{UPSTREAM_SERVERS}}|${UPSTREAM_SERVERS}|gs" | \
+sudo tee "$nginx_config" > /dev/null
 
 # Enable site
 sudo ln -sf "$nginx_config" "/etc/nginx/sites-enabled/$APP_NAME"
