@@ -13,7 +13,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder - Precompile assets with full environment
 # -----------------------------------------------------------------------------
-FROM ruby:3.3.4-slim AS builder
+FROM ruby:3.4.4-slim AS builder
 
 # Install build dependencies
 RUN apt-get update -qq && \
@@ -62,7 +62,7 @@ RUN rm -rf node_modules tmp/cache .bundle/vendor/ruby/*/cache
 # -----------------------------------------------------------------------------
 # Stage 2: Production - Clean runtime image without .env file
 # -----------------------------------------------------------------------------
-FROM ruby:3.3.4-slim
+FROM ruby:3.4.4-slim
 
 # Install runtime dependencies only
 RUN apt-get update -qq && \
