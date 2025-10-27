@@ -23,7 +23,9 @@ RUN apt-get update -qq && \
     nodejs \
     npm \
     git \
-    curl && \
+    curl \
+    imagemagick \
+    libmagickwand-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -69,7 +71,9 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
-    tzdata && \
+    tzdata \
+    imagemagick \
+    libmagickwand-6.q16-6 && \
     rm -rf /var/lib/apt/lists/*
 
 # Create app user for security (don't run as root)
