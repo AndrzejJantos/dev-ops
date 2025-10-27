@@ -283,6 +283,87 @@ backup_database() {
     fi
 }
 
+# Cleanup old database backups
+cleanup_old_backups() {
+    local backup_dir="$1"
+    local retention_days="${2:-30}"
+
+    log_info "Cleaning up database backups older than ${retention_days} days"
+
+    if [ ! -d "$backup_dir" ]; then
+        log_info "Backup directory doesn't exist: ${backup_dir}"
+        return 0
+    fi
+
+    # Find and delete backups older than retention days
+    local old_backups=$(find "$backup_dir" -name "*.sql.gz" -mtime +${retention_days} 2>/dev/null)
+
+    if [ -n "$old_backups" ]; then
+        echo "$old_backups" | xargs rm -f
+        log_success "Cleaned up old database backups"
+    else
+        log_info "No old backups to clean up"
+    fi
+
+    return 0
+}
+
+# List available database backups
+list_backups() {
+    local backup_dir="$1"
+
+    if [ ! -d "$backup_dir" ]; then
+        log_error "Backup directory not found: ${backup_dir}"
+        return 1
+    fi
+
+    echo "Available database backups:"
+    echo "============================"
+    ls -lh "$backup_dir"/*.sql.gz 2>/dev/null | awk '{print $9, "(" $5 ")", $6, $7, $8}'
+
+    if [ $? -ne 0 ]; then
+        echo "No backups found in ${backup_dir}"
+    fi
+
+    return 0
+}
+
+# Restore database from backup
+restore_database() {
+    local db_name="$1"
+    local backup_file="$2"
+
+    if [ ! -f "$backup_file" ]; then
+        log_error "Backup file not found: ${backup_file}"
+        return 1
+    fi
+
+    log_warning "This will restore database ${db_name} from ${backup_file}"
+    log_warning "Current data will be LOST. Press Ctrl+C to cancel."
+    sleep 5
+
+    log_info "Restoring database ${db_name} from ${backup_file}..."
+
+    # Drop and recreate database
+    sudo -u postgres dropdb "$db_name" 2>/dev/null || true
+    sudo -u postgres createdb "$db_name"
+
+    # Restore from backup
+    if [[ "$backup_file" == *.gz ]]; then
+        gunzip -c "$backup_file" | sudo -u postgres psql "$db_name" > /dev/null 2>&1
+    else
+        sudo -u postgres psql "$db_name" < "$backup_file" > /dev/null 2>&1
+    fi
+
+    if [ $? -eq 0 ]; then
+        log_success "Database restored successfully"
+        return 0
+    else
+        log_error "Database restore failed"
+        return 1
+    fi
+}
+
 # Load environment variables from file
 load_env_file() {
     local env_file="$1"

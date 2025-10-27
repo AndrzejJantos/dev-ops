@@ -94,6 +94,108 @@ else
     exit 1
 fi
 
+# Setup default catch-all server (security)
+log_info "Setting up default catch-all server..."
+default_server_config="/etc/nginx/sites-available/000-default"
+if [ ! -f "$default_server_config" ]; then
+    sudo cp "$DEVOPS_DIR/common/nginx/default-server.conf" "$default_server_config"
+    sudo ln -sf "$default_server_config" "/etc/nginx/sites-enabled/000-default"
+
+    if sudo nginx -t 2>&1 | grep -q "successful"; then
+        sudo systemctl reload nginx
+        log_success "Default catch-all server configured (rejects unknown domains)"
+    else
+        log_error "Default server configuration test failed"
+        exit 1
+    fi
+else
+    log_info "Default catch-all server already configured"
+fi
+
+# Setup automated cleanup
+log_info "Setting up automated cleanup..."
+
+# Create cleanup script
+cat > "$APP_DIR/cleanup.sh" << 'CLEANUP_SCRIPT'
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEVOPS_DIR="$(cd "$SCRIPT_DIR/../../DevOps" && pwd)"
+source "$DEVOPS_DIR/common/utils.sh"
+source "$DEVOPS_DIR/common/docker-utils.sh"
+APP_CONFIG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/cheaperfordrug-web"
+source "$APP_CONFIG_DIR/config.sh"
+
+# Cleanup old image backups (keep last ${MAX_IMAGE_BACKUPS})
+if [ -d "$IMAGE_BACKUP_DIR" ]; then
+    cleanup_old_image_backups "$IMAGE_BACKUP_DIR" "${MAX_IMAGE_BACKUPS:-20}"
+fi
+
+# Cleanup old Docker images (keep last ${MAX_IMAGE_VERSIONS})
+cleanup_old_images "$DOCKER_IMAGE_NAME" "${MAX_IMAGE_VERSIONS:-20}"
+
+echo "[$(date)] Cleanup completed for ${APP_NAME}"
+CLEANUP_SCRIPT
+
+chmod +x "$APP_DIR/cleanup.sh"
+
+# Setup cron job for cleanup (daily at 2 AM)
+(crontab -l 2>/dev/null | grep -v "$APP_DIR/cleanup.sh"; echo "0 2 * * * $APP_DIR/cleanup.sh >> $LOG_DIR/cleanup.log 2>&1") | crontab -
+
+log_success "Automated cleanup configured (daily at 2 AM)"
+
+# Setup SSL certificate (automatic if DNS is configured)
+log_info "Setting up SSL certificate..."
+
+# Check if certbot is installed
+if ! command -v certbot >/dev/null 2>&1; then
+    log_info "Installing certbot..."
+    sudo apt-get update -qq
+    sudo apt-get install -y certbot python3-certbot-nginx
+fi
+
+# Check DNS configuration
+log_info "Checking DNS configuration for ${DOMAIN}..."
+server_ip=$(curl -s ifconfig.me)
+domain_ip=$(dig +short "$DOMAIN" | tail -1)
+
+if [ -z "$domain_ip" ]; then
+    log_warning "DNS not configured for ${DOMAIN}"
+    log_info "Please configure DNS A record: ${DOMAIN} -> ${server_ip}"
+    log_info "You can setup SSL later by running: sudo certbot --nginx -d ${DOMAIN}"
+elif [ "$domain_ip" != "$server_ip" ]; then
+    log_warning "DNS mismatch: ${DOMAIN} points to ${domain_ip}, but server IP is ${server_ip}"
+    log_info "Please update DNS A record: ${DOMAIN} -> ${server_ip}"
+    log_info "You can setup SSL later by running: sudo certbot --nginx -d ${DOMAIN}"
+else
+    log_success "DNS correctly configured: ${DOMAIN} -> ${server_ip}"
+
+    # Check if certificate already exists
+    if sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${DOMAIN}"; then
+        log_info "SSL certificate already exists for ${DOMAIN}"
+    else
+        # Obtain SSL certificate
+        log_info "Obtaining SSL certificate from Let's Encrypt..."
+        if sudo certbot --nginx \
+            -d "$DOMAIN" \
+            --non-interactive \
+            --agree-tos \
+            --redirect 2>/dev/null; then
+            log_success "SSL certificate obtained successfully"
+            log_success "Site is now available at: https://${DOMAIN}"
+
+            # Setup auto-renewal
+            if ! sudo systemctl is-active --quiet certbot.timer; then
+                sudo systemctl enable certbot.timer
+                sudo systemctl start certbot.timer
+                log_success "SSL auto-renewal enabled"
+            fi
+        else
+            log_warning "Failed to obtain SSL certificate"
+            log_info "You can try manually: sudo certbot --nginx -d ${DOMAIN}"
+        fi
+    fi
+fi
+
 # Create deployment info file
 cat > "$APP_DIR/deployment-info.txt" << INFO
 CheaperForDrug Web Deployment Information
@@ -132,18 +234,14 @@ Next Steps:
    - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
    - NEXT_PUBLIC_GA_MEASUREMENT_ID
 
-4. Setup SSL certificates (only works if DNS is configured):
-   cd ${SCRIPT_DIR}
-   ./deploy.sh ssl-setup
-
-5. Deploy the application:
+4. Deploy the application:
    cd ${SCRIPT_DIR}
    ./deploy.sh deploy
 
-6. Check status:
+5. Check status:
    ./deploy.sh status
 
-7. View logs:
+6. View logs:
    ./deploy.sh logs
 
 Management Commands:

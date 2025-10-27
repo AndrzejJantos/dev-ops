@@ -58,7 +58,6 @@ fi
 
 # Setup PostgreSQL database
 log_info "Setting up PostgreSQL database..."
-source "$DEVOPS_DIR/common/db-utils.sh"
 
 if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
     log_info "Database $DB_NAME already exists"
@@ -117,6 +116,24 @@ else
     exit 1
 fi
 
+# Setup default catch-all server (security)
+log_info "Setting up default catch-all server..."
+default_server_config="/etc/nginx/sites-available/000-default"
+if [ ! -f "$default_server_config" ]; then
+    sudo cp "$DEVOPS_DIR/common/nginx/default-server.conf" "$default_server_config"
+    sudo ln -sf "$default_server_config" "/etc/nginx/sites-enabled/000-default"
+
+    if sudo nginx -t 2>&1 | grep -q "successful"; then
+        sudo systemctl reload nginx
+        log_success "Default catch-all server configured (rejects unknown domains)"
+    else
+        log_error "Default server configuration test failed"
+        exit 1
+    fi
+else
+    log_info "Default catch-all server already configured"
+fi
+
 # Setup automated backups
 log_info "Setting up automated database backups..."
 
@@ -126,11 +143,11 @@ cat > "$APP_DIR/backup.sh" << 'BACKUP_SCRIPT'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVOPS_DIR="$(cd "$SCRIPT_DIR/../../DevOps" && pwd)"
 source "$DEVOPS_DIR/common/utils.sh"
-source "$DEVOPS_DIR/common/db-utils.sh"
-source "$SCRIPT_DIR/../config.sh"
+APP_CONFIG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/cheaperfordrug-api"
+source "$APP_CONFIG_DIR/config.sh"
 
 backup_database "$DB_NAME" "$BACKUP_DIR"
-cleanup_old_backups "$BACKUP_DIR" "$BACKUP_RETENTION_DAYS"
+cleanup_old_backups "$BACKUP_DIR" "${BACKUP_RETENTION_DAYS:-30}"
 BACKUP_SCRIPT
 
 chmod +x "$APP_DIR/backup.sh"
@@ -147,8 +164,8 @@ cat > "$APP_DIR/restore.sh" << 'RESTORE_SCRIPT'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVOPS_DIR="$(cd "$SCRIPT_DIR/../../DevOps" && pwd)"
 source "$DEVOPS_DIR/common/utils.sh"
-source "$DEVOPS_DIR/common/db-utils.sh"
-source "$SCRIPT_DIR/../config.sh"
+APP_CONFIG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/cheaperfordrug-api"
+source "$APP_CONFIG_DIR/config.sh"
 
 if [ -z "$1" ]; then
     list_backups "$BACKUP_DIR"
@@ -161,6 +178,106 @@ restore_database "$DB_NAME" "$1"
 RESTORE_SCRIPT
 
 chmod +x "$APP_DIR/restore.sh"
+
+# Setup automated cleanup
+log_info "Setting up automated cleanup..."
+
+# Create cleanup script
+cat > "$APP_DIR/cleanup.sh" << 'CLEANUP_SCRIPT'
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEVOPS_DIR="$(cd "$SCRIPT_DIR/../../DevOps" && pwd)"
+source "$DEVOPS_DIR/common/utils.sh"
+source "$DEVOPS_DIR/common/docker-utils.sh"
+APP_CONFIG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/cheaperfordrug-api"
+source "$APP_CONFIG_DIR/config.sh"
+
+# Cleanup old image backups (keep last ${MAX_IMAGE_BACKUPS})
+if [ -d "$IMAGE_BACKUP_DIR" ]; then
+    cleanup_old_image_backups "$IMAGE_BACKUP_DIR" "${MAX_IMAGE_BACKUPS:-20}"
+fi
+
+# Cleanup old database backups (older than ${BACKUP_RETENTION_DAYS} days)
+if [ -d "$BACKUP_DIR" ]; then
+    cleanup_old_backups "$BACKUP_DIR" "${BACKUP_RETENTION_DAYS:-30}"
+fi
+
+# Cleanup old Docker images (keep last ${MAX_IMAGE_VERSIONS})
+cleanup_old_images "$DOCKER_IMAGE_NAME" "${MAX_IMAGE_VERSIONS:-20}"
+
+echo "[$(date)] Cleanup completed for ${APP_NAME}"
+CLEANUP_SCRIPT
+
+chmod +x "$APP_DIR/cleanup.sh"
+
+# Setup cron job for cleanup (daily at 2 AM)
+(crontab -l 2>/dev/null | grep -v "$APP_DIR/cleanup.sh"; echo "0 2 * * * $APP_DIR/cleanup.sh >> $LOG_DIR/cleanup.log 2>&1") | crontab -
+
+log_success "Automated cleanup configured (daily at 2 AM)"
+
+# Setup SSL certificate (automatic if DNS is configured)
+log_info "Setting up SSL certificates..."
+
+# Check if certbot is installed
+if ! command -v certbot >/dev/null 2>&1; then
+    log_info "Installing certbot..."
+    sudo apt-get update -qq
+    sudo apt-get install -y certbot python3-certbot-nginx
+fi
+
+# Check DNS configuration
+log_info "Checking DNS configuration..."
+server_ip=$(curl -s ifconfig.me)
+
+# Check both subdomains
+for domain in "$DOMAIN_PUBLIC" "$DOMAIN_INTERNAL"; do
+    domain_ip=$(dig +short "$domain" | tail -1)
+
+    if [ -z "$domain_ip" ]; then
+        log_warning "DNS not configured for ${domain}"
+        log_info "Please configure DNS A record: ${domain} -> ${server_ip}"
+    elif [ "$domain_ip" != "$server_ip" ]; then
+        log_warning "DNS mismatch for ${domain}: points to ${domain_ip}, but server IP is ${server_ip}"
+    else
+        log_success "DNS correctly configured: ${domain} -> ${server_ip}"
+    fi
+done
+
+# Try to obtain SSL certificates if DNS is configured
+public_ip=$(dig +short "$DOMAIN_PUBLIC" | tail -1)
+internal_ip=$(dig +short "$DOMAIN_INTERNAL" | tail -1)
+
+if [ "$public_ip" = "$server_ip" ] && [ "$internal_ip" = "$server_ip" ]; then
+    log_info "DNS configured correctly for both subdomains. Obtaining SSL certificates..."
+
+    # Check if certificates already exist
+    if sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${DOMAIN_PUBLIC}"; then
+        log_info "SSL certificate already exists for ${DOMAIN_PUBLIC}"
+    else
+        if sudo certbot --nginx \
+            -d "$DOMAIN_PUBLIC" -d "$DOMAIN_INTERNAL" \
+            --non-interactive \
+            --agree-tos \
+            --redirect 2>/dev/null; then
+            log_success "SSL certificates obtained successfully for both API subdomains"
+
+            # Setup auto-renewal
+            if ! sudo systemctl is-active --quiet certbot.timer; then
+                sudo systemctl enable certbot.timer
+                sudo systemctl start certbot.timer
+                log_success "SSL auto-renewal enabled"
+            fi
+        else
+            log_warning "Failed to obtain SSL certificates automatically"
+            log_info "You can setup SSL later by running:"
+            echo "  sudo certbot --nginx -d ${DOMAIN_PUBLIC} -d ${DOMAIN_INTERNAL}"
+        fi
+    fi
+else
+    log_warning "DNS not fully configured. Skipping SSL setup."
+    log_info "After DNS is configured, run:"
+    echo "  sudo certbot --nginx -d ${DOMAIN_PUBLIC} -d ${DOMAIN_INTERNAL}"
+fi
 
 # Create deployment info file
 cat > "$APP_DIR/deployment-info.txt" << INFO
@@ -205,23 +322,19 @@ Next Steps:
    - JWT secret (already generated)
    - Database password (already generated)
 
-3. Setup SSL certificates (only works if DNS is configured):
-   cd ${SCRIPT_DIR}
-   ./deploy.sh ssl-setup
-
-4. Deploy the application:
+3. Deploy the application:
    cd ${SCRIPT_DIR}
    ./deploy.sh deploy
 
-5. Check status:
+4. Check status:
    ./deploy.sh status
 
-6. View logs:
+5. View logs:
    ./deploy.sh logs
    ./deploy.sh logs worker_1
    ./deploy.sh logs scheduler
 
-7. Access Rails console:
+6. Access Rails console:
    ./deploy.sh console
 
 Management Commands:
