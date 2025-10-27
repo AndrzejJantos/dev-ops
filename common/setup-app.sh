@@ -182,17 +182,25 @@ setup_nginx() {
     perl -pe "BEGIN{undef $/;} s|{{UPSTREAM_SERVERS}}|${UPSTREAM_SERVERS}|gs" | \
     sudo tee "$nginx_config" > /dev/null
 
-    # Enable site
-    sudo ln -sf "$nginx_config" "/etc/nginx/sites-enabled/$APP_NAME"
-
-    # Test and reload nginx
+    # Test nginx configuration (but don't fail if SSL certificates don't exist yet)
     log_info "Testing nginx configuration..."
-    if sudo nginx -t 2>&1 | grep -q "successful"; then
+    nginx_test_output=$(sudo nginx -t 2>&1)
+
+    if echo "$nginx_test_output" | grep -q "successful"; then
+        # Config is good, enable it
+        sudo ln -sf "$nginx_config" "/etc/nginx/sites-enabled/$APP_NAME"
         sudo systemctl reload nginx
         log_success "Nginx configuration created and loaded"
+    elif echo "$nginx_test_output" | grep -q "cannot load certificate"; then
+        # SSL certificates don't exist yet, this is expected during initial setup
+        log_warning "Nginx config references SSL certificates that don't exist yet"
+        log_info "SSL certificates will be created in the next step"
+        log_info "Nginx will be enabled after SSL setup completes"
+        # Don't enable the site yet, will be done after SSL setup
     else
+        # Some other nginx error
         log_error "Nginx configuration test failed"
-        sudo nginx -t
+        echo "$nginx_test_output"
         return 1
     fi
 
@@ -366,6 +374,18 @@ setup_ssl() {
                     --agree-tos \
                     --redirect 2>&1 | tee /tmp/certbot-setup.log; then
                     log_success "SSL certificates obtained successfully"
+
+                    # Enable nginx site if it wasn't enabled before (due to missing certificates)
+                    local nginx_config="/etc/nginx/sites-available/$APP_NAME"
+                    if [ -f "$nginx_config" ] && [ ! -L "/etc/nginx/sites-enabled/$APP_NAME" ]; then
+                        log_info "Enabling nginx site..."
+                        sudo ln -sf "$nginx_config" "/etc/nginx/sites-enabled/$APP_NAME"
+                        if sudo nginx -t 2>&1 | grep -q "successful"; then
+                            sudo systemctl reload nginx
+                            log_success "Nginx site enabled and loaded"
+                        fi
+                    fi
+
                     log_success "Sites available at: https://${DOMAIN}$([ -n "${DOMAIN_INTERNAL:-}" ] && echo ", https://${DOMAIN_INTERNAL}" || echo "")"
                 else
                     log_warning "Automatic SSL setup failed"
