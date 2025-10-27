@@ -233,22 +233,31 @@ check_container_health() {
             return 1
         fi
 
-        # Get container port
-        local port=$(docker port "${container_name}" 80 2>/dev/null | cut -d ':' -f2)
+        # Get container port (try both 3000 for Next.js/Node and 80 for other services)
+        local port=$(docker port "${container_name}" 3000 2>/dev/null | cut -d ':' -f2)
+        if [ -z "$port" ]; then
+            port=$(docker port "${container_name}" 80 2>/dev/null | cut -d ':' -f2)
+        fi
 
         if [ -n "$port" ]; then
-            # Try to connect to the health endpoint
-            if curl -sf http://localhost:${port}/up > /dev/null 2>&1; then
-                log_success "Container ${container_name} is healthy"
-                return 0
-            fi
+            # Try multiple health check paths and accept 2xx or 3xx status codes
+            for path in "/up" "/" "/api/health"; do
+                local status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${port}${path} 2>/dev/null)
+                if [[ "$status" =~ ^[23][0-9][0-9]$ ]]; then
+                    log_success "Container ${container_name} is healthy (HTTP $status on $path)"
+                    return 0
+                fi
+            done
         fi
 
         attempt=$((attempt + 1))
         sleep 2
     done
 
-    log_error "Container ${container_name} failed health check"
+    log_error "Container ${container_name} failed health check after ${max_attempts} attempts"
+    # Show container logs for debugging
+    log_error "Last 20 lines of container logs:"
+    docker logs "${container_name}" --tail 20 2>&1 | sed 's/^/  /'
     return 1
 }
 
