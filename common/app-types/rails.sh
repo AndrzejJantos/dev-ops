@@ -280,6 +280,28 @@ rails_pull_code() {
         log_success "Updated from ${old_commit:0:7} to ${new_commit:0:7}"
     fi
 
+    # Install/update gems for production use
+    if command_exists bundle; then
+        log_info "Installing/updating application gems..."
+
+        # Ensure bundler config is set
+        bundle config set --local path '.bundle/vendor'
+        bundle config set --local without 'development test'
+
+        # Install gems
+        RAILS_ENV=production bundle install --quiet 2>&1 | grep -v "^Fetching" || log_warning "Gem installation completed with warnings"
+
+        # Ensure .env.production symlink exists for console access
+        if [ ! -L "${REPO_DIR}/.env.production" ]; then
+            ln -sf "$ENV_FILE" "${REPO_DIR}/.env.production"
+            log_info "Created symlink: ${REPO_DIR}/.env.production -> ${ENV_FILE}"
+        fi
+
+        log_success "Gems installed/updated successfully"
+    else
+        log_warning "Bundler not available, skipping gem installation"
+    fi
+
     # Export commit for use in notifications
     export CURRENT_COMMIT="$new_commit"
     return 0
@@ -615,7 +637,8 @@ rails_display_deployment_summary() {
     # Useful Commands
     echo "USEFUL COMMANDS:"
     echo "  View logs:        docker logs ${APP_NAME}_web_1 -f"
-    echo "  Rails console:    docker exec -it ${APP_NAME}_web_1 rails console"
+    echo "  Rails console:    cd ${REPO_DIR} && bundle exec rails console"
+    echo "  Console (Docker): docker exec -it ${APP_NAME}_web_1 rails console"
     echo "  Check health:     curl https://${DOMAIN}${HEALTH_CHECK_PATH}"
     echo "  Scale up:         ./deploy.sh scale $((scale + 1))"
     echo "  Scale down:       ./deploy.sh scale $((scale - 1))"
