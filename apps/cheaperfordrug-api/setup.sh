@@ -227,27 +227,28 @@ fi
 
 # Check DNS configuration
 log_info "Checking DNS configuration..."
-server_ip=$(curl -s ifconfig.me)
+# Get IPv4 address explicitly
+server_ipv4=$(curl -4 -s ifconfig.me 2>/dev/null || curl -s api.ipify.org)
 
 # Check both subdomains
+dns_ok=true
 for domain in "$DOMAIN_PUBLIC" "$DOMAIN_INTERNAL"; do
-    domain_ip=$(dig +short "$domain" | tail -1)
+    domain_ip=$(dig +short "$domain" A | tail -1)
 
     if [ -z "$domain_ip" ]; then
         log_warning "DNS not configured for ${domain}"
-        log_info "Please configure DNS A record: ${domain} -> ${server_ip}"
-    elif [ "$domain_ip" != "$server_ip" ]; then
-        log_warning "DNS mismatch for ${domain}: points to ${domain_ip}, but server IP is ${server_ip}"
+        log_info "Please configure DNS A record: ${domain} -> ${server_ipv4}"
+        dns_ok=false
+    elif [ "$domain_ip" != "$server_ipv4" ]; then
+        log_warning "DNS mismatch for ${domain}: points to ${domain_ip}, but server IPv4 is ${server_ipv4}"
+        dns_ok=false
     else
-        log_success "DNS correctly configured: ${domain} -> ${server_ip}"
+        log_success "DNS correctly configured: ${domain} -> ${server_ipv4}"
     fi
 done
 
 # Try to obtain SSL certificates if DNS is configured
-public_ip=$(dig +short "$DOMAIN_PUBLIC" | tail -1)
-internal_ip=$(dig +short "$DOMAIN_INTERNAL" | tail -1)
-
-if [ "$public_ip" = "$server_ip" ] && [ "$internal_ip" = "$server_ip" ]; then
+if [ "$dns_ok" = true ]; then
     log_info "DNS configured correctly for both subdomains. Obtaining SSL certificates..."
 
     # Check if certificates already exist

@@ -155,19 +155,20 @@ fi
 
 # Check DNS configuration
 log_info "Checking DNS configuration for ${DOMAIN}..."
-server_ip=$(curl -s ifconfig.me)
-domain_ip=$(dig +short "$DOMAIN" | tail -1)
+# Get IPv4 address explicitly
+server_ipv4=$(curl -4 -s ifconfig.me 2>/dev/null || curl -s api.ipify.org)
+domain_ip=$(dig +short "$DOMAIN" A | tail -1)
 
 if [ -z "$domain_ip" ]; then
     log_warning "DNS not configured for ${DOMAIN}"
-    log_info "Please configure DNS A record: ${DOMAIN} -> ${server_ip}"
+    log_info "Please configure DNS A record: ${DOMAIN} -> ${server_ipv4}"
     log_info "You can setup SSL later by running: sudo certbot --nginx -d ${DOMAIN}"
-elif [ "$domain_ip" != "$server_ip" ]; then
-    log_warning "DNS mismatch: ${DOMAIN} points to ${domain_ip}, but server IP is ${server_ip}"
-    log_info "Please update DNS A record: ${DOMAIN} -> ${server_ip}"
+elif [ "$domain_ip" != "$server_ipv4" ]; then
+    log_warning "DNS mismatch: ${DOMAIN} points to ${domain_ip}, but server IPv4 is ${server_ipv4}"
+    log_info "Please update DNS A record: ${DOMAIN} -> ${server_ipv4}"
     log_info "You can setup SSL later by running: sudo certbot --nginx -d ${DOMAIN}"
 else
-    log_success "DNS correctly configured: ${DOMAIN} -> ${server_ip}"
+    log_success "DNS correctly configured: ${DOMAIN} -> ${server_ipv4}"
 
     # Check if certificate already exists
     if sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${DOMAIN}"; then
