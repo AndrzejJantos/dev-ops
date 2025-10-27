@@ -66,6 +66,9 @@ RUN set -a && \
 # Clean up build artifacts
 RUN rm -rf node_modules tmp/cache .bundle/vendor/ruby/*/cache
 
+# Ensure public/assets exists for COPY in next stage (even if empty for API-only apps)
+RUN mkdir -p public/assets
+
 # -----------------------------------------------------------------------------
 # Stage 2: Production - Clean runtime image without .env file
 # -----------------------------------------------------------------------------
