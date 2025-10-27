@@ -76,6 +76,25 @@ else
     echo "  sudo systemctl start redis-server"
 fi
 
+# Setup native Rails environment for console access
+log_info "Setting up native Rails environment for console access..."
+cd "$REPO_DIR"
+
+# Install gems locally
+if [ ! -d "vendor/bundle" ]; then
+    log_info "Installing gems natively..."
+    bundle install --path vendor/bundle --jobs 4 --retry 3
+    log_success "Gems installed to vendor/bundle"
+else
+    log_info "Native gems already installed"
+fi
+
+# Create binstubs for easy access
+bundle binstubs --all 2>/dev/null || true
+
+log_success "Native Rails environment ready"
+log_info "You can now use: cd $REPO_DIR && bundle exec rails console"
+
 # Copy Dockerfile and .dockerignore from DevOps template
 log_info "Copying Docker files from template..."
 cp "$DEVOPS_DIR/common/rails/Dockerfile.template" "$REPO_DIR/Dockerfile"
