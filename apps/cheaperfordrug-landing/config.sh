@@ -5,6 +5,7 @@
 # This file is sourced by setup and deployment scripts
 
 # Application identification
+export APP_TYPE="nextjs"
 export APP_NAME="cheaperfordrug-landing"
 export APP_DISPLAY_NAME="CheaperForDrug Landing Page"
 
@@ -33,8 +34,9 @@ export REDIS_URL="redis://localhost:6379/${REDIS_DB_NUMBER}"
 
 # Network configuration
 export DOMAIN="presale.taniejpolek.pl"
-export BASE_PORT=3010      # Starting port for containers
-export PORT_RANGE_END=3019 # Ending port (supports 10 instances)
+export BASE_PORT=3010          # Starting port for containers (host side)
+export CONTAINER_PORT=3000     # Port inside container
+export PORT_RANGE_END=3019     # Ending port (supports 10 instances)
 
 # Container architecture configuration
 # Landing page: Only web containers needed (no background jobs)
@@ -61,7 +63,6 @@ export NGINX_UPSTREAM_NAME="${APP_NAME//-/_}_backend"
 # Docker configuration
 export DOCKER_IMAGE_NAME="${APP_NAME}"
 export DOCKER_NETWORK="bridge"
-export CONTAINER_PORT=3000          # Port inside container (consistent across Rails and Next.js)
 
 # Application-specific environment variables
 # These will be written to .env.production during setup

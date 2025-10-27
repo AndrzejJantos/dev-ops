@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# CheaperForDrug Web Setup Script
+# Next.js App Setup Script
 # This is a thin wrapper that uses the common setup infrastructure
 
 set -e

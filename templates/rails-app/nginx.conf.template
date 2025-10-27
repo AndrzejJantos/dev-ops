@@ -1,0 +1,113 @@
+# Nginx configuration for Rails API application
+# This template will be processed during setup to generate the actual config
+
+# Upstream servers (load balanced)
+upstream {{NGINX_UPSTREAM_NAME}} {
+    least_conn;  # Use least connections load balancing algorithm
+{{UPSTREAM_SERVERS}}
+}
+
+# HTTP server (redirect to HTTPS)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{DOMAIN}} www.{{DOMAIN}};
+
+    # Redirect all HTTP traffic to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+# HTTPS server
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {{DOMAIN}} www.{{DOMAIN}};
+
+    # SSL certificates (managed by Certbot)
+    # Certbot will automatically add ssl_certificate and ssl_certificate_key directives
+
+    # SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Logging
+    access_log /var/log/nginx/{{APP_NAME}}-access.log;
+    error_log /var/log/nginx/{{APP_NAME}}-error.log;
+
+    # Max upload size (increase for file uploads)
+    client_max_body_size 50M;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+    gzip_vary on;
+
+    # Proxy settings
+    location / {
+        proxy_pass http://{{NGINX_UPSTREAM_NAME}};
+        proxy_http_version 1.1;
+
+        # Required headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+
+        # WebSocket support (if needed)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+
+        # Timeouts (increase for long-running requests)
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;      # 5 minutes for uploads
+        proxy_read_timeout 300s;      # 5 minutes for long API calls
+
+        # Buffering
+        proxy_buffering on;
+        proxy_buffer_size 4k;
+        proxy_buffers 8 4k;
+        proxy_busy_buffers_size 8k;
+    }
+
+    # Health check endpoint (no auth required)
+    location /up {
+        proxy_pass http://{{NGINX_UPSTREAM_NAME}};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+
+        # Don't cache health checks
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+
+        # Quick timeout for health checks
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 5s;
+        proxy_read_timeout 5s;
+    }
+
+    # CORS headers (customize as needed for your API)
+    # Uncomment and configure if you need CORS support
+    # add_header 'Access-Control-Allow-Origin' '*' always;
+    # add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+    # add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept' always;
+    # add_header 'Access-Control-Max-Age' 86400 always;
+
+    # OPTIONS method for CORS preflight
+    # if ($request_method = OPTIONS) {
+    #     return 204;
+    # }
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Hide nginx version
+    server_tokens off;
+}

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# CheaperForDrug Web Deployment Script
+# Next.js App Deployment Script
 # This is a thin wrapper that uses the common deployment infrastructure
 
 set -e
