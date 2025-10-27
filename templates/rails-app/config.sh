@@ -37,6 +37,10 @@ export DOCKER_IMAGE_NAME="$APP_NAME"
 export BASE_PORT=3020              # Starting port for containers (e.g., 3020, 3021, 3022)
 export CONTAINER_PORT=3000          # Port inside container (consistent across Rails and Next.js)
 
+# IMPORTANT: Add PORT=3000 to your .env.production file
+# This ensures Puma listens on port 3000 (not port 80)
+# Run: echo 'PORT=3000' >> ~/apps/$APP_NAME/.env.production
+
 # ============================================================================
 # DATABASE CONFIGURATION
 # ============================================================================

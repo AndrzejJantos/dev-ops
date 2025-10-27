@@ -55,6 +55,12 @@ The setup script generates most values automatically, but you should update:
 - Any API keys your app needs
 - Custom environment variables
 
+**IMPORTANT:** Add `PORT=3000` to your `.env.production` file:
+```bash
+echo 'PORT=3000' >> ~/apps/your-app-name/.env.production
+```
+This ensures Puma listens on the correct port (3000, not 80).
+
 ### 5. Deploy
 ```bash
 ./deploy.sh deploy
