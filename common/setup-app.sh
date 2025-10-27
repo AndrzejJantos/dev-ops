@@ -297,31 +297,53 @@ setup_ssl() {
         sudo apt-get install -y certbot python3-certbot-nginx
     fi
 
-    # Check DNS configuration
-    log_info "Checking DNS configuration for ${DOMAIN}..."
-    # Get IPv4 address explicitly
+    # Build domain list for certbot
+    local cert_domains="-d $DOMAIN"
+    local all_domains="$DOMAIN"
+
+    # Add www subdomain for non-API domains
+    if [[ ! "$DOMAIN" =~ ^api ]]; then
+        cert_domains="$cert_domains -d www.$DOMAIN"
+    fi
+
+    # Check if additional domains are defined (e.g., DOMAIN_INTERNAL)
+    if [ -n "${DOMAIN_INTERNAL:-}" ]; then
+        cert_domains="$cert_domains -d $DOMAIN_INTERNAL"
+        all_domains="$all_domains, $DOMAIN_INTERNAL"
+        log_info "Additional domain detected: ${DOMAIN_INTERNAL}"
+    fi
+
+    # Check DNS configuration for all domains
+    log_info "Checking DNS configuration..."
     server_ipv4=$(curl -4 -s ifconfig.me 2>/dev/null || curl -s api.ipify.org)
-    domain_ip=$(dig +short "$DOMAIN" A | tail -1)
+
+    local dns_ok=true
+    for domain in $DOMAIN ${DOMAIN_INTERNAL:-}; do
+        domain_ip=$(dig +short "$domain" A | tail -1)
+        echo "  ${domain}: ${domain_ip:-NOT CONFIGURED}"
+
+        if [ -z "$domain_ip" ]; then
+            log_warning "DNS not configured for ${domain}"
+            dns_ok=false
+        elif [ "$domain_ip" != "$server_ipv4" ]; then
+            log_warning "DNS mismatch for ${domain}: points to ${domain_ip}, should be ${server_ipv4}"
+            dns_ok=false
+        fi
+    done
 
     echo "  Server IP: ${server_ipv4}"
-    echo "  Domain IP: ${domain_ip}"
 
-    if [ -z "$domain_ip" ]; then
-        log_warning "DNS not configured for ${DOMAIN}"
+    if [ "$dns_ok" = false ]; then
         echo ""
-        echo "Please configure DNS with these A records:"
-        echo "  ${DOMAIN}     A    ${server_ipv4}"
-        echo "  www.${DOMAIN} A    ${server_ipv4}"
+        log_error "DNS not configured correctly. Please configure:"
+        for domain in $DOMAIN ${DOMAIN_INTERNAL:-}; do
+            echo "  ${domain}     A    ${server_ipv4}"
+        done
         echo ""
-        log_info "After DNS is configured, run: sudo certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}"
-    elif [ "$domain_ip" != "$server_ipv4" ]; then
-        log_warning "DNS mismatch: ${DOMAIN} points to ${domain_ip}, but server IPv4 is ${server_ipv4}"
-        echo ""
-        echo "Please update DNS A record: ${DOMAIN} -> ${server_ipv4}"
-        echo ""
-        log_info "After DNS is updated, run: sudo certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}"
+        log_info "After DNS is configured, run: sudo certbot --nginx $cert_domains"
+        return 1
     else
-        log_success "DNS correctly configured: ${DOMAIN} -> ${server_ipv4}"
+        log_success "DNS correctly configured for all domains"
 
         # Check if certificate already exists
         if sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${DOMAIN}"; then
@@ -332,27 +354,26 @@ setup_ssl() {
             # Try to get email from existing certbot registration
             existing_email=$(sudo certbot show_account 2>/dev/null | grep -oP 'Email contact: \K.*' || echo "")
 
-            log_info "Obtaining SSL certificate from Let's Encrypt..."
+            log_info "Obtaining SSL certificates for: ${all_domains}"
 
             # Attempt automatic certificate setup
             if [ -n "$existing_email" ]; then
                 log_info "Using existing certbot account: ${existing_email}"
                 if sudo certbot --nginx \
-                    -d "$DOMAIN" \
-                    -d "www.$DOMAIN" \
+                    $cert_domains \
                     --email "${existing_email}" \
                     --non-interactive \
                     --agree-tos \
                     --redirect 2>&1 | tee /tmp/certbot-setup.log; then
-                    log_success "SSL certificate obtained successfully"
-                    log_success "Site is now available at: https://${DOMAIN}"
+                    log_success "SSL certificates obtained successfully"
+                    log_success "Sites available at: https://${DOMAIN}$([ -n "${DOMAIN_INTERNAL:-}" ] && echo ", https://${DOMAIN_INTERNAL}" || echo "")"
                 else
                     log_warning "Automatic SSL setup failed"
-                    log_info "Run manually: sudo certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}"
+                    log_info "Run manually: sudo certbot --nginx $cert_domains"
                 fi
             else
                 log_warning "No existing certbot account found"
-                log_info "Run manually: sudo certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}"
+                log_info "Run manually: sudo certbot --nginx $cert_domains"
             fi
         fi
 
