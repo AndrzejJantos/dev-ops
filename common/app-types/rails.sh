@@ -196,11 +196,17 @@ rails_setup_requirements() {
     cd "$REPO_DIR"
 
     # Check Ruby version
-    REQUIRED_RUBY_VERSION=$(cat .ruby-version 2>/dev/null || echo "3.3.4")
+    REQUIRED_RUBY_VERSION=$(cat .ruby-version 2>/dev/null || echo "3.4.4")
     CURRENT_RUBY_VERSION=$(ruby -v | grep -oP '\d+\.\d+\.\d+' | head -1 2>/dev/null || echo "unknown")
 
     log_info "Required Ruby version: ${REQUIRED_RUBY_VERSION}"
     log_info "Current Ruby version: ${CURRENT_RUBY_VERSION}"
+
+    # Warn if Ruby version mismatch
+    if [ "$CURRENT_RUBY_VERSION" != "$REQUIRED_RUBY_VERSION" ]; then
+        log_warning "Ruby version mismatch! Required: ${REQUIRED_RUBY_VERSION}, Current: ${CURRENT_RUBY_VERSION}"
+        log_warning "Gems may not install correctly. Consider upgrading Ruby to ${REQUIRED_RUBY_VERSION}"
+    fi
 
     # Install bundler if not present
     if ! command_exists bundle; then
@@ -283,6 +289,15 @@ rails_pull_code() {
     # Install/update gems for production use
     if command_exists bundle; then
         log_info "Installing/updating application gems..."
+
+        # Check Ruby version compatibility
+        REQUIRED_RUBY_VERSION=$(cat .ruby-version 2>/dev/null || echo "3.4.4")
+        CURRENT_RUBY_VERSION=$(ruby -v | grep -oP '\d+\.\d+\.\d+' | head -1 2>/dev/null || echo "unknown")
+
+        if [ "$CURRENT_RUBY_VERSION" != "$REQUIRED_RUBY_VERSION" ] && [ "$CURRENT_RUBY_VERSION" != "unknown" ]; then
+            log_warning "Ruby version mismatch! Required: ${REQUIRED_RUBY_VERSION}, Current: ${CURRENT_RUBY_VERSION}"
+            log_warning "To fix: Re-run ubuntu-init-setup.sh or manually install Ruby ${REQUIRED_RUBY_VERSION}"
+        fi
 
         # Ensure bundler config is set
         bundle config set --local path '.bundle/vendor'
