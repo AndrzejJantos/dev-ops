@@ -111,7 +111,7 @@ deploy_fresh() {
         local port=$((BASE_PORT + i - 1))
         local container_name="${APP_NAME}_web_${i}"
 
-        start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE"
+        start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start container ${container_name}"
@@ -140,7 +140,7 @@ deploy_rolling() {
 
     # Perform rolling restart for web containers
     if [ "$ZERO_DOWNTIME_ENABLED" = "true" ]; then
-        rolling_restart "$APP_NAME" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "$BASE_PORT" "$scale"
+        rolling_restart "$APP_NAME" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "$BASE_PORT" "$scale" "$CONTAINER_PORT"
 
         if [ $? -ne 0 ]; then
             log_error "Rolling restart failed"
@@ -270,7 +270,7 @@ restart_application() {
     fi
 
     # Perform rolling restart
-    rolling_restart "$APP_NAME" "$current_image" "$ENV_FILE" "$BASE_PORT" "$scale"
+    rolling_restart "$APP_NAME" "$current_image" "$ENV_FILE" "$BASE_PORT" "$scale" "$CONTAINER_PORT"
 
     if [ $? -ne 0 ]; then
         log_error "Restart failed"
@@ -299,7 +299,7 @@ scale_application_web() {
     local old_scale=$(get_container_count "$APP_NAME")
 
     # Perform scaling
-    scale_application "$APP_NAME" "$current_image" "$ENV_FILE" "$BASE_PORT" "$target_scale"
+    scale_application "$APP_NAME" "$current_image" "$ENV_FILE" "$BASE_PORT" "$target_scale" "$CONTAINER_PORT"
 
     if [ $? -ne 0 ]; then
         log_error "Scaling failed"

@@ -48,11 +48,12 @@ build_docker_image() {
 start_container() {
     local container_name="$1"
     local image_name="$2"
-    local port="$3"
+    local host_port="$3"
     local env_file="$4"
-    local network="${5:-bridge}"
+    local container_port="${5:-3000}"  # Default to 3000 (consistent for Rails and Next.js)
+    local network="${6:-bridge}"
 
-    log_info "Starting container: ${container_name} on port ${port}"
+    log_info "Starting container: ${container_name} on host port ${host_port} -> container port ${container_port}"
 
     # Remove existing container if it exists
     docker rm -f "$container_name" 2>/dev/null || true
@@ -61,7 +62,7 @@ start_container() {
         --name "$container_name" \
         --network "$network" \
         --restart unless-stopped \
-        -p "${port}:80" \
+        -p "${host_port}:${container_port}" \
         --env-file "$env_file" \
         "$image_name"
 
@@ -328,6 +329,7 @@ rolling_restart() {
     local env_file="$3"
     local base_port="$4"
     local scale="${5:-2}"
+    local container_port="${6:-3000}"  # Default to 3000 (consistent for Rails and Next.js)
 
     log_info "Performing rolling restart with scale=${scale}"
 
@@ -342,7 +344,7 @@ rolling_restart() {
             local port=$((base_port + i - 1))
             local container_name="${app_name}_web_${i}"
 
-            start_container "$container_name" "$new_image" "$port" "$env_file"
+            start_container "$container_name" "$new_image" "$port" "$env_file" "$container_port"
 
             if [ $? -ne 0 ]; then
                 log_error "Failed to start container ${container_name}"
@@ -375,7 +377,7 @@ rolling_restart() {
         fi
 
         # Start new container on same port
-        start_container "$container_name" "$new_image" "$port" "$env_file"
+        start_container "$container_name" "$new_image" "$port" "$env_file" "$container_port"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start container ${container_name}"
@@ -409,6 +411,7 @@ scale_application() {
     local env_file="$3"
     local base_port="$4"
     local target_scale="$5"
+    local container_port="${6:-3000}"  # Default to 3000 (consistent for Rails and Next.js)
 
     local current_count=$(get_container_count "$app_name")
 
@@ -428,7 +431,7 @@ scale_application() {
             local port=$(get_next_available_port "$base_port")
             local container_name="${app_name}_web_${i}"
 
-            start_container "$container_name" "$image_name" "$port" "$env_file"
+            start_container "$container_name" "$image_name" "$port" "$env_file" "$container_port"
 
             if [ $? -ne 0 ]; then
                 log_error "Failed to start container ${container_name}"

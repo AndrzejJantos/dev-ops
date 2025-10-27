@@ -111,19 +111,19 @@ RUN mkdir -p tmp/pids tmp/cache tmp/sockets log && \
 # Switch to non-root user
 USER app
 
-# Expose port
-EXPOSE 80
+# Expose port (using 3000 for consistency with Next.js and local development)
+EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:80/health || exit 1
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # Set environment variables for runtime
 # These will be provided by docker run --env-file at runtime
 ENV RAILS_ENV=production \
     RAILS_LOG_TO_STDOUT=true \
     RAILS_SERVE_STATIC_FILES=true \
-    PORT=80
+    PORT=3000
 
 # Start Puma server
 CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]

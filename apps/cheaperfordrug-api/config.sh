@@ -39,7 +39,8 @@ export SCHEDULER_ENABLED=true       # Enable Clockwork scheduler for recurring t
 # DOCKER CONFIGURATION
 # ============================================================================
 export DOCKER_IMAGE_NAME="$APP_NAME"
-export BASE_PORT=3020              # Ports 3020-3022 for web containers
+export BASE_PORT=3020              # Ports 3020-3022 for web containers (host side)
+export CONTAINER_PORT=3000          # Port inside container (consistent across Rails and Next.js)
 
 # ============================================================================
 # DATABASE CONFIGURATION

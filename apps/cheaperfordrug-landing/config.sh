@@ -61,6 +61,7 @@ export NGINX_UPSTREAM_NAME="${APP_NAME//-/_}_backend"
 # Docker configuration
 export DOCKER_IMAGE_NAME="${APP_NAME}"
 export DOCKER_NETWORK="bridge"
+export CONTAINER_PORT=3000          # Port inside container (consistent across Rails and Next.js)
 
 # Application-specific environment variables
 # These will be written to .env.production during setup
