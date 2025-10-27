@@ -59,6 +59,31 @@ else
     log_warning "next.config.js not found. You may need to create it with standalone output."
 fi
 
+# Check for domain conflicts in existing nginx configs
+log_info "Checking for domain conflicts in nginx configurations..."
+conflicting_configs=()
+for config in /etc/nginx/sites-enabled/*; do
+    if [ -f "$config" ] && [ "$(basename $config)" != "${APP_NAME}" ]; then
+        if sudo grep -q "server_name.*${DOMAIN}" "$config" 2>/dev/null; then
+            conflicting_configs+=("$(basename $config)")
+        fi
+    fi
+done
+
+if [ ${#conflicting_configs[@]} -gt 0 ]; then
+    log_error "Domain conflict detected!"
+    log_error "The following nginx configs already claim ${DOMAIN}:"
+    for config in "${conflicting_configs[@]}"; do
+        echo "  - $config"
+    done
+    echo ""
+    log_error "Please remove ${DOMAIN} from these configs before continuing."
+    log_info "You can use the fix script: ./fix-domain-and-ssl.sh"
+    exit 1
+fi
+
+log_success "No domain conflicts found"
+
 # Setup nginx configuration
 log_info "Setting up Nginx configuration..."
 nginx_template="$SCRIPT_DIR/nginx.conf.template"
@@ -85,11 +110,13 @@ sudo tee "$nginx_config" > /dev/null
 sudo ln -sf "$nginx_config" "/etc/nginx/sites-enabled/$APP_NAME"
 
 # Test and reload nginx
+log_info "Testing nginx configuration..."
 if sudo nginx -t 2>&1 | grep -q "successful"; then
     sudo systemctl reload nginx
     log_success "Nginx configuration created and loaded"
 else
     log_error "Nginx configuration test failed"
+    sudo nginx -t
     exit 1
 fi
 
@@ -158,40 +185,64 @@ log_info "Checking DNS configuration for ${DOMAIN}..."
 server_ipv4=$(curl -4 -s ifconfig.me 2>/dev/null || curl -s api.ipify.org)
 domain_ip=$(dig +short "$DOMAIN" A | tail -1)
 
+echo "  Server IP: ${server_ipv4}"
+echo "  Domain IP: ${domain_ip}"
+
 if [ -z "$domain_ip" ]; then
     log_warning "DNS not configured for ${DOMAIN}"
-    log_info "Please configure DNS A record: ${DOMAIN} -> ${server_ipv4}"
-    log_info "You can setup SSL later by running: sudo certbot --nginx -d ${DOMAIN}"
+    echo ""
+    echo "Please configure DNS with these A records:"
+    echo "  ${DOMAIN}     A    ${server_ipv4}"
+    echo "  www.${DOMAIN} A    ${server_ipv4}"
+    echo ""
+    log_info "After DNS is configured, run: ./fix-domain-and-ssl.sh"
 elif [ "$domain_ip" != "$server_ipv4" ]; then
     log_warning "DNS mismatch: ${DOMAIN} points to ${domain_ip}, but server IPv4 is ${server_ipv4}"
-    log_info "Please update DNS A record: ${DOMAIN} -> ${server_ipv4}"
-    log_info "You can setup SSL later by running: sudo certbot --nginx -d ${DOMAIN}"
+    echo ""
+    echo "Please update DNS A record: ${DOMAIN} -> ${server_ipv4}"
+    echo ""
+    log_info "After DNS is updated, run: ./fix-domain-and-ssl.sh"
 else
     log_success "DNS correctly configured: ${DOMAIN} -> ${server_ipv4}"
 
     # Check if certificate already exists
     if sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${DOMAIN}"; then
-        log_info "SSL certificate already exists for ${DOMAIN}"
+        log_success "SSL certificate already exists for ${DOMAIN}"
+        expiry=$(sudo certbot certificates 2>/dev/null | grep -A 10 "Certificate Name: ${DOMAIN}" | grep "Expiry Date" | cut -d: -f2- | xargs)
+        log_info "Certificate expires: ${expiry}"
     else
-        # Obtain SSL certificate
-        log_info "Obtaining SSL certificate from Let's Encrypt..."
-        if sudo certbot --nginx \
-            -d "$DOMAIN" \
-            --non-interactive \
-            --agree-tos \
-            --redirect 2>/dev/null; then
-            log_success "SSL certificate obtained successfully"
-            log_success "Site is now available at: https://${DOMAIN}"
+        # Try to get email from existing certbot registration
+        existing_email=$(sudo certbot show_account 2>/dev/null | grep -oP 'Email contact: \K.*' || echo "")
 
-            # Setup auto-renewal
-            if ! sudo systemctl is-active --quiet certbot.timer; then
-                sudo systemctl enable certbot.timer
-                sudo systemctl start certbot.timer
-                log_success "SSL auto-renewal enabled"
+        log_info "Obtaining SSL certificate from Let's Encrypt..."
+        log_warning "You'll need to provide an email for certificate notifications"
+
+        # Attempt automatic certificate setup
+        if [ -n "$existing_email" ]; then
+            log_info "Using existing certbot account: ${existing_email}"
+            if sudo certbot --nginx \
+                -d "$DOMAIN" \
+                -d "www.$DOMAIN" \
+                --email "${existing_email}" \
+                --non-interactive \
+                --agree-tos \
+                --redirect 2>&1 | tee /tmp/certbot-setup.log; then
+                log_success "SSL certificate obtained successfully"
+                log_success "Site is now available at: https://${DOMAIN}"
+
+                # Setup auto-renewal
+                if ! sudo systemctl is-active --quiet certbot.timer; then
+                    sudo systemctl enable certbot.timer
+                    sudo systemctl start certbot.timer
+                    log_success "SSL auto-renewal enabled"
+                fi
+            else
+                log_warning "Automatic SSL setup failed"
+                log_info "Run: ./fix-domain-and-ssl.sh (interactive SSL setup)"
             fi
         else
-            log_warning "Failed to obtain SSL certificate"
-            log_info "You can try manually: sudo certbot --nginx -d ${DOMAIN}"
+            log_warning "No existing certbot account found"
+            log_info "Run: ./fix-domain-and-ssl.sh (interactive SSL setup with email)"
         fi
     fi
 fi
@@ -252,7 +303,12 @@ Management Commands:
 ./deploy.sh scale <N>       - Scale web containers
 ./deploy.sh status          - Show container status
 ./deploy.sh logs [name]     - View logs
-./deploy.sh ssl-setup       - Setup SSL certificates
+
+Diagnostic & Fix Tools:
+=======================
+./quick-check.sh            - Quick status check
+./diagnose.sh               - Comprehensive diagnostics
+./fix-domain-and-ssl.sh     - Fix domain conflicts & setup SSL
 
 INFO
 
