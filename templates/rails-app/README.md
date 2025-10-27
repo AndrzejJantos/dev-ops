@@ -51,15 +51,18 @@ nano ~/apps/your-app-name/.env.production
 ```
 
 The setup script generates most values automatically, but you should update:
+- **ALLOWED_ORIGINS** - Frontend domains allowed to access your API (comma-separated)
 - Mailgun credentials (for application emails)
 - Any API keys your app needs
 - Custom environment variables
 
-**IMPORTANT:** Add `PORT=3000` to your `.env.production` file:
+Example:
 ```bash
-echo 'PORT=3000' >> ~/apps/your-app-name/.env.production
+# Update CORS allowed origins with your actual frontend domain(s)
+ALLOWED_ORIGINS=https://your-frontend.com,https://www.your-frontend.com
 ```
-This ensures Puma listens on the correct port (3000, not 80).
+
+**Note:** `PORT=3000` is automatically set by the setup script to ensure Puma listens on the correct port.
 
 ### 5. Deploy
 ```bash

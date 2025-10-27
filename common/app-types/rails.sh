@@ -154,6 +154,11 @@ PORT=${CONTAINER_PORT:-3000}
 WEB_CONCURRENCY=2
 RAILS_MAX_THREADS=5
 
+# CORS Configuration
+# Allowed origins for API requests (comma-separated)
+# Update with your actual frontend domain(s)
+ALLOWED_ORIGINS=https://example.com,https://www.example.com
+
 # App-specific environment variables
 # Add your custom variables below:
 
