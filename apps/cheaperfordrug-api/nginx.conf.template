@@ -90,12 +90,6 @@ server {
     # Handle preflight OPTIONS requests for CORS
     location / {
         if ($request_method = 'OPTIONS') {
-            # Check if origin is allowed
-            set $cors_origin "";
-            if ($http_origin ~* "^https://(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
-                set $cors_origin $http_origin;
-            }
-
             add_header 'Access-Control-Allow-Origin' $cors_origin always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
             add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
@@ -192,12 +186,6 @@ server {
     # Handle preflight OPTIONS requests for CORS
     location / {
         if ($request_method = 'OPTIONS') {
-            # Check if origin is allowed
-            set $cors_origin "";
-            if ($http_origin ~* "^https://(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
-                set $cors_origin $http_origin;
-            }
-
             add_header 'Access-Control-Allow-Origin' $cors_origin always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
             add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
