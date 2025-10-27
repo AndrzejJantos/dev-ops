@@ -13,7 +13,6 @@ APP_CONFIG="$SCRIPT_DIR/config.sh"
 # Source common configuration and utilities
 DEVOPS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$DEVOPS_DIR/common/utils.sh"
-source "$DEVOPS_DIR/common/db-utils.sh"
 source "$DEVOPS_DIR/common/docker-utils.sh"
 source "$DEVOPS_DIR/common/rails/deploy.sh"
 
