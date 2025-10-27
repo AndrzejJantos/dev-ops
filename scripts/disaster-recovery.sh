@@ -98,111 +98,15 @@ if [ "$confirm" != "yes" ]; then
 fi
 
 # ==============================================================================
-# STEP 1: Install System Dependencies
+# STEP 1: Install Basic Dependencies & Clone DevOps Repository
 # ==============================================================================
 
-if [ "$INSTALL_DEPENDENCIES" = "true" ]; then
-    log_step "1" "Installing System Dependencies"
+log_step "1" "Installing Basic Dependencies and Cloning DevOps Repository"
 
-    log_info "Updating package lists..."
-    sudo apt-get update -qq
-
-    log_info "Installing core dependencies..."
-    sudo apt-get install -y \
-        curl \
-        wget \
-        git \
-        build-essential \
-        ca-certificates \
-        gnupg \
-        lsb-release
-
-    # Install Docker
-    log_info "Installing Docker..."
-    if ! command -v docker >/dev/null 2>&1; then
-        curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
-        sudo sh /tmp/get-docker.sh
-        sudo usermod -aG docker "$RECOVERY_USER"
-        sudo systemctl enable docker
-        sudo systemctl start docker
-        log_success "Docker installed"
-    else
-        log_info "Docker already installed"
-    fi
-
-    # Install Nginx
-    log_info "Installing Nginx..."
-    if ! command -v nginx >/dev/null 2>&1; then
-        sudo apt-get install -y nginx
-        sudo systemctl enable nginx
-        sudo systemctl start nginx
-        log_success "Nginx installed"
-    else
-        log_info "Nginx already installed"
-    fi
-
-    # Install PostgreSQL
-    log_info "Installing PostgreSQL..."
-    if ! command -v psql >/dev/null 2>&1; then
-        sudo apt-get install -y postgresql postgresql-contrib
-        sudo systemctl enable postgresql
-        sudo systemctl start postgresql
-        log_success "PostgreSQL installed"
-    else
-        log_info "PostgreSQL already installed"
-    fi
-
-    # Install Redis
-    log_info "Installing Redis..."
-    if ! command -v redis-cli >/dev/null 2>&1; then
-        sudo apt-get install -y redis-server
-        sudo systemctl enable redis-server
-        sudo systemctl start redis-server
-        log_success "Redis installed"
-    else
-        log_info "Redis already installed"
-    fi
-
-    # Install Certbot (for SSL)
-    log_info "Installing Certbot..."
-    if ! command -v certbot >/dev/null 2>&1; then
-        sudo apt-get install -y certbot python3-certbot-nginx
-        sudo systemctl enable certbot.timer
-        sudo systemctl start certbot.timer
-        log_success "Certbot installed and auto-renewal enabled"
-    else
-        log_info "Certbot already installed"
-    fi
-
-    # Install Ruby (for Rails apps)
-    log_info "Installing Ruby..."
-    if ! command -v ruby >/dev/null 2>&1; then
-        sudo apt-get install -y ruby ruby-dev
-        log_success "Ruby installed"
-    else
-        log_info "Ruby already installed"
-    fi
-
-    # Install Node.js (for asset compilation)
-    log_info "Installing Node.js..."
-    if ! command -v node >/dev/null 2>&1; then
-        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-        sudo apt-get install -y nodejs
-        log_success "Node.js installed"
-    else
-        log_info "Node.js already installed"
-    fi
-
-    log_success "All system dependencies installed"
-else
-    log_info "Skipping system dependencies installation"
-fi
-
-# ==============================================================================
-# STEP 2: Clone DevOps Repository
-# ==============================================================================
-
-log_step "2" "Cloning DevOps Repository"
+# Install minimal dependencies needed to clone repository
+log_info "Installing minimal dependencies (git, curl, wget)..."
+sudo apt-get update -qq
+sudo apt-get install -y curl wget git ca-certificates
 
 DEVOPS_DIR="$RECOVERY_HOME/DevOps"
 
@@ -222,10 +126,40 @@ else
 fi
 
 # Make scripts executable
-chmod +x "$DEVOPS_DIR"/scripts/*.sh
-chmod +x "$DEVOPS_DIR"/common/*.sh
+chmod +x "$DEVOPS_DIR"/scripts/*.sh 2>/dev/null || true
+chmod +x "$DEVOPS_DIR"/common/*.sh 2>/dev/null || true
+chmod +x "$DEVOPS_DIR"/*.sh 2>/dev/null || true
 
 log_success "DevOps repository ready"
+
+# ==============================================================================
+# STEP 2: Install Complete System Dependencies
+# ==============================================================================
+
+if [ "$INSTALL_DEPENDENCIES" = "true" ]; then
+    log_step "2" "Installing Complete System Dependencies"
+
+    # Use the ubuntu-init-setup.sh script for complete system initialization
+    UBUNTU_INIT_SCRIPT="$DEVOPS_DIR/ubuntu-init-setup.sh"
+
+    if [ -f "$UBUNTU_INIT_SCRIPT" ]; then
+        log_info "Running ubuntu-init-setup.sh for system initialization..."
+        bash "$UBUNTU_INIT_SCRIPT"
+
+        if [ $? -eq 0 ]; then
+            log_success "System dependencies installed successfully"
+        else
+            log_error "System initialization failed"
+            exit 1
+        fi
+    else
+        log_error "ubuntu-init-setup.sh not found at: $UBUNTU_INIT_SCRIPT"
+        log_error "Cannot proceed without system initialization script"
+        exit 1
+    fi
+else
+    log_info "Skipping system dependencies installation"
+fi
 
 # ==============================================================================
 # STEP 3: Setup Applications
@@ -270,34 +204,10 @@ else
 fi
 
 # ==============================================================================
-# STEP 4: Configure Environment Variables
+# STEP 4: Deploy Applications
 # ==============================================================================
 
-log_step "4" "Configuring Environment Variables"
-
-log_warning "IMPORTANT: You need to manually configure environment variables for each app"
-echo ""
-echo "For each app, edit the .env.production file:"
-echo ""
-
-for app_name in "${APPS_TO_DEPLOY[@]}"; do
-    ENV_FILE="$RECOVERY_HOME/apps/$app_name/.env.production"
-    if [ -f "$ENV_FILE" ]; then
-        echo "  nano $ENV_FILE"
-    fi
-done
-
-echo ""
-log_info "Press Enter when you've configured all environment variables..."
-read -p ""
-
-log_success "Environment variables configured"
-
-# ==============================================================================
-# STEP 5: Deploy Applications
-# ==============================================================================
-
-log_step "5" "Deploying Applications"
+log_step "4" "Deploying Applications"
 
 for app_name in "${APPS_TO_DEPLOY[@]}"; do
     log_info "======== Deploying: $app_name ========"
@@ -328,11 +238,11 @@ done
 log_success "All applications deployed"
 
 # ==============================================================================
-# STEP 6: Setup SSL Certificates
+# STEP 5: Setup SSL Certificates
 # ==============================================================================
 
 if [ "$SETUP_SSL" = "true" ]; then
-    log_step "6" "Setting Up SSL Certificates"
+    log_step "5" "Setting Up SSL Certificates"
 
     log_warning "SSL certificates need to be configured for each domain"
     echo ""
@@ -363,10 +273,10 @@ if [ "$SETUP_SSL" = "true" ]; then
 fi
 
 # ==============================================================================
-# STEP 7: Setup Centralized Cleanup
+# STEP 6: Setup Centralized Cleanup
 # ==============================================================================
 
-log_step "7" "Setting Up Centralized Cleanup"
+log_step "6" "Setting Up Centralized Cleanup"
 
 log_info "Installing centralized cleanup cron job..."
 
@@ -387,10 +297,10 @@ else
 fi
 
 # ==============================================================================
-# STEP 8: Verify Deployment
+# STEP 7: Verify Deployment
 # ==============================================================================
 
-log_step "8" "Verifying Deployment"
+log_step "7" "Verifying Deployment"
 
 log_info "Checking container status..."
 docker ps
