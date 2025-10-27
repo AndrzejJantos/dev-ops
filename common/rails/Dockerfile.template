@@ -25,7 +25,8 @@ RUN apt-get update -qq && \
     git \
     curl \
     imagemagick \
-    libmagickwand-dev && \
+    libmagickwand-dev \
+    libyaml-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Set working directory
