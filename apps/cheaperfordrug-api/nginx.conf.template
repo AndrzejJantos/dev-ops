@@ -63,7 +63,7 @@ server {
     # CORS headers - Allow requests from frontend domains
     # Note: nginx doesn't support multiple origins in one header, use $http_origin variable
     set $cors_origin "";
-    if ($http_origin ~* "^https://(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
+    if ($http_origin ~* "^https://(www\.)?(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
         set $cors_origin $http_origin;
     }
 
@@ -159,7 +159,7 @@ server {
     # CORS headers - Allow requests from frontend domains
     # Note: nginx doesn't support multiple origins in one header, use $http_origin variable
     set $cors_origin "";
-    if ($http_origin ~* "^https://(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
+    if ($http_origin ~* "^https://(www\.)?(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
         set $cors_origin $http_origin;
     }
 
