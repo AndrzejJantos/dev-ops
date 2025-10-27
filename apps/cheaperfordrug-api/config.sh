@@ -50,6 +50,12 @@ export DB_HOST="localhost"
 export DB_PORT="5432"
 
 # ============================================================================
+# REDIS CONFIGURATION
+# ============================================================================
+export REDIS_DB_NUMBER=2               # Dedicated Redis database for API
+export REDIS_URL="redis://localhost:6379/${REDIS_DB_NUMBER}"
+
+# ============================================================================
 # DEPLOYMENT CONFIGURATION
 # ============================================================================
 export ZERO_DOWNTIME_ENABLED=true
