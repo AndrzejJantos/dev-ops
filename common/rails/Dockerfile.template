@@ -51,13 +51,17 @@ COPY . .
 # This file contains all necessary environment variables for Rails.application.config
 COPY .env .env
 
-# Precompile assets with environment variables loaded from .env
-# Export all variables from .env file and use them during asset precompilation
+# Precompile assets with environment variables loaded from .env (if not API-only)
+# Skip asset precompilation for API-only apps (no app/assets directory)
 # The --env-file approach doesn't work in RUN, so we source the .env file
 RUN set -a && \
     . ./.env && \
     set +a && \
-    RAILS_ENV=production bundle exec rails assets:precompile
+    if [ -d app/assets ] || [ -d app/javascript ]; then \
+        RAILS_ENV=production bundle exec rails assets:precompile || echo "Asset precompilation skipped or failed"; \
+    else \
+        echo "API-only app detected, skipping asset precompilation"; \
+    fi
 
 # Clean up build artifacts
 RUN rm -rf node_modules tmp/cache .bundle/vendor/ruby/*/cache
