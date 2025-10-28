@@ -22,7 +22,17 @@ set -e
 setup_application() {
     log_info "Starting setup for ${APP_DISPLAY_NAME}"
     log_info "Application Type: ${APP_TYPE}"
-    log_info "Domain: ${DOMAIN}"
+
+    # Display all configured domains
+    if [ -n "${DOMAIN_PUBLIC:-}" ] && [ -n "${DOMAIN_INTERNAL:-}" ]; then
+        log_info "Domains:"
+        log_info "  Public:   ${DOMAIN_PUBLIC}"
+        log_info "  Internal: ${DOMAIN_INTERNAL}"
+    elif [ -n "${DOMAIN_INTERNAL:-}" ]; then
+        log_info "Domains: ${DOMAIN}, ${DOMAIN_INTERNAL}"
+    else
+        log_info "Domain: ${DOMAIN}"
+    fi
 
     # Validate required variables
     if [ -z "$APP_TYPE" ]; then
@@ -447,7 +457,7 @@ ${APP_DISPLAY_NAME} Deployment Information
 
 Application: ${APP_DISPLAY_NAME}
 Type: ${APP_TYPE}
-Domain: ${DOMAIN}
+Domain: ${DOMAIN}$([ -n "${DOMAIN_INTERNAL:-}" ] && echo ", ${DOMAIN_INTERNAL}" || echo "")
 Repository: ${REPO_URL}
 Branch: ${REPO_BRANCH}
 ${extra_info}

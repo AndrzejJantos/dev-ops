@@ -644,7 +644,10 @@ rails_display_deployment_summary() {
     # URLs and Access
     echo "AVAILABILITY:"
     echo "  Primary URL: https://${DOMAIN}"
-    if [[ "$DOMAIN" != www.* ]]; then
+    if [ -n "${DOMAIN_INTERNAL:-}" ]; then
+        echo "  Internal URL: https://${DOMAIN_INTERNAL}"
+    fi
+    if [[ "$DOMAIN" != www.* ]] && [[ "$DOMAIN" != api* ]]; then
         echo "  Alternative: https://www.${DOMAIN}"
     fi
     echo "  Health Check: https://${DOMAIN}${HEALTH_CHECK_PATH}"
