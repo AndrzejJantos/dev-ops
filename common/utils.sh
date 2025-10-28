@@ -233,10 +233,15 @@ check_container_health() {
             return 1
         fi
 
-        # Get container port (try both 3000 for Next.js/Node and 80 for other services)
+        # Get container port - try docker port first (bridge network), then PORT env var (host network)
         local port=$(docker port "${container_name}" 3000 2>/dev/null | cut -d ':' -f2)
         if [ -z "$port" ]; then
             port=$(docker port "${container_name}" 80 2>/dev/null | cut -d ':' -f2)
+        fi
+
+        # If no port mapping found (host network), get PORT from container environment
+        if [ -z "$port" ]; then
+            port=$(docker exec "${container_name}" env 2>/dev/null | grep "^PORT=" | cut -d '=' -f2)
         fi
 
         if [ -n "$port" ]; then
