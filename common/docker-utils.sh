@@ -71,6 +71,11 @@ start_container() {
             --env-file "$env_file" \
             -e PORT="${host_port}" \
             -v "${LOG_DIR}:/app/log" \
+            --health-cmd "curl -f http://localhost:${host_port}/up || exit 1" \
+            --health-interval=30s \
+            --health-timeout=3s \
+            --health-start-period=40s \
+            --health-retries=3 \
             "$image_name"
     else
         docker run -d \
@@ -80,6 +85,11 @@ start_container() {
             -p "${host_port}:${container_port}" \
             --env-file "$env_file" \
             -v "${LOG_DIR}:/app/log" \
+            --health-cmd "curl -f http://localhost:${container_port}/up || exit 1" \
+            --health-interval=30s \
+            --health-timeout=3s \
+            --health-start-period=40s \
+            --health-retries=3 \
             "$image_name"
     fi
 
