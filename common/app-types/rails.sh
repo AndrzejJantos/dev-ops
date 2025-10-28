@@ -233,6 +233,7 @@ rails_setup_requirements() {
     # Ensure log directory exists in repo for Rails file logging
     if [ ! -d "${REPO_DIR}/log" ]; then
         mkdir -p "${REPO_DIR}/log"
+        chmod 777 "${REPO_DIR}/log"  # Allow container's app user to write logs
         log_info "Created log directory: ${REPO_DIR}/log"
     fi
 
@@ -325,6 +326,7 @@ rails_pull_code() {
     # Ensure log directory exists in repo for Rails file logging
     if [ ! -d "${REPO_DIR}/log" ]; then
         mkdir -p "${REPO_DIR}/log"
+        chmod 777 "${REPO_DIR}/log"  # Allow container's app user to write logs
         log_info "Created log directory: ${REPO_DIR}/log"
     fi
 

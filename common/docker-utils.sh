@@ -58,8 +58,9 @@ start_container() {
     # Remove existing container if it exists
     docker rm -f "$container_name" 2>/dev/null || true
 
-    # Ensure logs directory exists
+    # Ensure logs directory exists with proper permissions for container user
     mkdir -p "${LOG_DIR}"
+    chmod 777 "${LOG_DIR}"  # Allow container's app user to write logs
 
     # Use host network for Rails apps to access PostgreSQL on localhost
     # For other apps, use bridge network with port mapping
@@ -115,8 +116,9 @@ start_worker_container() {
     # Remove existing container if it exists
     docker rm -f "$container_name" 2>/dev/null || true
 
-    # Ensure logs directory exists
+    # Ensure logs directory exists with proper permissions for container user
     mkdir -p "${LOG_DIR}"
+    chmod 777 "${LOG_DIR}"  # Allow container's app user to write logs
 
     docker run -d \
         --name "$container_name" \
@@ -149,8 +151,9 @@ start_scheduler_container() {
     # Remove existing container if it exists
     docker rm -f "$container_name" 2>/dev/null || true
 
-    # Ensure logs directory exists
+    # Ensure logs directory exists with proper permissions for container user
     mkdir -p "${LOG_DIR}"
+    chmod 777 "${LOG_DIR}"  # Allow container's app user to write logs
 
     docker run -d \
         --name "$container_name" \
