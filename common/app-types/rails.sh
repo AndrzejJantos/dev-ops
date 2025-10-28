@@ -569,11 +569,22 @@ rails_deploy_rolling() {
     if [ $worker_count -gt 0 ]; then
         log_info "Restarting ${worker_count} worker container(s)..."
 
-        # Stop old workers
+        # Stop old workers with longer timeout to finish jobs gracefully
+        # Sidekiq needs time to finish processing current jobs
+        log_info "Stopping workers gracefully (allowing time to finish current jobs)..."
+
         for i in $(seq 1 $worker_count); do
             local worker_name="${APP_NAME}_worker_${i}"
             if docker ps -a --filter "name=${worker_name}" --format "{{.Names}}" | grep -q "^${worker_name}$"; then
-                stop_container "$worker_name"
+                # Send TSTP signal to stop accepting new jobs (quiet mode)
+                log_info "Putting ${worker_name} into quiet mode..."
+                docker exec "$worker_name" pkill -TSTP -f sidekiq 2>/dev/null || true
+                sleep 2
+
+                # Stop container with extended timeout (default: 90 seconds)
+                local worker_timeout="${WORKER_SHUTDOWN_TIMEOUT:-90}"
+                log_info "Stopping ${worker_name} (timeout: ${worker_timeout}s)..."
+                stop_container "$worker_name" "$worker_timeout"
             fi
         done
 

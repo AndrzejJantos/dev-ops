@@ -24,6 +24,7 @@ export REPO_BRANCH="master"                               # Or "main" if that's 
 export DEFAULT_SCALE=2              # Number of web containers (2-3 recommended)
 export WORKER_COUNT=1               # Number of Sidekiq worker containers
 export SCHEDULER_ENABLED=true       # Enable Clockwork scheduler for recurring tasks
+export WORKER_SHUTDOWN_TIMEOUT=90   # Seconds to wait for workers to finish jobs during deployment
 
 # Architecture note:
 # - Web containers handle API requests with load balancing
