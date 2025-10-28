@@ -108,6 +108,12 @@ setup_directories() {
         mkdir -p "$BACKUP_DIR"
     fi
 
+    # Create convenience symlink from deployed app to config directory
+    if [ ! -L "$APP_DIR/config" ]; then
+        ln -sf "$DEVOPS_DIR/apps/$APP_NAME" "$APP_DIR/config"
+        log_info "Created symlink: $APP_DIR/config -> $DEVOPS_DIR/apps/$APP_NAME"
+    fi
+
     log_success "Directory structure created"
 }
 
