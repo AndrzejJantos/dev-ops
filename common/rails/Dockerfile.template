@@ -85,7 +85,7 @@ RUN apt-get update -qq && \
     rm -rf /var/lib/apt/lists/*
 
 # Create app user for security (don't run as root)
-RUN groupadd -r app && useradd -r -g app app
+RUN groupadd -r app && useradd -r -g app -m -d /home/app app
 
 # Set working directory
 WORKDIR /app
