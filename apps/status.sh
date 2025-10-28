@@ -21,20 +21,43 @@ APPS_DIR="$SCRIPT_DIR"
 get_app_config() {
     local app_dir="$1"
     local env_file="$app_dir/.env.production"
+    local config_file="$app_dir/config.sh"
 
-    if [ ! -f "$env_file" ]; then
-        return 1
+    # Always set APP_NAME from directory
+    APP_NAME=$(basename "$app_dir")
+    APP_DISPLAY_NAME=""
+    DOMAIN=""
+    APP_TYPE=""
+
+    # Try to read from .env.production first
+    if [ -f "$env_file" ]; then
+        DOMAIN=$(grep "^DOMAIN=" "$env_file" 2>/dev/null | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+        APP_DISPLAY_NAME=$(grep "^APP_DISPLAY_NAME=" "$env_file" 2>/dev/null | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+        APP_TYPE=$(grep "^APP_TYPE=" "$env_file" 2>/dev/null | cut -d '=' -f2 | tr -d '"' | tr -d "'")
     fi
 
-    # Read key configuration values
-    APP_NAME=$(basename "$app_dir")
-    DOMAIN=$(grep "^DOMAIN=" "$env_file" 2>/dev/null | cut -d '=' -f2 | tr -d '"' | tr -d "'")
-    APP_DISPLAY_NAME=$(grep "^APP_DISPLAY_NAME=" "$env_file" 2>/dev/null | cut -d '=' -f2 | tr -d '"' | tr -d "'")
-    APP_TYPE=$(grep "^APP_TYPE=" "$env_file" 2>/dev/null | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+    # Fallback to config.sh if .env.production doesn't exist or values are missing
+    if [ -f "$config_file" ] && [ -z "$DOMAIN" ]; then
+        # Source config.sh in a subshell to get variables without polluting current shell
+        eval "$(grep "^export DOMAIN=" "$config_file" 2>/dev/null | sed 's/^export //')"
+        eval "$(grep "^export APP_DISPLAY_NAME=" "$config_file" 2>/dev/null | sed 's/^export //')"
+        eval "$(grep "^export APP_TYPE=" "$config_file" 2>/dev/null | sed 's/^export //')"
+    fi
 
-    # If APP_DISPLAY_NAME is empty, use APP_NAME
+    # If APP_DISPLAY_NAME is still empty, use APP_NAME
     if [ -z "$APP_DISPLAY_NAME" ]; then
         APP_DISPLAY_NAME="$APP_NAME"
+    fi
+
+    # If APP_TYPE is still empty, try to guess from structure
+    if [ -z "$APP_TYPE" ]; then
+        if [ -f "$app_dir/Gemfile" ] || grep -q "rails" "$config_file" 2>/dev/null; then
+            APP_TYPE="rails"
+        elif [ -f "$app_dir/package.json" ] || grep -q "nextjs" "$config_file" 2>/dev/null; then
+            APP_TYPE="nextjs"
+        else
+            APP_TYPE="unknown"
+        fi
     fi
 
     return 0
@@ -131,10 +154,14 @@ echo -e "Generated: ${CYAN}$(date)${NC}"
 echo ""
 
 # Find all app directories
+# Look for directories with config.sh or deploy.sh (indicates it's an app)
 app_dirs=()
 for dir in "$APPS_DIR"/*; do
-    if [ -d "$dir" ] && [ -f "$dir/.env.production" ]; then
-        app_dirs+=("$dir")
+    if [ -d "$dir" ] && [[ "$(basename "$dir")" != "." ]] && [[ "$(basename "$dir")" != ".." ]]; then
+        # Check if it's an app directory (has config.sh or deploy.sh)
+        if [ -f "$dir/config.sh" ] || [ -f "$dir/deploy.sh" ]; then
+            app_dirs+=("$dir")
+        fi
     fi
 done
 
@@ -150,9 +177,7 @@ echo ""
 # Process each app
 for app_dir in "${app_dirs[@]}"; do
     # Get app configuration
-    if ! get_app_config "$app_dir"; then
-        continue
-    fi
+    get_app_config "$app_dir"
 
     # Get status information
     container_info=$(get_container_status "$APP_NAME")
