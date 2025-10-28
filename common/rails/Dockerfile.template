@@ -114,9 +114,10 @@ USER app
 # Expose port (using 3000 for consistency with Next.js and local development)
 EXPOSE 3000
 
-# Health check
+# Health check (uses PORT env variable which is set at runtime)
+# Note: Must use shell form to evaluate PORT variable at runtime
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:3000/up || exit 1
+    CMD /bin/sh -c 'curl -f http://localhost:${PORT:-3000}/up || exit 1'
 
 # Set environment variables for runtime
 # These will be provided by docker run --env-file at runtime
