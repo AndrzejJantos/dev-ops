@@ -107,33 +107,33 @@ case $DB_OPTION in
         BACKUP_FILE="$HOME/backups/${DB_NAME}_final_$(date +%Y%m%d_%H%M%S).sql.gz"
         mkdir -p "$HOME/backups"
 
-        if psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
-            pg_dump -U postgres "$DB_NAME" | gzip > "$BACKUP_FILE"
+        if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
+            sudo -u postgres pg_dump "$DB_NAME" | gzip > "$BACKUP_FILE"
             echo "✓ Backup created: $BACKUP_FILE"
 
             echo "Dropping database..."
-            psql -U postgres -c "DROP DATABASE IF EXISTS $DB_NAME;"
+            sudo -u postgres psql -c "DROP DATABASE IF EXISTS $DB_NAME;"
             echo "✓ Database dropped"
         else
             echo "Database $DB_NAME does not exist"
         fi
 
         echo "Dropping database user..."
-        psql -U postgres -c "DROP USER IF EXISTS $DB_USER;" 2>/dev/null || true
+        sudo -u postgres psql -c "DROP USER IF EXISTS $DB_USER;" 2>/dev/null || true
         echo "✓ Database user dropped"
         ;;
     3)
         echo "⚠️  DANGEROUS: Dropping database without backup..."
         sleep 3
 
-        if psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
-            psql -U postgres -c "DROP DATABASE IF EXISTS $DB_NAME;"
+        if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
+            sudo -u postgres psql -c "DROP DATABASE IF EXISTS $DB_NAME;"
             echo "✓ Database dropped"
         else
             echo "Database $DB_NAME does not exist"
         fi
 
-        psql -U postgres -c "DROP USER IF EXISTS $DB_USER;" 2>/dev/null || true
+        sudo -u postgres psql -c "DROP USER IF EXISTS $DB_USER;" 2>/dev/null || true
         echo "✓ Database user dropped"
         ;;
 esac
