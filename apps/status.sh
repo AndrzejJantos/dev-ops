@@ -208,7 +208,7 @@ for app_dir in "${app_dirs[@]}"; do
     echo -e "  ${BOLD}Domain:${NC}           ${DOMAIN:-Not configured} ${health_status}"
 
     if [[ "$DOMAIN" != www.* ]] && [ -n "$DOMAIN" ]; then
-        local alt_health=$(check_app_health "www.${DOMAIN}")
+        alt_health=$(check_app_health "www.${DOMAIN}")
         echo -e "  ${BOLD}Alternative:${NC}      www.${DOMAIN} ${alt_health}"
     fi
 
