@@ -61,14 +61,27 @@ start_container() {
     # Ensure logs directory exists
     mkdir -p "${LOG_DIR}"
 
-    docker run -d \
-        --name "$container_name" \
-        --network "$network" \
-        --restart unless-stopped \
-        -p "${host_port}:${container_port}" \
-        --env-file "$env_file" \
-        -v "${LOG_DIR}:/app/log" \
-        "$image_name"
+    # Use host network for Rails apps to access PostgreSQL on localhost
+    # For other apps, use bridge network with port mapping
+    if [ "$network" = "host" ]; then
+        docker run -d \
+            --name "$container_name" \
+            --network host \
+            --restart unless-stopped \
+            --env-file "$env_file" \
+            -e PORT="${host_port}" \
+            -v "${LOG_DIR}:/app/log" \
+            "$image_name"
+    else
+        docker run -d \
+            --name "$container_name" \
+            --network "$network" \
+            --restart unless-stopped \
+            -p "${host_port}:${container_port}" \
+            --env-file "$env_file" \
+            -v "${LOG_DIR}:/app/log" \
+            "$image_name"
+    fi
 
     if [ $? -eq 0 ]; then
         log_success "Container started successfully"
@@ -342,6 +355,7 @@ rolling_restart() {
     local base_port="$4"
     local scale="${5:-2}"
     local container_port="${6:-3000}"  # Default to 3000 (consistent for Rails and Next.js)
+    local network="${7:-bridge}"       # Default to bridge, but Rails uses host
 
     log_info "Performing rolling restart with scale=${scale}"
 
@@ -356,7 +370,7 @@ rolling_restart() {
             local port=$((base_port + i - 1))
             local container_name="${app_name}_web_${i}"
 
-            start_container "$container_name" "$new_image" "$port" "$env_file" "$container_port"
+            start_container "$container_name" "$new_image" "$port" "$env_file" "$container_port" "$network"
 
             if [ $? -ne 0 ]; then
                 log_error "Failed to start container ${container_name}"
@@ -389,7 +403,7 @@ rolling_restart() {
         fi
 
         # Start new container on same port
-        start_container "$container_name" "$new_image" "$port" "$env_file" "$container_port"
+        start_container "$container_name" "$new_image" "$port" "$env_file" "$container_port" "$network"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start container ${container_name}"

@@ -445,12 +445,12 @@ rails_deploy_fresh() {
 
     log_info "No running containers found, starting fresh deployment"
 
-    # Start web containers
+    # Start web containers with host network for database access
     for i in $(seq 1 $scale); do
         local port=$((BASE_PORT + i - 1))
         local container_name="${APP_NAME}_web_${i}"
 
-        start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT"
+        start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT" "host"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start container ${container_name}"
@@ -472,13 +472,13 @@ rails_deploy_fresh() {
         run_migrations "${APP_NAME}_web_1"
     fi
 
-    # Start worker containers if configured
+    # Start worker containers if configured (also use host network)
     local worker_count="${WORKER_COUNT:-0}"
     if [ $worker_count -gt 0 ]; then
         log_info "Starting ${worker_count} worker container(s)..."
         for i in $(seq 1 $worker_count); do
             local worker_name="${APP_NAME}_worker_${i}"
-            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE"
+            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host"
 
             if [ $? -ne 0 ]; then
                 log_error "Failed to start worker ${worker_name}"
@@ -488,11 +488,11 @@ rails_deploy_fresh() {
         log_success "Worker containers started successfully"
     fi
 
-    # Start scheduler container if enabled
+    # Start scheduler container if enabled (also use host network)
     if [ "${SCHEDULER_ENABLED:-false}" = "true" ]; then
         log_info "Starting scheduler container..."
         local scheduler_name="${APP_NAME}_scheduler"
-        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE"
+        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork config/clock.rb" "host"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start scheduler ${scheduler_name}"
@@ -515,12 +515,13 @@ rails_deploy_rolling() {
     # Initialize migrations flag
     export RAILS_MIGRATIONS_RUN="false"
 
-    # Create a test container to check migrations
+    # Create a test container to check migrations (use host network)
     local test_container="${APP_NAME}_migration_check"
 
     if [ "$MIGRATION_BACKUP_ENABLED" = "true" ]; then
         docker run -d \
             --name "$test_container" \
+            --network host \
             --env-file "$ENV_FILE" \
             "${DOCKER_IMAGE_NAME}:${image_tag}" \
             sleep infinity
@@ -543,9 +544,9 @@ rails_deploy_rolling() {
         docker rm -f "$test_container"
     fi
 
-    # Perform rolling restart for web containers
+    # Perform rolling restart for web containers (use host network)
     if [ "$ZERO_DOWNTIME_ENABLED" = "true" ]; then
-        rolling_restart "$APP_NAME" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "$BASE_PORT" "$scale" "$CONTAINER_PORT"
+        rolling_restart "$APP_NAME" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "$BASE_PORT" "$scale" "$CONTAINER_PORT" "host"
 
         if [ $? -ne 0 ]; then
             log_error "Rolling restart failed"
@@ -555,7 +556,7 @@ rails_deploy_rolling() {
         log_success "Zero-downtime deployment completed successfully"
     fi
 
-    # Restart worker containers if configured
+    # Restart worker containers if configured (use host network)
     local worker_count="${WORKER_COUNT:-0}"
     if [ $worker_count -gt 0 ]; then
         log_info "Restarting ${worker_count} worker container(s)..."
@@ -571,7 +572,7 @@ rails_deploy_rolling() {
         # Start new workers
         for i in $(seq 1 $worker_count); do
             local worker_name="${APP_NAME}_worker_${i}"
-            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE"
+            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host"
 
             if [ $? -ne 0 ]; then
                 log_error "Failed to start worker ${worker_name}"
@@ -581,7 +582,7 @@ rails_deploy_rolling() {
         log_success "Worker containers restarted successfully"
     fi
 
-    # Restart scheduler container if enabled
+    # Restart scheduler container if enabled (use host network)
     if [ "${SCHEDULER_ENABLED:-false}" = "true" ]; then
         log_info "Restarting scheduler container..."
         local scheduler_name="${APP_NAME}_scheduler"
@@ -592,7 +593,7 @@ rails_deploy_rolling() {
         fi
 
         # Start new scheduler
-        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE"
+        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork config/clock.rb" "host"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start scheduler ${scheduler_name}"
