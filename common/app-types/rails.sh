@@ -230,6 +230,12 @@ rails_setup_requirements() {
         log_warning "Bundler not available, skipping gem installation"
     fi
 
+    # Ensure log directory exists in repo for Rails file logging
+    if [ ! -d "${REPO_DIR}/log" ]; then
+        mkdir -p "${REPO_DIR}/log"
+        log_info "Created log directory: ${REPO_DIR}/log"
+    fi
+
     log_success "Rails setup requirements completed"
     return 0
 }
@@ -314,6 +320,12 @@ rails_pull_code() {
         log_success "Gems installed/updated successfully"
     else
         log_warning "Bundler not available, skipping gem installation"
+    fi
+
+    # Ensure log directory exists in repo for Rails file logging
+    if [ ! -d "${REPO_DIR}/log" ]; then
+        mkdir -p "${REPO_DIR}/log"
+        log_info "Created log directory: ${REPO_DIR}/log"
     fi
 
     # Export commit for use in notifications
