@@ -60,17 +60,8 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    # CORS headers - Allow requests from frontend domains
-    # Note: nginx doesn't support multiple origins in one header, use $http_origin variable
-    set $cors_origin "";
-    if ($http_origin ~* "^https://(www\.)?(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
-        set $cors_origin $http_origin;
-    }
-
-    add_header 'Access-Control-Allow-Origin' $cors_origin always;
-    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-    add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
-    add_header 'Access-Control-Allow-Credentials' 'true' always;
+    # Note: CORS headers are handled by Rails rack-cors middleware
+    # Do not add CORS headers here to avoid duplicate header issues
 
     # Logging
     access_log /var/log/nginx/{{APP_NAME}}-access.log;
@@ -87,19 +78,9 @@ server {
         access_log off;
     }
 
-    # Handle preflight OPTIONS requests for CORS
+    # Proxy all requests to Rails backend
+    # Rails rack-cors middleware will handle CORS headers including OPTIONS preflight requests
     location / {
-        if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' $cors_origin always;
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-            add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
-            add_header 'Access-Control-Allow-Credentials' 'true' always;
-            add_header 'Access-Control-Max-Age' 1728000;
-            add_header 'Content-Type' 'text/plain; charset=utf-8';
-            add_header 'Content-Length' 0;
-            return 204;
-        }
-
         proxy_pass http://{{NGINX_UPSTREAM_NAME}};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -156,17 +137,8 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    # CORS headers - Allow requests from frontend domains
-    # Note: nginx doesn't support multiple origins in one header, use $http_origin variable
-    set $cors_origin "";
-    if ($http_origin ~* "^https://(www\.)?(taniejpolek\.pl|premiera\.taniejpolek\.pl)$") {
-        set $cors_origin $http_origin;
-    }
-
-    add_header 'Access-Control-Allow-Origin' $cors_origin always;
-    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-    add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
-    add_header 'Access-Control-Allow-Credentials' 'true' always;
+    # Note: CORS headers are handled by Rails rack-cors middleware
+    # Do not add CORS headers here to avoid duplicate header issues
 
     # Logging
     access_log /var/log/nginx/{{APP_NAME}}-internal-access.log;
@@ -183,19 +155,9 @@ server {
         access_log off;
     }
 
-    # Handle preflight OPTIONS requests for CORS
+    # Proxy all requests to Rails backend
+    # Rails rack-cors middleware will handle CORS headers including OPTIONS preflight requests
     location / {
-        if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' $cors_origin always;
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-            add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
-            add_header 'Access-Control-Allow-Credentials' 'true' always;
-            add_header 'Access-Control-Max-Age' 1728000;
-            add_header 'Content-Type' 'text/plain; charset=utf-8';
-            add_header 'Content-Length' 0;
-            return 204;
-        }
-
         proxy_pass http://{{NGINX_UPSTREAM_NAME}};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
