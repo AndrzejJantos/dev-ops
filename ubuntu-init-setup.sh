@@ -471,6 +471,56 @@ install_essential_tools() {
     show_version "Wget" "wget --version | head -1"
 }
 
+install_fzf() {
+    print_info "Installing fzf (fuzzy finder)..."
+
+    local fzf_dir="${USER_HOME}/.fzf"
+
+    # Check if fzf already installed
+    if [[ -d "${fzf_dir}" ]]; then
+        print_warning "fzf already installed for ${USERNAME}"
+        return 0
+    fi
+
+    # Clone fzf repository
+    if sudo -u "${USERNAME}" git clone --depth 1 https://github.com/junegunn/fzf.git "${fzf_dir}" &>/dev/null; then
+        print_success "fzf repository cloned"
+    else
+        print_error "Failed to clone fzf repository"
+        return 1
+    fi
+
+    # Install fzf (auto-completion and key bindings)
+    print_info "Installing fzf with key bindings..."
+    if sudo -u "${USERNAME}" bash -c "cd ${fzf_dir} && ./install --key-bindings --completion --no-update-rc" &>/dev/null; then
+        print_success "fzf installed with key bindings"
+    else
+        print_error "Failed to install fzf"
+        return 1
+    fi
+
+    # Configure CTRL+P mapping in .bashrc
+    print_info "Configuring CTRL+P mapping for fzf..."
+    local bashrc="${USER_HOME}/.bashrc"
+
+    if ! grep -q 'fzf key bindings' "${bashrc}" 2>/dev/null; then
+        sudo -u "${USERNAME}" tee -a "${bashrc}" > /dev/null << 'EOF'
+
+# fzf configuration
+[ -f ~/.fzf.bash ] && source ~/.fzf.bash
+
+# fzf key bindings - Map CTRL+P to fzf file search
+bind '"\C-p": "\C-u\C-afzf\n"'
+EOF
+        print_success "fzf CTRL+P mapping added to .bashrc"
+    else
+        print_warning "fzf configuration already exists in .bashrc"
+    fi
+
+    print_success "fzf installed and configured"
+    print_info "CTRL+P will trigger fuzzy file search after ${USERNAME} logs in"
+}
+
 ################################################################################
 # STEP 6: NODE.JS SETUP
 ################################################################################
@@ -1859,6 +1909,10 @@ main() {
     fi
 
     install_essential_tools
+
+    if ask_yes_no "Install fzf (fuzzy finder with CTRL+P)?" "y"; then
+        install_fzf
+    fi
 
     if ask_yes_no "Install Node.js ${NODE_VERSION}.x?" "y"; then
         install_nodejs
