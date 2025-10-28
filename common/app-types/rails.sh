@@ -468,10 +468,16 @@ rails_deploy_fresh() {
         fi
     done
 
-    # Run migrations after first container is up
-    if [ "$MIGRATION_BACKUP_ENABLED" = "true" ]; then
+    # Always check and run migrations after first container is up
+    log_info "Checking for pending migrations..."
+    if check_pending_migrations "${APP_NAME}_web_1"; then
         log_info "Running database migrations..."
         run_migrations "${APP_NAME}_web_1"
+
+        if [ $? -ne 0 ]; then
+            log_error "Migrations failed"
+            return 1
+        fi
     fi
 
     # Start worker containers if configured (also use host network)

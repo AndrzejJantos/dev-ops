@@ -222,14 +222,28 @@ check_pending_migrations() {
     log_info "Checking for pending migrations..."
 
     local output=$(docker exec "$container_name" /bin/bash -c "cd /app && bundle exec rails db:migrate:status 2>&1")
+    local exit_code=$?
 
+    # If command failed (likely no schema_migrations table exists), migrations are needed
+    if [ $exit_code -ne 0 ] || echo "$output" | grep -qE "does not exist|No such|PG::UndefinedTable"; then
+        log_warning "Database schema not initialized, migrations needed"
+        return 0  # Migrations are pending
+    fi
+
+    # Check for migrations with "down" status
     if echo "$output" | grep -q "down"; then
         log_warning "Pending migrations detected"
         return 0  # Migrations are pending
-    else
-        log_info "No pending migrations"
-        return 1  # No migrations pending
     fi
+
+    # Check if there are NO migrations at all (output is empty or very short)
+    if [ -z "$output" ] || [ ${#output} -lt 50 ]; then
+        log_warning "No migration history found, migrations may be needed"
+        return 0  # Migrations are pending (safer to assume they need to run)
+    fi
+
+    log_info "No pending migrations"
+    return 1  # No migrations pending
 }
 
 # Clean up old Docker images
