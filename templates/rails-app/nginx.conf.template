@@ -90,17 +90,19 @@ server {
         proxy_read_timeout 5s;
     }
 
-    # CORS headers (customize as needed for your API)
-    # Uncomment and configure if you need CORS support
-    # add_header 'Access-Control-Allow-Origin' '*' always;
-    # add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
-    # add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept' always;
-    # add_header 'Access-Control-Max-Age' 86400 always;
-
-    # OPTIONS method for CORS preflight
-    # if ($request_method = OPTIONS) {
-    #     return 204;
-    # }
+    # CORS Configuration Note:
+    # For Rails APIs, it's recommended to handle CORS in Rails using rack-cors middleware
+    # instead of nginx. This avoids duplicate headers and gives you more control.
+    #
+    # To enable CORS in Rails:
+    # 1. Add gem 'rack-cors' to Gemfile
+    # 2. Configure in config/initializers/cors.rb
+    # 3. Do NOT add CORS headers here in nginx
+    #
+    # Only add CORS headers in nginx if:
+    # - You're NOT using rack-cors in Rails
+    # - You want nginx to handle CORS for static assets only
+    # - You understand this will add headers to ALL responses
 
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
