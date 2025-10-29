@@ -38,7 +38,11 @@ source "$SCRIPT_DIR/config.sh"
 # ==============================================================================
 
 main() {
-    log_section "Redis Streams Setup for ${APP_DISPLAY_NAME}"
+    echo ""
+    echo "=============================================================================="
+    echo "  Redis Streams Setup for ${APP_DISPLAY_NAME}"
+    echo "=============================================================================="
+    echo ""
 
     # Step 1: Verify prerequisites
     log_info "Step 1: Checking prerequisites..."
@@ -136,7 +140,11 @@ main() {
     echo ""
 
     # Step 6: Show next steps
-    log_section "Setup Complete!"
+    echo ""
+    echo "=============================================================================="
+    echo "  Setup Complete!"
+    echo "=============================================================================="
+    echo ""
 
     if [ "$config_ok" = true ]; then
         log_success "Redis Streams is configured and ready"
