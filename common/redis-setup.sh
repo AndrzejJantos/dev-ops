@@ -53,13 +53,13 @@ setup_redis_for_streams() {
     # Check Redis version
     log_info "Redis version: $(redis-server --version | grep -oP 'v=\K[0-9]+\.[0-9]+\.[0-9]+')"
 
-    # Locate Redis config file
+    # Locate Redis config file (use sudo to check due to permissions)
     local redis_conf="/etc/redis/redis.conf"
-    if [ ! -f "$redis_conf" ]; then
-        if [ -f "/etc/redis.conf" ]; then
+    if ! sudo test -f "$redis_conf"; then
+        if sudo test -f "/etc/redis.conf"; then
             redis_conf="/etc/redis.conf"
         else
-            log_error "Cannot find Redis config file"
+            log_error "Cannot find Redis config file at $redis_conf or /etc/redis.conf"
             return 1
         fi
     fi
