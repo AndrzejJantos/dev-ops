@@ -723,75 +723,88 @@ install_databases() {
         fi
     fi
 
-    # Redis
-    print_info "Installing Redis..."
+    # Redis 8 from official repository
+    print_info "Installing Redis 8 from official repository..."
 
     if command_exists redis-server; then
         print_warning "Redis already installed"
-    else
-        if apt-get install -y -qq redis-server; then
-            print_success "Redis installed"
+        show_version "Redis" "redis-server --version"
 
-            # Start and enable service
-            systemctl enable redis-server &>/dev/null
-            systemctl start redis-server &>/dev/null
-
-            show_version "Redis" "redis-server --version"
-        else
-            print_warning "Failed to install Redis"
+        if ! ask_yes_no "Upgrade to Redis 8 from official repository?" "n"; then
+            return 0
         fi
     fi
 
-    # Configure Redis for Streams
-    print_info "Configuring Redis for Streams..."
+    # Install prerequisites for Redis repository
+    print_info "Installing prerequisites..."
+    apt-get install -y -qq lsb-release curl gpg
+
+    # Add Redis GPG key
+    print_info "Adding Redis GPG key..."
+    curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+    chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
+
+    # Add Redis repository
+    print_info "Adding Redis repository..."
+    echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list
+
+    # Update package list
+    print_info "Updating package list..."
+    apt-get update -qq
+
+    # Install Redis
+    if apt-get install -y -qq redis; then
+        print_success "Redis 8 installed"
+
+        # Start and enable service
+        systemctl enable redis-server &>/dev/null
+        systemctl start redis-server &>/dev/null
+
+        show_version "Redis" "redis-server --version"
+    else
+        print_warning "Failed to install Redis 8"
+        return 1
+    fi
+
+    # Configure Redis using template
+    print_info "Deploying Redis configuration from template..."
 
     local redis_conf="/etc/redis/redis.conf"
-    if [ ! -f "$redis_conf" ] && [ -f "/etc/redis.conf" ]; then
-        redis_conf="/etc/redis.conf"
+    local template_conf="${SCRIPT_DIR}/common/templates/redis.conf"
+
+    if [ ! -f "$template_conf" ]; then
+        print_warning "Redis config template not found: $template_conf"
+        print_warning "Skipping Redis configuration"
+        return 0
     fi
 
+    # Backup existing config
     if [ -f "$redis_conf" ]; then
-        # Check if already configured
-        if grep -q "Redis Streams Configuration" "$redis_conf"; then
-            print_info "Redis Streams configuration already exists"
-        else
-            # Backup config
-            cp "$redis_conf" "${redis_conf}.backup-$(date +%Y%m%d-%H%M%S)"
+        cp "$redis_conf" "${redis_conf}.backup-$(date +%Y%m%d-%H%M%S)"
+        print_info "Backed up existing config"
+    fi
 
-            # Add configuration
-            cat >> "$redis_conf" << 'REDIS_CONFIG'
+    # Deploy clean config from template
+    cp "$template_conf" "$redis_conf"
+    chown redis:redis "$redis_conf"
+    chmod 640 "$redis_conf"
 
-# ===== Redis Streams Configuration =====
-# Added by ubuntu-init-setup.sh
-
-# Enable AOF persistence (more durable than RDB)
-appendonly yes
-appendfilename "appendonly.aof"
-appendfsync everysec
-
-# Memory management
-maxmemory 2gb
-maxmemory-policy noeviction
-
-# Stream optimization
-stream-node-max-bytes 4096
-stream-node-max-entries 100
-
-# ===== End Redis Streams Configuration =====
-REDIS_CONFIG
-
-            # Restart Redis to apply configuration
-            systemctl restart redis-server
-            sleep 2
-
-            if redis-cli ping > /dev/null 2>&1; then
-                print_success "Redis configured for Streams"
-            else
-                print_warning "Redis configuration may need manual verification"
-            fi
-        fi
+    # Test configuration
+    if redis-server "$redis_conf" --test-memory 1 2>&1 | grep -q "Configuration passed"; then
+        print_success "Configuration syntax is valid"
     else
-        print_warning "Redis config file not found, skipping Streams configuration"
+        print_warning "Configuration test failed, check manually"
+    fi
+
+    # Restart Redis to apply configuration
+    print_info "Restarting Redis with new configuration..."
+    systemctl restart redis-server
+    sleep 3
+
+    if redis-cli ping > /dev/null 2>&1; then
+        print_success "Redis 8 configured for Streams"
+    else
+        print_warning "Redis may need manual verification"
     fi
 }
 
