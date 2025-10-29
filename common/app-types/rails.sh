@@ -510,7 +510,7 @@ rails_deploy_fresh() {
     if [ "${SCHEDULER_ENABLED:-false}" = "true" ]; then
         log_info "Starting scheduler container..."
         local scheduler_name="${APP_NAME}_scheduler"
-        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork config/clock.rb" "host"
+        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork lib/clock.rb" "host"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start scheduler ${scheduler_name}"
@@ -622,7 +622,7 @@ rails_deploy_rolling() {
         fi
 
         # Start new scheduler
-        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork config/clock.rb" "host"
+        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork lib/clock.rb" "host"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start scheduler ${scheduler_name}"
