@@ -55,13 +55,12 @@ main() {
     fi
 
     if ! redis_check_running; then
-        log_error "Redis is not running"
-        log_info "Start Redis with:"
-        log_info "  sudo systemctl start redis-server"
-        exit 1
+        log_warning "Redis is not currently running (this is OK - we'll fix the config)"
+    else
+        log_success "Redis is running"
     fi
 
-    log_success "Redis is installed and running"
+    log_success "Redis is installed"
     echo ""
 
     # Step 2: Configure Redis for Streams
