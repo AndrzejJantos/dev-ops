@@ -45,26 +45,13 @@ setup_redis_for_streams() {
         return 1
     fi
 
-    # Check if Redis is running
-    if ! redis_check_running; then
-        log_warning "Redis is not running. Attempting to start..."
-        sudo systemctl start redis-server || {
-            log_error "Failed to start Redis"
-            return 1
-        }
-        sleep 2
-    fi
-
-    log_success "Redis is running"
+    # Stop Redis before replacing config
+    log_info "Stopping Redis to replace configuration..."
+    sudo systemctl stop redis-server
+    sleep 2
 
     # Check Redis version
-    local redis_version=$(redis_get_version)
-    log_info "Redis version: $(redis-cli INFO server 2>/dev/null | grep redis_version | cut -d: -f2 | tr -d '\r')"
-
-    if [ "$redis_version" -lt 5 ]; then
-        log_warning "Redis version is below 5.0. Streams require 5.0+"
-        log_warning "Consider upgrading Redis for better performance"
-    fi
+    log_info "Redis version: $(redis-server --version | grep -oP 'v=\K[0-9]+\.[0-9]+\.[0-9]+')"
 
     # Locate Redis config file
     local redis_conf="/etc/redis/redis.conf"
@@ -79,67 +66,66 @@ setup_redis_for_streams() {
 
     log_info "Redis config: $redis_conf"
 
-    # Check if already configured
-    if grep -q "Redis Streams Configuration" "$redis_conf"; then
-        log_info "Redis Streams configuration already exists"
-        return 0
+    # Get the DevOps directory (assuming we're in DevOps/common or DevOps/apps/*)
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local devops_dir=""
+
+    # Try to find DevOps root
+    if [[ "$script_dir" == */DevOps/common ]]; then
+        devops_dir="$(dirname "$script_dir")"
+    elif [[ "$script_dir" == */DevOps/apps/* ]]; then
+        devops_dir="$(dirname "$(dirname "$script_dir")")"
+    elif [[ "$script_dir" == */DevOps ]]; then
+        devops_dir="$script_dir"
+    else
+        log_error "Cannot determine DevOps directory from: $script_dir"
+        return 1
     fi
 
-    # Backup config
+    local template_conf="${devops_dir}/common/templates/redis.conf"
+
+    if [ ! -f "$template_conf" ]; then
+        log_error "Redis config template not found: $template_conf"
+        log_error "Please ensure DevOps repository is up to date"
+        return 1
+    fi
+
+    log_info "Using template: $template_conf"
+
+    # Backup existing config
     local backup_file="${redis_conf}.backup-$(date +%Y%m%d-%H%M%S)"
     sudo cp "$redis_conf" "$backup_file"
-    log_info "Backed up Redis config to: $backup_file"
+    log_info "Backed up existing config to: $backup_file"
 
-    # Add configuration
-    log_info "Adding Redis Streams configuration..."
-
-    sudo tee -a "$redis_conf" > /dev/null << 'EOF'
-
-# ===== Redis Streams Configuration =====
-# Added by DevOps setup script
-
-# Enable AOF persistence (more durable than RDB)
-appendonly yes
-appendfilename "appendonly.aof"
-appendfsync everysec
-
-# Memory management
-maxmemory 2gb
-maxmemory-policy noeviction
-
-# Stream optimization
-stream-node-max-bytes 4096
-stream-node-max-entries 100
-
-# ===== End Redis Streams Configuration =====
-EOF
-
-    # Comment out conflicting settings
-    sudo sed -i.tmp 's/^appendonly no/# appendonly no # (disabled by Redis Streams setup)/' "$redis_conf"
-    sudo sed -i.tmp 's/^maxmemory-policy.*volatile/# maxmemory-policy volatile # (disabled by Redis Streams setup)/' "$redis_conf"
+    # Deploy clean config from template
+    log_info "Deploying clean Redis configuration..."
+    sudo cp "$template_conf" "$redis_conf"
+    sudo chown redis:redis "$redis_conf"
+    sudo chmod 640 "$redis_conf"
 
     # Test configuration
-    if sudo redis-server "$redis_conf" --test-memory 1 > /dev/null 2>&1; then
-        log_success "Configuration syntax is valid"
-    else
+    log_info "Testing configuration..."
+    if ! sudo redis-server "$redis_conf" --test-memory 1 2>&1 | grep -q "Configuration passed"; then
         log_error "Configuration test failed!"
         log_error "Restoring backup..."
         sudo cp "$backup_file" "$redis_conf"
         return 1
     fi
 
-    # Restart Redis
-    log_info "Restarting Redis..."
-    sudo systemctl restart redis-server
+    log_success "Configuration syntax is valid"
+
+    # Start Redis with new config
+    log_info "Starting Redis with new configuration..."
+    sudo systemctl start redis-server
 
     # Wait for Redis to start
     sleep 3
 
     # Verify Redis is running
-    local retries=5
+    local retries=10
     while [ $retries -gt 0 ]; do
         if redis_check_running; then
-            log_success "Redis restarted successfully"
+            log_success "Redis started successfully with new configuration"
             break
         fi
         sleep 2
@@ -147,10 +133,12 @@ EOF
     done
 
     if [ $retries -eq 0 ]; then
-        log_error "Redis failed to restart!"
+        log_error "Redis failed to start!"
+        log_error "Checking logs..."
+        sudo journalctl -xeu redis-server.service --no-pager | tail -20
         log_error "Restoring backup configuration..."
         sudo cp "$backup_file" "$redis_conf"
-        sudo systemctl restart redis-server
+        sudo systemctl start redis-server
         return 1
     fi
 
