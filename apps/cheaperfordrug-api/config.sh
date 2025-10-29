@@ -85,6 +85,13 @@ export AUTO_CLEANUP_ENABLED=true
 export MAX_IMAGE_VERSIONS=20
 
 # ============================================================================
+# REDIS STREAMS CONFIGURATION
+# ============================================================================
+# Enable Redis Streams for async scraper data ingestion
+export ENABLE_REDIS_STREAM_CONSUMERS="true"
+export REDIS_STREAM_CONSUMER_COUNT="3"
+
+# ============================================================================
 # NGINX CONFIGURATION
 # ============================================================================
 export NGINX_UPSTREAM_NAME="${APP_NAME}_backend"

@@ -741,6 +741,58 @@ install_databases() {
             print_warning "Failed to install Redis"
         fi
     fi
+
+    # Configure Redis for Streams
+    print_info "Configuring Redis for Streams..."
+
+    local redis_conf="/etc/redis/redis.conf"
+    if [ ! -f "$redis_conf" ] && [ -f "/etc/redis.conf" ]; then
+        redis_conf="/etc/redis.conf"
+    fi
+
+    if [ -f "$redis_conf" ]; then
+        # Check if already configured
+        if grep -q "Redis Streams Configuration" "$redis_conf"; then
+            print_info "Redis Streams configuration already exists"
+        else
+            # Backup config
+            cp "$redis_conf" "${redis_conf}.backup-$(date +%Y%m%d-%H%M%S)"
+
+            # Add configuration
+            cat >> "$redis_conf" << 'REDIS_CONFIG'
+
+# ===== Redis Streams Configuration =====
+# Added by ubuntu-init-setup.sh
+
+# Enable AOF persistence (more durable than RDB)
+appendonly yes
+appendfilename "appendonly.aof"
+appendfsync everysec
+
+# Memory management
+maxmemory 2gb
+maxmemory-policy noeviction
+
+# Stream optimization
+stream-node-max-bytes 4096
+stream-node-max-entries 100
+
+# ===== End Redis Streams Configuration =====
+REDIS_CONFIG
+
+            # Restart Redis to apply configuration
+            systemctl restart redis-server
+            sleep 2
+
+            if redis-cli ping > /dev/null 2>&1; then
+                print_success "Redis configured for Streams"
+            else
+                print_warning "Redis configuration may need manual verification"
+            fi
+        fi
+    else
+        print_warning "Redis config file not found, skipping Streams configuration"
+    fi
 }
 
 ################################################################################
