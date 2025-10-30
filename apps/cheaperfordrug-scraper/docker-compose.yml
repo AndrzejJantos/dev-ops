@@ -62,7 +62,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
 
       # Error Tracking
-      - ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN:-faa194032525412eb901138b55de3309}
+      - ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN}
 
       # Timezone
       - TZ=Europe/Warsaw
@@ -146,7 +146,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
 
       # Error Tracking
-      - ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN:-faa194032525412eb901138b55de3309}
+      - ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN}
 
       # Timezone
       - TZ=Europe/Berlin
@@ -230,7 +230,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
 
       # Error Tracking
-      - ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN:-faa194032525412eb901138b55de3309}
+      - ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN}
 
       # Timezone
       - TZ=Europe/Prague

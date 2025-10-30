@@ -59,8 +59,10 @@ RUN node --version && npm --version
 FROM nodejs AS nordvpn
 
 # Download and install NordVPN
-# Note: Using Ubuntu 22.04 (jammy) repository as Ubuntu 24.04 may not be fully supported yet
-RUN sh -c 'curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh | sh' \
+# Note: Using official install script with non-interactive mode
+RUN curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh -o /tmp/nordvpn-install.sh \
+    && DEBIAN_FRONTEND=noninteractive sh /tmp/nordvpn-install.sh \
+    && rm /tmp/nordvpn-install.sh \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

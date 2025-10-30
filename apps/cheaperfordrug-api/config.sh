@@ -117,4 +117,4 @@ export NOTIFICATION_EMAIL=""        # Set during setup
 # ============================================================================
 # ERROR TRACKING CONFIGURATION
 # ============================================================================
-export ROLLBAR_ACCESS_TOKEN="faa194032525412eb901138b55de3309"
+export ROLLBAR_ACCESS_TOKEN="${ROLLBAR_ACCESS_TOKEN:-}"  # Set via environment variable
