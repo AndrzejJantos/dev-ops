@@ -59,12 +59,9 @@ RUN node --version && npm --version
 FROM nodejs AS nordvpn
 
 # Download and install NordVPN
-RUN wget -qO /tmp/nordvpn.deb https://repo.nordvpn.com/deb/nordvpn/debian/pool/main/nordvpn-release_1.0.0_all.deb \
-    && apt-get update \
-    && apt-get install -y /tmp/nordvpn.deb \
-    && apt-get update \
-    && apt-get install -y nordvpn \
-    && rm /tmp/nordvpn.deb \
+# Note: Using Ubuntu 22.04 (jammy) repository as Ubuntu 24.04 may not be fully supported yet
+RUN sh -c 'curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh | sh' \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Create nordvpn group and set up permissions
