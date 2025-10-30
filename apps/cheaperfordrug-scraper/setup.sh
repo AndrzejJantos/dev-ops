@@ -322,7 +322,7 @@ stop_containers() {
 
     cd "${REPO_DIR}"
 
-    if ${DOCKER_COMPOSE_CMD} -f "${SCRIPT_DIR}/docker-compose.yml" down --timeout 30 2>/dev/null; then
+    if eval "${DOCKER_COMPOSE_CMD}" -f "${SCRIPT_DIR}/docker-compose.yml" down --timeout 30 2>/dev/null; then
         log_success "Containers stopped"
     else
         log_warning "No containers to stop or error occurred"
@@ -344,7 +344,7 @@ start_containers() {
     export API_TOKEN="${API_TOKEN:-${SCRAPER_AUTH_TOKEN}}"
 
     # Start containers
-    if ${DOCKER_COMPOSE_CMD} -f "${SCRIPT_DIR}/docker-compose.yml" up -d; then
+    if eval "${DOCKER_COMPOSE_CMD}" -f "${SCRIPT_DIR}/docker-compose.yml" up -d; then
         log_success "Containers started"
     else
         log_error "Failed to start containers"
@@ -425,7 +425,7 @@ show_logs() {
         exec bash "${SCRIPT_DIR}/.scripts/watch-logs.sh" all
     else
         # Fallback to docker compose logs
-        ${DOCKER_COMPOSE_CMD} -f "${SCRIPT_DIR}/docker-compose.yml" logs --tail=50 -f
+        eval "${DOCKER_COMPOSE_CMD}" -f "${SCRIPT_DIR}/docker-compose.yml" logs --tail=50 -f
     fi
 }
 

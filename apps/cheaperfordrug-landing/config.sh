@@ -33,7 +33,8 @@ export REDIS_DB_NUMBER=1  # Dedicated Redis database for this app
 export REDIS_URL="redis://localhost:6379/${REDIS_DB_NUMBER}"
 
 # Network configuration
-export DOMAIN="presale.taniejpolek.pl"
+export DOMAIN="taniejpolek.pl"
+export DOMAIN_INTERNAL="presale.taniejpolek.pl"  # Additional domain (presale subdomain)
 export BASE_PORT=3010          # Starting port for containers (host side)
 export CONTAINER_PORT=3000     # Port inside container
 export PORT_RANGE_END=3019     # Ending port (supports 10 instances)
