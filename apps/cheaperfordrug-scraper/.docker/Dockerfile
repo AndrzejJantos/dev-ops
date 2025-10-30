@@ -101,22 +101,24 @@ RUN npx playwright install-deps chromium
 # Copy application code
 COPY --chown=scraper:scraper . .
 
-# Copy Docker-specific scripts
-COPY --chown=root:root docker-scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY --chown=root:root docker-scripts/vpn-rotate.sh /usr/local/bin/vpn-rotate.sh
-COPY --chown=root:root docker-scripts/run-scraper.sh /usr/local/bin/run-scraper.sh
-COPY --chown=root:root docker-scripts/run-scraper-cron.sh /usr/local/bin/run-scraper-cron.sh
-COPY --chown=root:root docker-scripts/healthcheck.sh /usr/local/bin/healthcheck.sh
-COPY --chown=root:root docker-scripts/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# Copy Docker-specific scripts (these are copied to repo root by setup.sh)
+COPY --chown=root:root entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chown=root:root vpn-rotate.sh /usr/local/bin/vpn-rotate.sh
+COPY --chown=root:root run-scraper.sh /usr/local/bin/run-scraper.sh
+COPY --chown=root:root run-scraper-cron.sh /usr/local/bin/run-scraper-cron.sh
+COPY --chown=root:root send-scraper-email-wrapper.sh /usr/local/bin/send-scraper-email-wrapper.sh
+COPY --chown=root:root healthcheck.sh /usr/local/bin/healthcheck.sh
+COPY --chown=root:root supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Copy container-level cron configuration
-COPY --chown=root:root docker-scripts/container-cron /etc/cron.d/scraper-cron
+COPY --chown=root:root container-cron /etc/cron.d/scraper-cron
 
 # Make scripts executable
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     /usr/local/bin/vpn-rotate.sh \
     /usr/local/bin/run-scraper.sh \
     /usr/local/bin/run-scraper-cron.sh \
+    /usr/local/bin/send-scraper-email-wrapper.sh \
     /usr/local/bin/healthcheck.sh
 
 # Setup cron
