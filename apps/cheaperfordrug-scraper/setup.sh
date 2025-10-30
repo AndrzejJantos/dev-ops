@@ -177,15 +177,28 @@ check_docker() {
 check_docker_compose() {
     log_info "Checking docker-compose..."
 
-    if ! command -v docker-compose >/dev/null 2>&1; then
-        log_error "docker-compose is not installed!"
-        echo ""
-        echo "Please install docker-compose: https://docs.docker.com/compose/install/"
-        echo ""
-        exit 1
+    # Check for docker-compose (standalone) first
+    if command -v docker-compose >/dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="docker-compose"
+        log_success "docker-compose is installed (standalone)"
+        return 0
     fi
 
-    log_success "docker-compose is installed"
+    # Check for docker compose (plugin)
+    if docker compose version >/dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="docker compose"
+        log_success "docker compose is installed (plugin)"
+        return 0
+    fi
+
+    # Neither found
+    log_error "docker-compose is not installed!"
+    echo ""
+    echo "Please install docker-compose:"
+    echo "  - Plugin (recommended): Already included with Docker Desktop"
+    echo "  - Standalone: https://docs.docker.com/compose/install/"
+    echo ""
+    exit 1
 }
 
 check_git() {
@@ -309,7 +322,7 @@ stop_containers() {
 
     cd "${REPO_DIR}"
 
-    if docker-compose -f "${SCRIPT_DIR}/docker-compose.yml" down --timeout 30 2>/dev/null; then
+    if ${DOCKER_COMPOSE_CMD} -f "${SCRIPT_DIR}/docker-compose.yml" down --timeout 30 2>/dev/null; then
         log_success "Containers stopped"
     else
         log_warning "No containers to stop or error occurred"
@@ -331,7 +344,7 @@ start_containers() {
     export API_TOKEN="${API_TOKEN:-${SCRAPER_AUTH_TOKEN}}"
 
     # Start containers
-    if docker-compose -f "${SCRIPT_DIR}/docker-compose.yml" up -d; then
+    if ${DOCKER_COMPOSE_CMD} -f "${SCRIPT_DIR}/docker-compose.yml" up -d; then
         log_success "Containers started"
     else
         log_error "Failed to start containers"
@@ -411,8 +424,8 @@ show_logs() {
     if [ -f "${SCRIPT_DIR}/.scripts/watch-logs.sh" ]; then
         exec bash "${SCRIPT_DIR}/.scripts/watch-logs.sh" all
     else
-        # Fallback to docker-compose logs
-        docker-compose -f "${SCRIPT_DIR}/docker-compose.yml" logs --tail=50 -f
+        # Fallback to docker compose logs
+        ${DOCKER_COMPOSE_CMD} -f "${SCRIPT_DIR}/docker-compose.yml" logs --tail=50 -f
     fi
 }
 

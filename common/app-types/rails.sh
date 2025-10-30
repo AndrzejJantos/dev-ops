@@ -168,6 +168,9 @@ RAILS_MAX_THREADS=5
 # Update with your actual frontend domain(s)
 ALLOWED_ORIGINS=https://example.com,https://www.example.com
 
+# Error Tracking
+ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN:-dummy_rollbar_token}
+
 # App-specific environment variables
 # Add your custom variables below:
 

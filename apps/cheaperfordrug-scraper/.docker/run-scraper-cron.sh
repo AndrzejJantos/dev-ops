@@ -13,6 +13,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# State directory for email coordination
+STATE_DIR="/app/state"
+EMAIL_START_MARKER="${STATE_DIR}/email-start.marker"
+EMAIL_FINISH_MARKER="${STATE_DIR}/email-finish.marker"
+
 # Logging functions with timestamps
 log_info() {
     echo -e "$(date '+%Y-%m-%d %H:%M:%S') ${BLUE}[CRON]${NC} [INFO] $1"
@@ -159,6 +164,74 @@ run_all_scrapers() {
     return 0
 }
 
+# ============================================================================
+# EMAIL NOTIFICATION FUNCTIONS
+# ============================================================================
+
+# Send scraper start email (only from Poland container to avoid duplicates)
+send_start_email() {
+    # Only Poland container sends the start email
+    if [ "${COUNTRY}" != "poland" ]; then
+        return 0
+    fi
+
+    # Check if SENDGRID_API_KEY is available
+    if [ -z "${SENDGRID_API_KEY:-}" ]; then
+        log_info "Skipping start email (SENDGRID_API_KEY not set)"
+        return 0
+    fi
+
+    # Check if start email already sent (using marker file)
+    if [ -f "${EMAIL_START_MARKER}" ]; then
+        local marker_age=$(($(date +%s) - $(stat -f %m "${EMAIL_START_MARKER}" 2>/dev/null || stat -c %Y "${EMAIL_START_MARKER}" 2>/dev/null || echo 0)))
+        # If marker is less than 1 hour old, skip
+        if [ "${marker_age}" -lt 3600 ]; then
+            log_info "Start email already sent recently, skipping"
+            return 0
+        fi
+    fi
+
+    log_info "Sending scraper start email notification..."
+
+    # Create marker file
+    mkdir -p "${STATE_DIR}"
+    date +%s > "${EMAIL_START_MARKER}"
+
+    # Send email using host script (via mounted volume)
+    if [ -f "/app/docker-scripts/send-scraper-email-wrapper.sh" ]; then
+        /app/docker-scripts/send-scraper-email-wrapper.sh start
+    else
+        log_warning "Email script not found, skipping notification"
+    fi
+}
+
+# Send scraper finish email (only from Poland container to avoid duplicates)
+send_finish_email() {
+    # Only Poland container sends the finish email
+    if [ "${COUNTRY}" != "poland" ]; then
+        return 0
+    fi
+
+    # Check if SENDGRID_API_KEY is available
+    if [ -z "${SENDGRID_API_KEY:-}" ]; then
+        log_info "Skipping finish email (SENDGRID_API_KEY not set)"
+        return 0
+    fi
+
+    log_info "Sending scraper finish email notification..."
+
+    # Create marker file
+    mkdir -p "${STATE_DIR}"
+    date +%s > "${EMAIL_FINISH_MARKER}"
+
+    # Send email using host script (via mounted volume)
+    if [ -f "/app/docker-scripts/send-scraper-email-wrapper.sh" ]; then
+        /app/docker-scripts/send-scraper-email-wrapper.sh finish
+    else
+        log_warning "Email script not found, skipping notification"
+    fi
+}
+
 # Main execution
 main() {
     log_info "==================================================================="
@@ -182,6 +255,9 @@ main() {
         exit 1
     fi
 
+    # Send start email (only from Poland container)
+    send_start_email
+
     # Run scrapers for this container's country
     log_info "Starting scrapers for country: ${COUNTRY}"
 
@@ -192,6 +268,9 @@ main() {
         log_error "Some scrapers failed"
         exit_code=1
     fi
+
+    # Send finish email (only from Poland container)
+    send_finish_email
 
     log_info "==================================================================="
     log_info "Container Cron Job Completed"

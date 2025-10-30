@@ -113,3 +113,8 @@ export IMAGE_BACKUP_DIR="$APP_DIR/docker-images"
 export MAILGUN_API_KEY=""           # Set during setup
 export MAILGUN_DOMAIN=""            # Set during setup
 export NOTIFICATION_EMAIL=""        # Set during setup
+
+# ============================================================================
+# ERROR TRACKING CONFIGURATION
+# ============================================================================
+export ROLLBAR_ACCESS_TOKEN="faa194032525412eb901138b55de3309"

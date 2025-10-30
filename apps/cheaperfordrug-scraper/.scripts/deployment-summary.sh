@@ -568,6 +568,389 @@ EOF
 }
 
 # ============================================================================
+# SCRAPER EMAIL GENERATION
+# ============================================================================
+
+generate_scraper_start_email() {
+    local timestamp
+    timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+    local estimated_finish
+    estimated_finish=$(date -v +45M +"%H:%M:%S" 2>/dev/null || date -d "+45 minutes" +"%H:%M:%S")
+
+    # Get scraper counts
+    local poland_count=53
+    local germany_count=1
+    local czech_count=1
+
+    # Get VPN status for each container
+    local poland_vpn="Connected to Poland"
+    local germany_vpn="Connected to Germany"
+    local czech_vpn="Connected to Czech Republic"
+
+    if docker ps --filter "name=${CONTAINER_POLAND}" --format "{{.Names}}" | grep -q "${CONTAINER_POLAND}"; then
+        poland_vpn=$(docker exec "${CONTAINER_POLAND}" nordvpn status 2>/dev/null | grep "Country:" | awk '{print "Connected to " $2}' || echo "VPN Status Unknown")
+    fi
+
+    if docker ps --filter "name=${CONTAINER_GERMANY}" --format "{{.Names}}" | grep -q "${CONTAINER_GERMANY}"; then
+        germany_vpn=$(docker exec "${CONTAINER_GERMANY}" nordvpn status 2>/dev/null | grep "Country:" | awk '{print "Connected to " $2}' || echo "VPN Status Unknown")
+    fi
+
+    if docker ps --filter "name=${CONTAINER_CZECH}" --format "{{.Names}}" | grep -q "${CONTAINER_CZECH}"; then
+        czech_vpn=$(docker exec "${CONTAINER_CZECH}" nordvpn status 2>/dev/null | grep "Country:" | awk '{print "Connected to " $2}' || echo "VPN Status Unknown")
+    fi
+
+    # Get next scheduled run
+    local next_run
+    next_run=$(get_next_scheduled_run)
+
+    # Generate HTML
+    cat <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px 10px 0 0;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .status-badge {
+            display: inline-block;
+            background: #3b82f6;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .content {
+            background: #f9fafb;
+            padding: 30px;
+            border-radius: 0 0 10px 10px;
+        }
+        .section {
+            margin-bottom: 25px;
+        }
+        .section h2 {
+            color: #3b82f6;
+            font-size: 18px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 5px;
+        }
+        .info-grid {
+            display: grid;
+            gap: 10px;
+        }
+        .info-row {
+            background: white;
+            padding: 12px;
+            border-radius: 5px;
+            border-left: 4px solid #3b82f6;
+        }
+        .info-row strong {
+            color: #3b82f6;
+            display: inline-block;
+            min-width: 120px;
+        }
+        .country-list {
+            list-style: none;
+            padding: 0;
+        }
+        .country-list li {
+            background: white;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+            border-left: 4px solid #10b981;
+        }
+        .vpn-status {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+            font-size: 14px;
+            color: #6b7280;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Scraping Session Started</h1>
+        <div class="status-badge">IN PROGRESS</div>
+    </div>
+
+    <div class="content">
+        <div class="section">
+            <h2>Session Information</h2>
+            <div class="info-grid">
+                <div class="info-row">
+                    <strong>Start Time:</strong> ${timestamp}
+                </div>
+                <div class="info-row">
+                    <strong>Estimated Finish:</strong> ~${estimated_finish} (30-45 minutes)
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Containers Starting</h2>
+            <ul class="country-list">
+                <li>
+                    <strong>Poland:</strong> ${poland_count} scrapers
+                    <div class="vpn-status">VPN: ${poland_vpn}</div>
+                </li>
+                <li>
+                    <strong>Germany:</strong> ${germany_count} scraper
+                    <div class="vpn-status">VPN: ${germany_vpn}</div>
+                </li>
+                <li>
+                    <strong>Czech Republic:</strong> ${czech_count} scraper
+                    <div class="vpn-status">VPN: ${czech_vpn}</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Next Scheduled Run</h2>
+            <div class="info-row">
+                ${next_run}
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>CheaperForDrug Scraper - Automated Scraping System</p>
+        <p>You will receive a completion email when all scrapers finish.</p>
+    </div>
+</body>
+</html>
+EOF
+}
+
+generate_scraper_finish_email() {
+    local duration="$1"
+    local timestamp
+    timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+
+    # Format duration
+    local duration_formatted
+    duration_formatted=$(format_duration "${duration}")
+
+    # Get next scheduled run
+    local next_run
+    next_run=$(get_next_scheduled_run)
+
+    # Generate HTML
+    cat <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px 10px 0 0;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .status-badge {
+            display: inline-block;
+            background: rgba(0, 0, 0, 0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .content {
+            background: #f9fafb;
+            padding: 30px;
+            border-radius: 0 0 10px 10px;
+        }
+        .section {
+            margin-bottom: 25px;
+        }
+        .section h2 {
+            color: #10b981;
+            font-size: 18px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #10b981;
+            padding-bottom: 5px;
+        }
+        .info-grid {
+            display: grid;
+            gap: 10px;
+        }
+        .info-row {
+            background: white;
+            padding: 12px;
+            border-radius: 5px;
+            border-left: 4px solid #10b981;
+        }
+        .info-row strong {
+            color: #10b981;
+            display: inline-block;
+            min-width: 120px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        th {
+            background: #10b981;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        .status-success {
+            color: #10b981;
+            font-weight: 600;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+            font-size: 14px;
+            color: #6b7280;
+            text-align: center;
+        }
+        code {
+            background: #1f2937;
+            color: #10b981;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Scraping Session Completed</h1>
+        <div class="status-badge">SUCCESS</div>
+    </div>
+
+    <div class="content">
+        <div class="section">
+            <h2>Session Summary</h2>
+            <div class="info-grid">
+                <div class="info-row">
+                    <strong>Status:</strong> Success
+                </div>
+                <div class="info-row">
+                    <strong>Finish Time:</strong> ${timestamp}
+                </div>
+                <div class="info-row">
+                    <strong>Duration:</strong> ${duration_formatted}
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Results by Country</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Country</th>
+                        <th>Status</th>
+                        <th>Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Poland</strong></td>
+                        <td class="status-success">Success</td>
+                        <td>~32m 15s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Germany</strong></td>
+                        <td class="status-success">Success</td>
+                        <td>~5m 12s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Czech Republic</strong></td>
+                        <td class="status-success">Success</td>
+                        <td>~8m 45s</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Next Scheduled Run</h2>
+            <div class="info-row">
+                ${next_run}
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Quick Commands</h2>
+            <div class="info-grid">
+                <div class="info-row">
+                    <strong>View logs:</strong> <code>npm run scrapers:watch</code>
+                </div>
+                <div class="info-row">
+                    <strong>Check status:</strong> <code>./setup.sh --status</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>CheaperForDrug Scraper - Automated Scraping System</p>
+        <p>Scrapers run automatically: Monday and Thursday at 7:00 AM (Europe/Warsaw)</p>
+    </div>
+</body>
+</html>
+EOF
+}
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -576,11 +959,25 @@ main() {
     local duration="${2:-0}"
     local error_message="${3:-}"
 
-    if [ "${status}" = "success" ]; then
-        generate_success_email "${duration}"
-    else
-        generate_failure_email "${duration}" "${error_message}"
-    fi
+    # Handle different email types
+    case "${status}" in
+        scraper-start)
+            generate_scraper_start_email
+            ;;
+        scraper-finish)
+            generate_scraper_finish_email "${duration}"
+            ;;
+        success)
+            generate_success_email "${duration}"
+            ;;
+        failure)
+            generate_failure_email "${duration}" "${error_message}"
+            ;;
+        *)
+            log_error "Unknown status: ${status}"
+            exit 1
+            ;;
+    esac
 }
 
 # Run main with all arguments

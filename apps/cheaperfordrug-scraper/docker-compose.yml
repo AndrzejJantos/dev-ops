@@ -52,10 +52,17 @@ services:
       - NORDVPN_TOKEN=${NORDVPN_TOKEN}
       - VPN_ROTATE_INTERVAL=${VPN_ROTATE_INTERVAL:-15}
 
+      # Email Configuration (for scraper notifications)
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - HOME=${HOME}
+
       # Scraper Configuration
       - NODE_ENV=production
       - HEADLESS=${HEADLESS:-true}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+
+      # Error Tracking
+      - ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN:-faa194032525412eb901138b55de3309}
 
       # Timezone
       - TZ=Europe/Warsaw
@@ -71,6 +78,9 @@ services:
 
       # Docker scripts (override the copied ones if needed)
       - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/.docker:/app/docker-scripts:ro
+
+      # Mount host scripts for email functionality
+      - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/.scripts:${HOME}/apps/cheaperfordrug-scraper/.scripts:ro
 
     healthcheck:
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
@@ -126,10 +136,17 @@ services:
       - NORDVPN_TOKEN=${NORDVPN_TOKEN}
       - VPN_ROTATE_INTERVAL=${VPN_ROTATE_INTERVAL:-15}
 
+      # Email Configuration (for scraper notifications)
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - HOME=${HOME}
+
       # Scraper Configuration
       - NODE_ENV=production
       - HEADLESS=${HEADLESS:-true}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+
+      # Error Tracking
+      - ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN:-faa194032525412eb901138b55de3309}
 
       # Timezone
       - TZ=Europe/Berlin
@@ -144,7 +161,10 @@ services:
       - ${APP_DIR}/state/germany:/app/state
 
       # Docker scripts
-      - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/docker-scripts:/app/docker-scripts:ro
+      - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/.docker:/app/docker-scripts:ro
+
+      # Mount host scripts for email functionality
+      - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/.scripts:${HOME}/apps/cheaperfordrug-scraper/.scripts:ro
 
     healthcheck:
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
@@ -200,10 +220,17 @@ services:
       - NORDVPN_TOKEN=${NORDVPN_TOKEN}
       - VPN_ROTATE_INTERVAL=${VPN_ROTATE_INTERVAL:-15}
 
+      # Email Configuration (for scraper notifications)
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - HOME=${HOME}
+
       # Scraper Configuration
       - NODE_ENV=production
       - HEADLESS=${HEADLESS:-true}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+
+      # Error Tracking
+      - ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN:-faa194032525412eb901138b55de3309}
 
       # Timezone
       - TZ=Europe/Prague
@@ -218,7 +245,10 @@ services:
       - ${APP_DIR}/state/czech:/app/state
 
       # Docker scripts
-      - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/docker-scripts:/app/docker-scripts:ro
+      - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/.docker:/app/docker-scripts:ro
+
+      # Mount host scripts for email functionality
+      - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/.scripts:${HOME}/apps/cheaperfordrug-scraper/.scripts:ro
 
     healthcheck:
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
