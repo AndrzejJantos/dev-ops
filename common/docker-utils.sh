@@ -52,6 +52,7 @@ start_container() {
     local env_file="$4"
     local container_port="${5:-3000}"  # Default to 3000 (consistent for Rails and Next.js)
     local network="${6:-bridge}"
+    local log_mount_path="${7:-/app/log}"  # Default to /app/log, but Rails uses /rails/log
 
     log_info "Starting container: ${container_name} on host port ${host_port} -> container port ${container_port}"
 
@@ -71,7 +72,7 @@ start_container() {
             --restart unless-stopped \
             --env-file "$env_file" \
             -e PORT="${host_port}" \
-            -v "${LOG_DIR}:/app/log" \
+            -v "${LOG_DIR}:${log_mount_path}" \
             --health-cmd "curl -f http://localhost:${host_port}/up || exit 1" \
             --health-interval=30s \
             --health-timeout=3s \
@@ -85,7 +86,7 @@ start_container() {
             --restart unless-stopped \
             -p "${host_port}:${container_port}" \
             --env-file "$env_file" \
-            -v "${LOG_DIR}:/app/log" \
+            -v "${LOG_DIR}:${log_mount_path}" \
             --health-cmd "curl -f http://localhost:${container_port}/up || exit 1" \
             --health-interval=30s \
             --health-timeout=3s \
@@ -110,6 +111,7 @@ start_worker_container() {
     local env_file="$3"
     local worker_command="${4:-bundle exec sidekiq}"
     local network="${5:-bridge}"
+    local log_mount_path="${6:-/app/log}"  # Default to /app/log, but Rails uses /rails/log
 
     log_info "Starting worker container: ${container_name}"
 
@@ -120,14 +122,17 @@ start_worker_container() {
     mkdir -p "${LOG_DIR}"
     chmod 777 "${LOG_DIR}"  # Allow container's app user to write logs
 
+    # Extract the workdir from log_mount_path (e.g., /rails/log -> /rails)
+    local workdir=$(dirname "$log_mount_path")
+
     docker run -d \
         --name "$container_name" \
         --network "$network" \
         --restart unless-stopped \
         --env-file "$env_file" \
-        -v "${LOG_DIR}:/app/log" \
+        -v "${LOG_DIR}:${log_mount_path}" \
         "$image_name" \
-        /bin/bash -c "cd /app && $worker_command"
+        /bin/bash -c "cd ${workdir} && $worker_command"
 
     if [ $? -eq 0 ]; then
         log_success "Worker container started successfully"
@@ -145,6 +150,7 @@ start_scheduler_container() {
     local env_file="$3"
     local scheduler_command="${4:-bundle exec clockwork config/clock.rb}"
     local network="${5:-bridge}"
+    local log_mount_path="${6:-/app/log}"  # Default to /app/log, but Rails uses /rails/log
 
     log_info "Starting scheduler container: ${container_name}"
 
@@ -155,14 +161,17 @@ start_scheduler_container() {
     mkdir -p "${LOG_DIR}"
     chmod 777 "${LOG_DIR}"  # Allow container's app user to write logs
 
+    # Extract the workdir from log_mount_path (e.g., /rails/log -> /rails)
+    local workdir=$(dirname "$log_mount_path")
+
     docker run -d \
         --name "$container_name" \
         --network "$network" \
         --restart unless-stopped \
         --env-file "$env_file" \
-        -v "${LOG_DIR}:/app/log" \
+        -v "${LOG_DIR}:${log_mount_path}" \
         "$image_name" \
-        /bin/bash -c "cd /app && $scheduler_command"
+        /bin/bash -c "cd ${workdir} && $scheduler_command"
 
     if [ $? -eq 0 ]; then
         log_success "Scheduler container started successfully"

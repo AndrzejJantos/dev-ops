@@ -406,14 +406,28 @@ CONSOLE_WRAPPER
     # Create log viewing wrapper script
     cat > "${APP_DIR}/logs.sh" << 'LOGS_WRAPPER'
 #!/bin/bash
-LOG_FILE="$(dirname "$0")/logs/production.log"
-if [ -f "$LOG_FILE" ]; then
-    tail -f "$LOG_FILE"
-else
-    echo "Log file not found: $LOG_FILE"
-    echo "Logs will be created when the application starts logging."
+# Rails containers write logs to mounted volume at ~/apps/APP_NAME/logs/
+LOG_DIR="$(dirname "$0")/logs"
+PRODUCTION_LOG="${LOG_DIR}/production.log"
+
+# Check if log file exists
+if [ ! -f "$PRODUCTION_LOG" ]; then
+    echo "Log file not found: $PRODUCTION_LOG"
+    echo ""
+    echo "Available logs in ${LOG_DIR}:"
+    ls -lh "${LOG_DIR}" 2>/dev/null || echo "  (directory is empty or doesn't exist yet)"
+    echo ""
+    echo "Logs will be created when the application starts."
+    echo "Try running: docker logs APP_NAME_web_1"
     exit 1
 fi
+
+# Follow production log
+echo "Following production.log..."
+echo "Log file: $PRODUCTION_LOG"
+echo "Press Ctrl+C to stop"
+echo ""
+tail -f "$PRODUCTION_LOG"
 LOGS_WRAPPER
 
     chmod +x "${APP_DIR}/logs.sh"
@@ -462,7 +476,7 @@ rails_deploy_fresh() {
         local port=$((BASE_PORT + i - 1))
         local container_name="${APP_NAME}_web_${i}"
 
-        start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT" "host"
+        start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT" "host" "/rails/log"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start container ${container_name}"
@@ -496,7 +510,7 @@ rails_deploy_fresh() {
         log_info "Starting ${worker_count} worker container(s)..."
         for i in $(seq 1 $worker_count); do
             local worker_name="${APP_NAME}_worker_${i}"
-            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host"
+            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host" "/rails/log"
 
             if [ $? -ne 0 ]; then
                 log_error "Failed to start worker ${worker_name}"
@@ -510,7 +524,7 @@ rails_deploy_fresh() {
     if [ "${SCHEDULER_ENABLED:-false}" = "true" ]; then
         log_info "Starting scheduler container..."
         local scheduler_name="${APP_NAME}_scheduler"
-        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork lib/clock.rb" "host"
+        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork lib/clock.rb" "host" "/rails/log"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start scheduler ${scheduler_name}"
@@ -601,7 +615,7 @@ rails_deploy_rolling() {
         # Start new workers
         for i in $(seq 1 $worker_count); do
             local worker_name="${APP_NAME}_worker_${i}"
-            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host"
+            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host" "/rails/log"
 
             if [ $? -ne 0 ]; then
                 log_error "Failed to start worker ${worker_name}"
@@ -622,7 +636,7 @@ rails_deploy_rolling() {
         fi
 
         # Start new scheduler
-        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork lib/clock.rb" "host"
+        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork lib/clock.rb" "host" "/rails/log"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start scheduler ${scheduler_name}"

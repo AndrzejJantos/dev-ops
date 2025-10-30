@@ -196,14 +196,31 @@ nextjs_create_log_wrapper() {
 
     cat > "${APP_DIR}/logs.sh" << 'LOGS_WRAPPER'
 #!/bin/bash
-LOG_FILE="$(dirname "$0")/logs/production.log"
-if [ -f "$LOG_FILE" ]; then
-    tail -f "$LOG_FILE"
-else
-    echo "Log file not found: $LOG_FILE"
-    echo "Logs will be created when the application starts logging."
+# Next.js containers write logs to mounted volume at ~/apps/APP_NAME/logs/
+LOG_DIR="$(dirname "$0")/logs"
+PRODUCTION_LOG="${LOG_DIR}/production.log"
+APP_NAME="$(basename "$(dirname "$0")")"
+
+# Check if log file exists
+if [ ! -f "$PRODUCTION_LOG" ]; then
+    echo "Log file not found: $PRODUCTION_LOG"
+    echo ""
+    echo "Available logs in ${LOG_DIR}:"
+    ls -lh "${LOG_DIR}" 2>/dev/null || echo "  (directory is empty or doesn't exist yet)"
+    echo ""
+    echo "Note: Next.js logs to STDOUT by default, which goes to Docker logs."
+    echo "To see Docker logs, run: docker logs -f ${APP_NAME}_web_1"
+    echo ""
+    echo "To write logs to files, configure a custom logger in your Next.js app."
     exit 1
 fi
+
+# Follow production log
+echo "Following production.log..."
+echo "Log file: $PRODUCTION_LOG"
+echo "Press Ctrl+C to stop"
+echo ""
+tail -f "$PRODUCTION_LOG"
 LOGS_WRAPPER
 
     chmod +x "${APP_DIR}/logs.sh"
