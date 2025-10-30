@@ -400,6 +400,7 @@ check_and_setup_ssl() {
             --email "${existing_email}" \
             --non-interactive \
             --agree-tos \
+            --expand \
             --redirect 2>&1 | tee "$certbot_output"; then
             log_success "SSL certificates obtained successfully"
             log_success "HTTPS now available at: https://${DOMAIN}"
@@ -562,10 +563,18 @@ handle_deploy_command() {
             local existing_email=$(sudo certbot show_account 2>/dev/null | grep -oP 'Email contact: \K.*' || echo "")
 
             if [ -n "$existing_email" ]; then
-                sudo certbot --nginx $cert_domains --email "${existing_email}" --non-interactive --agree-tos --redirect
+                log_info "Obtaining/expanding SSL certificate for domains: ${cert_domains}"
+                sudo certbot --nginx $cert_domains --email "${existing_email}" --non-interactive --agree-tos --redirect --expand
+                if [ $? -eq 0 ]; then
+                    log_success "SSL certificate configured successfully"
+                    sudo systemctl reload nginx
+                else
+                    log_error "SSL setup failed. Check logs: /var/log/letsencrypt/letsencrypt.log"
+                fi
             else
                 # Interactive mode if no account exists
-                sudo certbot --nginx $cert_domains
+                log_info "No certbot account found, running in interactive mode"
+                sudo certbot --nginx $cert_domains --expand
             fi
             ;;
         help|*)
