@@ -79,7 +79,17 @@ deploy_application() {
     log_success "Deployment completed successfully!"
 
     # Step 5.5: Check and setup SSL if needed
+    export SSL_SETUP_STATUS="unknown"
+    export SSL_SETUP_MESSAGE=""
     check_and_setup_ssl
+    ssl_result=$?
+    if [ $ssl_result -eq 0 ]; then
+        export SSL_SETUP_STATUS="success"
+    elif [ $ssl_result -eq 2 ]; then
+        export SSL_SETUP_STATUS="failed"
+    else
+        export SSL_SETUP_STATUS="skipped"
+    fi
 
     # Step 6: Display summary (app-type specific)
     if [ "$APP_TYPE" = "rails" ]; then
@@ -281,28 +291,49 @@ check_and_setup_ssl() {
     # Check if certbot is installed
     if ! command -v certbot >/dev/null 2>&1; then
         log_warning "Certbot not installed, skipping SSL check"
-        return 0
+        export SSL_SETUP_MESSAGE="Certbot not installed"
+        return 1  # Skipped
     fi
 
     # Build domain list for certbot
     local cert_domains="-d $DOMAIN"
     local all_domains="$DOMAIN"
+    local all_domains_array=("$DOMAIN")
 
     # Add www subdomain for non-API domains
     if [[ ! "$DOMAIN" =~ ^api ]]; then
         cert_domains="$cert_domains -d www.$DOMAIN"
         all_domains="$all_domains, www.$DOMAIN"
+        all_domains_array+=("www.$DOMAIN")
     fi
 
     # Check if additional domains are defined (e.g., DOMAIN_INTERNAL)
     if [ -n "${DOMAIN_INTERNAL:-}" ]; then
         cert_domains="$cert_domains -d $DOMAIN_INTERNAL"
         all_domains="$all_domains, $DOMAIN_INTERNAL"
+        all_domains_array+=("$DOMAIN_INTERNAL")
     fi
 
-    # Check if certificate already exists and is valid
+    # Check if certificate already exists
     if sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${DOMAIN}"; then
         log_success "SSL certificate exists for ${DOMAIN}"
+
+        # Check if certificate covers all required domains
+        local cert_domains_list=$(sudo certbot certificates 2>/dev/null | grep -A 10 "Certificate Name: ${DOMAIN}" | grep "Domains:" | sed 's/.*Domains: //')
+        local missing_domains=()
+
+        for required_domain in "${all_domains_array[@]}"; do
+            if ! echo "$cert_domains_list" | grep -q "$required_domain"; then
+                missing_domains+=("$required_domain")
+            fi
+        done
+
+        if [ ${#missing_domains[@]} -gt 0 ]; then
+            log_warning "Certificate missing domains: ${missing_domains[*]}"
+            log_warning "Run: ./deploy.sh ssl-setup to expand certificate"
+            export SSL_SETUP_MESSAGE="Partial coverage (missing: ${missing_domains[*]})"
+            return 1  # Skipped (needs manual intervention)
+        fi
 
         # Check expiry
         local expiry_date=$(sudo certbot certificates 2>/dev/null | grep -A 10 "Certificate Name: ${DOMAIN}" | grep "Expiry Date" | head -1 | awk '{print $3}')
@@ -317,7 +348,8 @@ check_and_setup_ssl() {
                 log_info "Certificate valid for ${days_left} more days"
             fi
         fi
-        return 0
+        export SSL_SETUP_MESSAGE="Valid"
+        return 0  # Success
     fi
 
     # Certificate doesn't exist - try to obtain it
@@ -327,6 +359,7 @@ check_and_setup_ssl() {
     log_info "Checking DNS configuration..."
     local server_ipv4=$(curl -4 -s ifconfig.me 2>/dev/null || curl -s api.ipify.org)
     local dns_ok=true
+    local dns_issues=()
 
     for domain in $DOMAIN ${DOMAIN_INTERNAL:-}; do
         if [[ ! "$domain" =~ ^www\. ]]; then
@@ -335,9 +368,11 @@ check_and_setup_ssl() {
             if [ -z "$domain_ip" ]; then
                 log_warning "DNS not configured for ${domain}"
                 dns_ok=false
+                dns_issues+=("$domain: not configured")
             elif [ "$domain_ip" != "$server_ipv4" ]; then
                 log_warning "DNS mismatch for ${domain}: points to ${domain_ip}, server is ${server_ipv4}"
                 dns_ok=false
+                dns_issues+=("$domain: wrong IP")
             fi
         fi
     done
@@ -345,7 +380,8 @@ check_and_setup_ssl() {
     if [ "$dns_ok" = false ]; then
         log_warning "DNS not properly configured. Skipping SSL setup."
         log_info "To setup SSL manually, run: ./deploy.sh ssl-setup"
-        return 0
+        export SSL_SETUP_MESSAGE="Skipped - DNS issues: ${dns_issues[*]}"
+        return 1  # Skipped
     fi
 
     # DNS is good, try to get certificate
@@ -356,24 +392,34 @@ check_and_setup_ssl() {
 
     if [ -n "$existing_email" ]; then
         log_info "Using existing certbot account: ${existing_email}"
+
+        # Capture certbot output
+        local certbot_output=$(mktemp)
         if sudo certbot --nginx \
             $cert_domains \
             --email "${existing_email}" \
             --non-interactive \
             --agree-tos \
-            --redirect 2>&1 | tee /tmp/certbot-setup.log; then
+            --redirect 2>&1 | tee "$certbot_output"; then
             log_success "SSL certificates obtained successfully"
             log_success "HTTPS now available at: https://${DOMAIN}"
-            return 0
+            export SSL_SETUP_MESSAGE="Successfully obtained"
+            rm -f "$certbot_output"
+            return 0  # Success
         else
-            log_warning "Automatic SSL setup failed"
-            log_info "To setup SSL manually, run: ./deploy.sh ssl-setup"
-            return 0
+            local error_msg=$(grep -i "error\|failed\|problem" "$certbot_output" | head -3 | tr '\n' '; ')
+            log_error "SSL certificate setup FAILED"
+            log_error "Error: ${error_msg}"
+            log_info "To retry manually, run: ./deploy.sh ssl-setup"
+            export SSL_SETUP_MESSAGE="FAILED: ${error_msg}"
+            rm -f "$certbot_output"
+            return 2  # Failed
         fi
     else
         log_warning "No existing certbot account found"
         log_info "To setup SSL manually, run: ./deploy.sh ssl-setup"
-        return 0
+        export SSL_SETUP_MESSAGE="Skipped - No certbot account"
+        return 1  # Skipped
     fi
 }
 
@@ -420,7 +466,18 @@ update_nginx_upstream() {
         log_info "Nginx now routing to ${new_scale} containers (ports ${BASE_PORT}-$((BASE_PORT + new_scale - 1)))"
 
         # Check SSL after nginx config change
+        export SSL_SETUP_STATUS="unknown"
+        export SSL_SETUP_MESSAGE=""
         check_and_setup_ssl
+        ssl_result=$?
+        if [ $ssl_result -eq 0 ]; then
+            export SSL_SETUP_STATUS="success"
+        elif [ $ssl_result -eq 2 ]; then
+            export SSL_SETUP_STATUS="failed"
+            log_error "SSL setup failed after nginx configuration update"
+        else
+            export SSL_SETUP_STATUS="skipped"
+        fi
 
         return 0
     else

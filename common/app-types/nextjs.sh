@@ -308,6 +308,66 @@ nextjs_display_deployment_summary() {
         echo "  Alternative: https://www.${DOMAIN}"
     fi
     echo ""
+
+    # SSL Certificate Information
+    echo "SSL CERTIFICATE:"
+    if command -v certbot >/dev/null 2>&1 && sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${DOMAIN}"; then
+        # Certificate exists, extract details
+        local cert_info=$(sudo certbot certificates 2>/dev/null | grep -A 15 "Certificate Name: ${DOMAIN}")
+
+        # Extract domains
+        local domains=$(echo "$cert_info" | grep "Domains:" | sed 's/.*Domains: //')
+
+        # Extract expiry date
+        local expiry_date=$(echo "$cert_info" | grep "Expiry Date:" | awk '{print $3}')
+        local expiry_time=$(echo "$cert_info" | grep "Expiry Date:" | awk '{print $4}')
+
+        # Calculate days remaining
+        if [ -n "$expiry_date" ]; then
+            local expiry_ts=$(date -d "$expiry_date" +%s 2>/dev/null || echo "0")
+            local now_ts=$(date +%s)
+            local days_left=$(( (expiry_ts - now_ts) / 86400 ))
+
+            echo "  Status: Active"
+            echo "  Domains: ${domains}"
+            echo "  Expires: ${expiry_date} ${expiry_time}"
+
+            if [ $days_left -lt 30 ]; then
+                echo "  Validity: ${days_left} days remaining ⚠️  (renewal due)"
+            elif [ $days_left -lt 60 ]; then
+                echo "  Validity: ${days_left} days remaining"
+            else
+                echo "  Validity: ${days_left} days remaining ✓"
+            fi
+
+            # Certificate path
+            echo "  Certificate: /etc/letsencrypt/live/${DOMAIN}/"
+        else
+            echo "  Status: Active (unable to parse expiry)"
+        fi
+    else
+        echo "  Status: Not configured"
+        echo "  Setup: ./deploy.sh ssl-setup"
+    fi
+
+    # Show SSL setup attempt status if available
+    if [ -n "${SSL_SETUP_STATUS:-}" ]; then
+        case "$SSL_SETUP_STATUS" in
+            success)
+                echo "  Last Setup: ✓ Success"
+                ;;
+            failed)
+                echo "  Last Setup: ✗ FAILED"
+                [ -n "${SSL_SETUP_MESSAGE:-}" ] && echo "  Error: ${SSL_SETUP_MESSAGE}"
+                echo "  Action: Run './deploy.sh ssl-setup' to retry"
+                ;;
+            skipped)
+                [ -n "${SSL_SETUP_MESSAGE:-}" ] && echo "  Note: ${SSL_SETUP_MESSAGE}"
+                ;;
+        esac
+    fi
+    echo ""
+
     echo "WEB CONTAINERS:"
     local containers=($(get_running_containers "$APP_NAME"))
     echo "  Count: ${#containers[@]} instances"
