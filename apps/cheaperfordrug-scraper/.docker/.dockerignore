@@ -1,0 +1,63 @@
+# Ignore unnecessary files during Docker build
+
+# Git
+.git
+.gitignore
+
+# Node modules (will be installed in container)
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Runtime files
+logs
+*.log
+outputs
+state
+backups
+*.pid
+
+# Development files
+.vscode
+.idea
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+test
+tests
+*.test.js
+*.spec.js
+coverage
+
+# Build artifacts
+dist
+build
+tmp
+
+# System files
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache
+*.egg-info
+
+# DevOps files (not needed in container)
+DevOps
+.claude

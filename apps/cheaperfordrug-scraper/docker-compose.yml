@@ -1,0 +1,247 @@
+version: '3.8'
+
+# CheaperForDrug Scraper - Multi-Country Docker Compose Configuration
+# Deploys 3 containers, one per country (Poland, Germany, Czech Republic)
+# Each container runs with NordVPN connected to the respective country
+#
+# ENVIRONMENT VARIABLES:
+#   Set these in your shell profile (~/.bashrc or ~/.zshrc):
+#     export NORDVPN_TOKEN="your_token_here"
+#     export SCRAPER_AUTH_TOKEN="Andrzej12345"  # Optional
+#
+# These are automatically passed from host environment to containers
+
+services:
+  # ============================================================================
+  # Poland Scraper Container
+  # ============================================================================
+  scraper-poland:
+    image: ${DOCKER_IMAGE_NAME:-cheaperfordrug-scraper}:${IMAGE_TAG:-latest}
+    container_name: cheaperfordrug-scraper-poland
+    hostname: scraper-poland
+    restart: unless-stopped
+
+    # Required for NordVPN to function properly
+    cap_add:
+      - NET_ADMIN               # Required for VPN network configuration
+      - SYS_MODULE              # Required for loading kernel modules
+    devices:
+      - /dev/net/tun            # Required for TUN/TAP interface
+
+    # Use host network mode to access API on localhost:4100
+    # Alternative: use bridge mode with extra_hosts if localhost access needed
+    network_mode: bridge
+
+    # Map to host's localhost for API access
+    extra_hosts:
+      - "api-scraper.localtest.me:host-gateway"
+
+    environment:
+      # Country Configuration
+      - COUNTRY=poland
+      - COUNTRY_CODE=PL
+      - VPN_COUNTRY=Poland
+
+      # API Configuration
+      - API_ENDPOINT=${API_ENDPOINT:-http://api-scraper.localtest.me:4100/api/scraper/online_pharmacy_drugs}
+      - API_TOKEN=${API_TOKEN:-${SCRAPER_AUTH_TOKEN:-Andrzej12345}}
+      - SCRAPER_AUTH_TOKEN=${SCRAPER_AUTH_TOKEN:-Andrzej12345}
+      - SEND_TO_API=${SEND_TO_API:-true}
+
+      # NordVPN Configuration (reads from host environment)
+      - NORDVPN_TOKEN=${NORDVPN_TOKEN}
+      - VPN_ROTATE_INTERVAL=${VPN_ROTATE_INTERVAL:-15}
+
+      # Scraper Configuration
+      - NODE_ENV=production
+      - HEADLESS=${HEADLESS:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+      # Timezone
+      - TZ=Europe/Warsaw
+
+    volumes:
+      # Application code (read-only in production)
+      - ${APP_DIR}/repo:/app:ro
+
+      # Persistent data directories
+      - ${APP_DIR}/logs/poland:/app/logs
+      - ${APP_DIR}/outputs/poland:/app/outputs
+      - ${APP_DIR}/state/poland:/app/state
+
+      # Docker scripts (override the copied ones if needed)
+      - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/.docker:/app/docker-scripts:ro
+
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    labels:
+      - "com.cheaperfordrug.service=scraper"
+      - "com.cheaperfordrug.country=poland"
+      - "com.cheaperfordrug.vpn=nordvpn"
+
+  # ============================================================================
+  # Germany Scraper Container
+  # ============================================================================
+  scraper-germany:
+    image: ${DOCKER_IMAGE_NAME:-cheaperfordrug-scraper}:${IMAGE_TAG:-latest}
+    container_name: cheaperfordrug-scraper-germany
+    hostname: scraper-germany
+    restart: unless-stopped
+
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+
+    network_mode: bridge
+
+    extra_hosts:
+      - "api-scraper.localtest.me:host-gateway"
+
+    environment:
+      # Country Configuration
+      - COUNTRY=germany
+      - COUNTRY_CODE=DE
+      - VPN_COUNTRY=Germany
+
+      # API Configuration
+      - API_ENDPOINT=${API_ENDPOINT:-http://api-scraper.localtest.me:4100/api/scraper/online_pharmacy_drugs}
+      - API_TOKEN=${API_TOKEN:-${SCRAPER_AUTH_TOKEN:-Andrzej12345}}
+      - SCRAPER_AUTH_TOKEN=${SCRAPER_AUTH_TOKEN:-Andrzej12345}
+      - SEND_TO_API=${SEND_TO_API:-true}
+
+      # NordVPN Configuration (reads from host environment)
+      - NORDVPN_TOKEN=${NORDVPN_TOKEN}
+      - VPN_ROTATE_INTERVAL=${VPN_ROTATE_INTERVAL:-15}
+
+      # Scraper Configuration
+      - NODE_ENV=production
+      - HEADLESS=${HEADLESS:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+      # Timezone
+      - TZ=Europe/Berlin
+
+    volumes:
+      # Application code (read-only in production)
+      - ${APP_DIR}/repo:/app:ro
+
+      # Persistent data directories
+      - ${APP_DIR}/logs/germany:/app/logs
+      - ${APP_DIR}/outputs/germany:/app/outputs
+      - ${APP_DIR}/state/germany:/app/state
+
+      # Docker scripts
+      - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/docker-scripts:/app/docker-scripts:ro
+
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    labels:
+      - "com.cheaperfordrug.service=scraper"
+      - "com.cheaperfordrug.country=germany"
+      - "com.cheaperfordrug.vpn=nordvpn"
+
+  # ============================================================================
+  # Czech Republic Scraper Container
+  # ============================================================================
+  scraper-czech:
+    image: ${DOCKER_IMAGE_NAME:-cheaperfordrug-scraper}:${IMAGE_TAG:-latest}
+    container_name: cheaperfordrug-scraper-czech
+    hostname: scraper-czech
+    restart: unless-stopped
+
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+
+    network_mode: bridge
+
+    extra_hosts:
+      - "api-scraper.localtest.me:host-gateway"
+
+    environment:
+      # Country Configuration
+      - COUNTRY=czech
+      - COUNTRY_CODE=CZ
+      - VPN_COUNTRY=Czech_Republic
+
+      # API Configuration
+      - API_ENDPOINT=${API_ENDPOINT:-http://api-scraper.localtest.me:4100/api/scraper/online_pharmacy_drugs}
+      - API_TOKEN=${API_TOKEN:-${SCRAPER_AUTH_TOKEN:-Andrzej12345}}
+      - SCRAPER_AUTH_TOKEN=${SCRAPER_AUTH_TOKEN:-Andrzej12345}
+      - SEND_TO_API=${SEND_TO_API:-true}
+
+      # NordVPN Configuration (reads from host environment)
+      - NORDVPN_TOKEN=${NORDVPN_TOKEN}
+      - VPN_ROTATE_INTERVAL=${VPN_ROTATE_INTERVAL:-15}
+
+      # Scraper Configuration
+      - NODE_ENV=production
+      - HEADLESS=${HEADLESS:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+      # Timezone
+      - TZ=Europe/Prague
+
+    volumes:
+      # Application code (read-only in production)
+      - ${APP_DIR}/repo:/app:ro
+
+      # Persistent data directories
+      - ${APP_DIR}/logs/czech:/app/logs
+      - ${APP_DIR}/outputs/czech:/app/outputs
+      - ${APP_DIR}/state/czech:/app/state
+
+      # Docker scripts
+      - ${DEVOPS_DIR}/apps/cheaperfordrug-scraper/docker-scripts:/app/docker-scripts:ro
+
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    labels:
+      - "com.cheaperfordrug.service=scraper"
+      - "com.cheaperfordrug.country=czech"
+      - "com.cheaperfordrug.vpn=nordvpn"
+
+# ============================================================================
+# Networks (if not using host mode)
+# ============================================================================
+networks:
+  default:
+    name: cheaperfordrug-scraper-network
+    driver: bridge
