@@ -78,6 +78,9 @@ deploy_application() {
 
     log_success "Deployment completed successfully!"
 
+    # Step 5.5: Check and setup SSL if needed
+    check_and_setup_ssl
+
     # Step 6: Display summary (app-type specific)
     if [ "$APP_TYPE" = "rails" ]; then
         ${APP_TYPE}_display_deployment_summary "$actual_scale" "$image_tag" "$migrations_run"
@@ -271,6 +274,109 @@ handle_status() {
     exit 0
 }
 
+# Function: Check and setup SSL certificates if missing or invalid
+check_and_setup_ssl() {
+    log_info "Checking SSL certificates for ${DOMAIN}..."
+
+    # Check if certbot is installed
+    if ! command -v certbot >/dev/null 2>&1; then
+        log_warning "Certbot not installed, skipping SSL check"
+        return 0
+    fi
+
+    # Build domain list for certbot
+    local cert_domains="-d $DOMAIN"
+    local all_domains="$DOMAIN"
+
+    # Add www subdomain for non-API domains
+    if [[ ! "$DOMAIN" =~ ^api ]]; then
+        cert_domains="$cert_domains -d www.$DOMAIN"
+        all_domains="$all_domains, www.$DOMAIN"
+    fi
+
+    # Check if additional domains are defined (e.g., DOMAIN_INTERNAL)
+    if [ -n "${DOMAIN_INTERNAL:-}" ]; then
+        cert_domains="$cert_domains -d $DOMAIN_INTERNAL"
+        all_domains="$all_domains, $DOMAIN_INTERNAL"
+    fi
+
+    # Check if certificate already exists and is valid
+    if sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${DOMAIN}"; then
+        log_success "SSL certificate exists for ${DOMAIN}"
+
+        # Check expiry
+        local expiry_date=$(sudo certbot certificates 2>/dev/null | grep -A 10 "Certificate Name: ${DOMAIN}" | grep "Expiry Date" | head -1 | awk '{print $3}')
+        if [ -n "$expiry_date" ]; then
+            local expiry_ts=$(date -d "$expiry_date" +%s 2>/dev/null || echo "0")
+            local now_ts=$(date +%s)
+            local days_left=$(( (expiry_ts - now_ts) / 86400 ))
+
+            if [ $days_left -lt 30 ]; then
+                log_warning "Certificate expires in ${days_left} days, certbot will auto-renew"
+            else
+                log_info "Certificate valid for ${days_left} more days"
+            fi
+        fi
+        return 0
+    fi
+
+    # Certificate doesn't exist - try to obtain it
+    log_warning "SSL certificate not found for ${DOMAIN}"
+
+    # Check DNS configuration
+    log_info "Checking DNS configuration..."
+    local server_ipv4=$(curl -4 -s ifconfig.me 2>/dev/null || curl -s api.ipify.org)
+    local dns_ok=true
+
+    for domain in $DOMAIN ${DOMAIN_INTERNAL:-}; do
+        if [[ ! "$domain" =~ ^www\. ]]; then
+            local domain_ip=$(dig +short "$domain" A | tail -1)
+
+            if [ -z "$domain_ip" ]; then
+                log_warning "DNS not configured for ${domain}"
+                dns_ok=false
+            elif [ "$domain_ip" != "$server_ipv4" ]; then
+                log_warning "DNS mismatch for ${domain}: points to ${domain_ip}, server is ${server_ipv4}"
+                dns_ok=false
+            fi
+        fi
+    done
+
+    if [ "$dns_ok" = false ]; then
+        log_warning "DNS not properly configured. Skipping SSL setup."
+        log_info "To setup SSL manually, run: ./deploy.sh ssl-setup"
+        return 0
+    fi
+
+    # DNS is good, try to get certificate
+    log_info "Obtaining SSL certificates for: ${all_domains}"
+
+    # Try to get email from existing certbot registration
+    local existing_email=$(sudo certbot show_account 2>/dev/null | grep -oP 'Email contact: \K.*' || echo "")
+
+    if [ -n "$existing_email" ]; then
+        log_info "Using existing certbot account: ${existing_email}"
+        if sudo certbot --nginx \
+            $cert_domains \
+            --email "${existing_email}" \
+            --non-interactive \
+            --agree-tos \
+            --redirect 2>&1 | tee /tmp/certbot-setup.log; then
+            log_success "SSL certificates obtained successfully"
+            log_success "HTTPS now available at: https://${DOMAIN}"
+            return 0
+        else
+            log_warning "Automatic SSL setup failed"
+            log_info "To setup SSL manually, run: ./deploy.sh ssl-setup"
+            return 0
+        fi
+    else
+        log_warning "No existing certbot account found"
+        log_info "To setup SSL manually, run: ./deploy.sh ssl-setup"
+        return 0
+    fi
+}
+
 # Function: Update nginx upstream configuration when scaling
 update_nginx_upstream() {
     local new_scale="$1"
@@ -312,6 +418,10 @@ update_nginx_upstream() {
         sudo systemctl reload nginx
         log_success "Nginx configuration updated successfully"
         log_info "Nginx now routing to ${new_scale} containers (ports ${BASE_PORT}-$((BASE_PORT + new_scale - 1)))"
+
+        # Check SSL after nginx config change
+        check_and_setup_ssl
+
         return 0
     else
         log_error "Nginx configuration test failed, restoring backup"
@@ -383,7 +493,23 @@ handle_deploy_command() {
             ;;
         ssl-setup)
             log_info "Setting up SSL certificates for ${DOMAIN}"
-            sudo certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN"
+            # Force SSL setup by temporarily removing certificate check
+            local force_ssl=true
+
+            # Build domain list
+            local cert_domains="-d $DOMAIN"
+            [[ ! "$DOMAIN" =~ ^api ]] && cert_domains="$cert_domains -d www.$DOMAIN"
+            [ -n "${DOMAIN_INTERNAL:-}" ] && cert_domains="$cert_domains -d $DOMAIN_INTERNAL"
+
+            # Get email from existing certbot account or prompt
+            local existing_email=$(sudo certbot show_account 2>/dev/null | grep -oP 'Email contact: \K.*' || echo "")
+
+            if [ -n "$existing_email" ]; then
+                sudo certbot --nginx $cert_domains --email "${existing_email}" --non-interactive --agree-tos --redirect
+            else
+                # Interactive mode if no account exists
+                sudo certbot --nginx $cert_domains
+            fi
             ;;
         help|*)
             echo "${APP_DISPLAY_NAME} Deployment Script"
