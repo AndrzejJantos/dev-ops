@@ -5,7 +5,7 @@
 # This file is sourced by setup and deployment scripts
 
 # Application identification
-export APP_TYPE="nextjs"
+export APP_TYPE="rails"
 export APP_NAME="cheaperfordrug-landing"
 export APP_DISPLAY_NAME="CheaperForDrug Landing Page"
 
