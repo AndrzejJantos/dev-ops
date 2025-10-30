@@ -41,13 +41,26 @@ rails_setup_database() {
     # Generate database user name from app name
     DB_APP_USER="${APP_NAME//-/_}_user"
 
-    # Generate strong password for database user
-    DB_APP_PASSWORD=$(get_or_generate_secret "$ENV_FILE" "DB_PASSWORD" "openssl rand -base64 32 | tr -d '/+=' | head -c 32")
+    # Try to get existing password from .env.production file
+    EXISTING_PASSWORD=""
+    if [ -f "$ENV_FILE" ]; then
+        EXISTING_PASSWORD=$(grep "^DB_PASSWORD=" "$ENV_FILE" 2>/dev/null | cut -d '=' -f2-)
+    fi
+
+    # Generate or use existing password
+    if [ -n "$EXISTING_PASSWORD" ]; then
+        DB_APP_PASSWORD="$EXISTING_PASSWORD"
+        log_info "Found existing database password in .env.production"
+    else
+        DB_APP_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)
+        log_info "Generated new database password"
+    fi
 
     log_info "Database user will be: ${DB_APP_USER}"
 
-    # Create database user if it doesn't exist, or reset password if it does
+    # Check if database user exists
     if ! check_db_user_exists "$DB_APP_USER"; then
+        # User doesn't exist - create it with the password
         create_db_user "$DB_APP_USER" "$DB_APP_PASSWORD"
         if [ $? -ne 0 ]; then
             log_error "Failed to create database user"
@@ -55,11 +68,28 @@ rails_setup_database() {
         fi
     else
         log_info "Database user ${DB_APP_USER} already exists"
-        # Reset password to match the one in .env file
-        reset_db_user_password "$DB_APP_USER" "$DB_APP_PASSWORD"
-        if [ $? -ne 0 ]; then
-            log_error "Failed to reset database user password"
-            return 1
+
+        # Test if existing credentials work (only if database exists)
+        if check_database_exists "$DB_NAME" && [ -n "$EXISTING_PASSWORD" ]; then
+            log_info "Testing existing database credentials..."
+            if test_db_credentials "$DB_NAME" "$DB_APP_USER" "$DB_APP_PASSWORD"; then
+                log_success "Existing credentials are valid - keeping them unchanged"
+            else
+                log_warning "Existing credentials failed - resetting password"
+                reset_db_user_password "$DB_APP_USER" "$DB_APP_PASSWORD"
+                if [ $? -ne 0 ]; then
+                    log_error "Failed to reset database user password"
+                    return 1
+                fi
+            fi
+        else
+            # Database doesn't exist yet or no existing password - ensure password is set
+            log_info "Setting database password for ${DB_APP_USER}"
+            reset_db_user_password "$DB_APP_USER" "$DB_APP_PASSWORD"
+            if [ $? -ne 0 ]; then
+                log_error "Failed to set database user password"
+                return 1
+            fi
         fi
     fi
 
@@ -141,16 +171,6 @@ RAILS_SERVE_STATIC_FILES=true
 
 # Redis Configuration (Dedicated database)
 REDIS_URL=${REDIS_URL:-redis://localhost:6379/0}
-
-# Redis Streams Configuration (for async scraper data ingestion)
-# Enable consumers for cheaperfordrug-api only
-ENABLE_REDIS_STREAM_CONSUMERS=${ENABLE_REDIS_STREAM_CONSUMERS:-false}
-REDIS_STREAM_CONSUMER_COUNT=${REDIS_STREAM_CONSUMER_COUNT:-3}
-REDIS_STREAM_BATCH_SIZE=${REDIS_STREAM_BATCH_SIZE:-10}
-REDIS_STREAM_BLOCK_MS=${REDIS_STREAM_BLOCK_MS:-5000}
-REDIS_STREAM_MAX_ITERATIONS=${REDIS_STREAM_MAX_ITERATIONS:-1000}
-REDIS_STREAMS_URL=${REDIS_STREAMS_URL:-redis://localhost:6379/3}
-REDIS_STREAM_ALERT_THRESHOLD=${REDIS_STREAM_ALERT_THRESHOLD:-1000}
 
 # Mailgun Configuration (for application emails)
 MAILGUN_API_KEY=${MAILGUN_API_KEY:-dummy_mailgun_key}

@@ -59,10 +59,11 @@ RUN node --version && npm --version
 FROM nodejs AS nordvpn
 
 # Download and install NordVPN
-# Note: Using official install script with non-interactive mode
-RUN curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh -o /tmp/nordvpn-install.sh \
-    && DEBIAN_FRONTEND=noninteractive sh /tmp/nordvpn-install.sh \
-    && rm /tmp/nordvpn-install.sh \
+# Install NordVPN repository and package
+RUN curl -sSf https://repo.nordvpn.com/gpg/nordvpn_public.asc | gpg --dearmor | tee /usr/share/keyrings/nordvpn-archive-keyring.gpg > /dev/null \
+    && echo "deb [signed-by=/usr/share/keyrings/nordvpn-archive-keyring.gpg] https://repo.nordvpn.com/deb/nordvpn/debian stable main" | tee /etc/apt/sources.list.d/nordvpn.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nordvpn \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -76,7 +77,10 @@ RUN groupadd -g 1001 nordvpn || true \
 FROM nordvpn AS app
 
 # Create application user and directories
-RUN useradd -m -u 1000 -s /bin/bash scraper \
+# Note: NordVPN installation creates 'ubuntu' user with UID 1000
+# We'll use UID 1001 for scraper user to avoid conflict
+RUN useradd -m -u 1001 -s /bin/bash scraper \
+    && usermod -aG nordvpn scraper \
     && mkdir -p /app /app/logs /app/outputs /app/state \
     && chown -R scraper:scraper /app
 
@@ -88,14 +92,13 @@ COPY --chown=scraper:scraper package*.json ./
 
 # Install Node.js dependencies as scraper user
 USER scraper
-RUN npm ci --only=production \
-    && npx playwright install --with-deps chromium
+RUN npm install --omit=dev
 
-# Switch back to root for system-level operations
+# Switch back to root for Playwright installation (needs system-level access)
 USER root
 
-# Install Playwright system dependencies that might be missing
-RUN npx playwright install-deps chromium
+# Install Playwright and its system dependencies
+RUN npx playwright install --with-deps chromium
 
 # Copy application code
 COPY --chown=scraper:scraper . .

@@ -188,6 +188,22 @@ reset_db_user_password() {
     fi
 }
 
+# Test database credentials by attempting connection
+test_db_credentials() {
+    local db_name="$1"
+    local db_user="$2"
+    local db_password="$3"
+
+    # Attempt to connect using PGPASSWORD environment variable
+    PGPASSWORD="${db_password}" psql -h localhost -U "${db_user}" -d "${db_name}" -c "SELECT 1;" >/dev/null 2>&1
+
+    if [ $? -eq 0 ]; then
+        return 0  # Connection successful
+    else
+        return 1  # Connection failed
+    fi
+}
+
 # Get or generate secret
 get_or_generate_secret() {
     local env_file="$1"
