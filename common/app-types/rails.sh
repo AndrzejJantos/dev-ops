@@ -595,7 +595,7 @@ rails_deploy_fresh() {
         log_info "Starting ${worker_count} worker container(s)..."
         for i in $(seq 1 $worker_count); do
             local worker_name="${APP_NAME}_worker_${i}"
-            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host" "/rails/log"
+            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host" "/app/log"
 
             if [ $? -ne 0 ]; then
                 log_error "Failed to start worker ${worker_name}"
@@ -609,7 +609,7 @@ rails_deploy_fresh() {
     if [ "${SCHEDULER_ENABLED:-false}" = "true" ]; then
         log_info "Starting scheduler container..."
         local scheduler_name="${APP_NAME}_scheduler"
-        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork lib/clock.rb" "host" "/rails/log"
+        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork lib/clock.rb" "host" "/app/log"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start scheduler ${scheduler_name}"
@@ -700,7 +700,7 @@ rails_deploy_rolling() {
         # Start new workers
         for i in $(seq 1 $worker_count); do
             local worker_name="${APP_NAME}_worker_${i}"
-            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host" "/rails/log"
+            start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host" "/app/log"
 
             if [ $? -ne 0 ]; then
                 log_error "Failed to start worker ${worker_name}"
@@ -721,7 +721,7 @@ rails_deploy_rolling() {
         fi
 
         # Start new scheduler
-        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork lib/clock.rb" "host" "/rails/log"
+        start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec clockwork lib/clock.rb" "host" "/app/log"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start scheduler ${scheduler_name}"

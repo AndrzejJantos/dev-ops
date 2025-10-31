@@ -13,7 +13,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder - Precompile assets with full environment
 # -----------------------------------------------------------------------------
-FROM ruby:3.4.4-slim AS builder
+FROM ruby:3.4.5-slim AS builder
 
 # Install build dependencies
 RUN apt-get update -qq && \
@@ -72,7 +72,7 @@ RUN mkdir -p public/assets
 # -----------------------------------------------------------------------------
 # Stage 2: Production - Clean runtime image without .env file
 # -----------------------------------------------------------------------------
-FROM ruby:3.4.4-slim
+FROM ruby:3.4.5-slim
 
 # Install runtime dependencies only
 RUN apt-get update -qq && \
@@ -81,7 +81,7 @@ RUN apt-get update -qq && \
     curl \
     tzdata \
     imagemagick \
-    libmagickwand-6.q16-6 && \
+    libmagickwand-7.q16-10 && \
     rm -rf /var/lib/apt/lists/*
 
 # Create app user for security (don't run as root)
