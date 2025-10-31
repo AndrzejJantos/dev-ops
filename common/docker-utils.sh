@@ -70,7 +70,7 @@ start_container() {
     local env_file="$4"
     local container_port="${5:-3000}"  # Default to 3000 (consistent for Rails and Next.js)
     local network="${6:-bridge}"
-    local log_mount_path="${7:-/app/log}"  # Default to /app/log, but Rails uses /rails/log
+    local log_mount_path="${7:-/app/log}"  # Default to /app/log for all apps
 
     log_info "Starting container: ${container_name} on host port ${host_port} -> container port ${container_port}"
 
@@ -129,7 +129,7 @@ start_worker_container() {
     local env_file="$3"
     local worker_command="${4:-bundle exec sidekiq}"
     local network="${5:-bridge}"
-    local log_mount_path="${6:-/app/log}"  # Default to /app/log, but Rails uses /rails/log
+    local log_mount_path="${6:-/app/log}"  # Default to /app/log for all apps
 
     log_info "Starting worker container: ${container_name}"
 
@@ -140,7 +140,7 @@ start_worker_container() {
     mkdir -p "${LOG_DIR}"
     chmod 777 "${LOG_DIR}"  # Allow container's app user to write logs
 
-    # Extract the workdir from log_mount_path (e.g., /rails/log -> /rails)
+    # Extract the workdir from log_mount_path (e.g., /app/log -> /app)
     local workdir=$(dirname "$log_mount_path")
 
     docker run -d \
@@ -168,7 +168,7 @@ start_scheduler_container() {
     local env_file="$3"
     local scheduler_command="${4:-bundle exec clockwork config/clock.rb}"
     local network="${5:-bridge}"
-    local log_mount_path="${6:-/app/log}"  # Default to /app/log, but Rails uses /rails/log
+    local log_mount_path="${6:-/app/log}"  # Default to /app/log for all apps
 
     log_info "Starting scheduler container: ${container_name}"
 
@@ -179,7 +179,7 @@ start_scheduler_container() {
     mkdir -p "${LOG_DIR}"
     chmod 777 "${LOG_DIR}"  # Allow container's app user to write logs
 
-    # Extract the workdir from log_mount_path (e.g., /rails/log -> /rails)
+    # Extract the workdir from log_mount_path (e.g., /app/log -> /app)
     local workdir=$(dirname "$log_mount_path")
 
     docker run -d \

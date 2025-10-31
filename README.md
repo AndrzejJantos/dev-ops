@@ -981,7 +981,7 @@ sudo tail -f /var/log/nginx/{domain}-error.log
 tail -f ~/apps/{app-name}/logs/production.log
 
 # Inside container
-docker exec {app-name}_web_1 tail -f /rails/log/production.log
+docker exec {app-name}_web_1 tail -f /app/log/production.log
 ```
 
 **System Logs**:

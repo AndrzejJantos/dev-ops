@@ -570,7 +570,7 @@ rails_deploy_fresh() {
         local port=$((BASE_PORT + i - 1))
         local container_name="${APP_NAME}_web_${i}"
 
-        start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT" "host" "/rails/log"
+        start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT" "host" "/app/log"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start container ${container_name}"
