@@ -106,23 +106,81 @@ get_log_location() {
     fi
 }
 
-# Function to count backups
-count_backups() {
+# Function to get detailed backup information
+get_backup_details() {
     local app_name="$1"
-    local backup_dir="/home/andrzej/backups/${app_name}"
+    local backup_base="/home/andrzej/backups/${app_name}"
 
-    local db_backups=0
-    local image_backups=0
+    # Database backups
+    local db_backup_dir="${backup_base}/db"
+    local db_count=0
+    local db_last_file=""
+    local db_last_size=""
+    local db_last_time=""
+    local db_total_size=0
 
-    if [ -d "${backup_dir}/db" ]; then
-        db_backups=$(ls -1 "${backup_dir}/db"/*.sql.gz 2>/dev/null | wc -l | tr -d ' ')
+    if [ -d "$db_backup_dir" ]; then
+        db_count=$(ls -1 "${db_backup_dir}"/*.sql.gz 2>/dev/null | wc -l | tr -d ' ')
+        db_last_file=$(ls -t "${db_backup_dir}"/*.sql.gz 2>/dev/null | head -1)
+
+        if [ -n "$db_last_file" ]; then
+            db_last_size=$(du -h "$db_last_file" | cut -f1)
+            db_last_time=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$db_last_file" 2>/dev/null || stat -c "%y" "$db_last_file" 2>/dev/null | cut -d'.' -f1)
+            db_last_file=$(basename "$db_last_file")
+        fi
+
+        # Calculate total size of all db backups
+        if [ $db_count -gt 0 ]; then
+            db_total_size=$(du -sh "${db_backup_dir}" 2>/dev/null | cut -f1)
+        fi
     fi
 
-    if [ -d "${backup_dir}/images" ]; then
-        image_backups=$(ls -1 "${backup_dir}/images"/*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
+    # Image backups
+    local img_backup_dir="${backup_base}/images"
+    local img_count=0
+    local img_last_file=""
+    local img_last_size=""
+    local img_last_time=""
+    local img_total_size=0
+
+    if [ -d "$img_backup_dir" ]; then
+        img_count=$(ls -1 "${img_backup_dir}"/*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
+        img_last_file=$(ls -t "${img_backup_dir}"/*.tar.gz 2>/dev/null | head -1)
+
+        if [ -n "$img_last_file" ]; then
+            img_last_size=$(du -h "$img_last_file" | cut -f1)
+            img_last_time=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$img_last_file" 2>/dev/null || stat -c "%y" "$img_last_file" 2>/dev/null | cut -d'.' -f1)
+            img_last_file=$(basename "$img_last_file")
+        fi
+
+        # Calculate total size of all image backups
+        if [ $img_count -gt 0 ]; then
+            img_total_size=$(du -sh "${img_backup_dir}" 2>/dev/null | cut -f1)
+        fi
     fi
 
-    echo "${db_backups}|${image_backups}"
+    # Return all details separated by pipe
+    echo "${db_count}|${db_last_file}|${db_last_size}|${db_last_time}|${db_total_size}|${img_count}|${img_last_file}|${img_last_size}|${img_last_time}|${img_total_size}"
+}
+
+# Function to check if backup is old (older than 7 days)
+is_backup_old() {
+    local backup_time="$1"
+
+    if [ -z "$backup_time" ] || [ "$backup_time" = "Never" ]; then
+        return 0  # true, no backup is "old"
+    fi
+
+    # Convert backup time to timestamp
+    local backup_ts=$(date -j -f "%Y-%m-%d %H:%M" "$backup_time" +%s 2>/dev/null || date -d "$backup_time" +%s 2>/dev/null || echo "0")
+    local now_ts=$(date +%s)
+    local days_old=$(( (now_ts - backup_ts) / 86400 ))
+
+    if [ $days_old -gt 7 ]; then
+        return 0  # true
+    else
+        return 1  # false
+    fi
 }
 
 # Function to check if app is accessible
@@ -186,8 +244,8 @@ for app_dir in "${app_dirs[@]}"; do
     last_deployment=$(get_last_deployment "$APP_NAME")
     log_location=$(get_log_location "$APP_NAME")
 
-    backup_info=$(count_backups "$APP_NAME")
-    IFS='|' read -r db_backups image_backups <<< "$backup_info"
+    backup_details=$(get_backup_details "$APP_NAME")
+    IFS='|' read -r db_count db_last_file db_last_size db_last_time db_total_size img_count img_last_file img_last_size img_last_time img_total_size <<< "$backup_details"
 
     health_status=$(check_app_health "$DOMAIN")
 
@@ -237,8 +295,42 @@ for app_dir in "${app_dirs[@]}"; do
 
     echo ""
     echo -e "  ${BOLD}Backups:${NC}"
-    echo -e "    Database:       ${db_backups} backup(s)"
-    echo -e "    Docker Images:  ${image_backups} backup(s)"
+
+    # Database backups section
+    if [ "$db_count" -gt 0 ]; then
+        # Determine color based on backup age
+        local db_color="${GREEN}"
+        if is_backup_old "$db_last_time"; then
+            db_color="${YELLOW}"
+        fi
+
+        echo -e "    ${BOLD}Database Backups:${NC}"
+        echo -e "      Count:        ${db_count} backup(s)"
+        echo -e "      Latest:       ${db_color}${db_last_file}${NC}"
+        echo -e "      Size:         ${db_last_size}"
+        echo -e "      Created:      ${db_color}${db_last_time}${NC}"
+        echo -e "      Total Size:   ${db_total_size}"
+    else
+        echo -e "    ${BOLD}Database Backups:${NC} ${YELLOW}None${NC}"
+    fi
+
+    # Docker image backups section
+    if [ "$img_count" -gt 0 ]; then
+        # Determine color based on backup age
+        local img_color="${GREEN}"
+        if is_backup_old "$img_last_time"; then
+            img_color="${YELLOW}"
+        fi
+
+        echo -e "    ${BOLD}Docker Image Backups:${NC}"
+        echo -e "      Count:        ${img_count} backup(s)"
+        echo -e "      Latest:       ${img_color}${img_last_file}${NC}"
+        echo -e "      Size:         ${img_last_size}"
+        echo -e "      Created:      ${img_color}${img_last_time}${NC}"
+        echo -e "      Total Size:   ${img_total_size}"
+    else
+        echo -e "    ${BOLD}Docker Image Backups:${NC} ${YELLOW}None${NC}"
+    fi
 
     echo ""
     echo -e "  ${BOLD}Quick Actions:${NC}"
@@ -283,6 +375,85 @@ echo -e "  Running:                ${running_apps}"
 echo -e "  Stopped:                $((total_apps - running_apps))"
 echo -e "  Total Web Containers:   ${total_web_containers}"
 echo -e "  Total Worker Containers: ${total_worker_containers}"
+echo ""
+
+# Backup Summary Section
+echo -e "${BOLD}BACKUP SUMMARY:${NC}"
+echo ""
+
+total_db_backups=0
+total_img_backups=0
+total_backup_size=0
+apps_with_db_backups=0
+apps_with_img_backups=0
+
+for app_dir in "${app_dirs[@]}"; do
+    get_app_config "$app_dir" >/dev/null 2>&1
+    backup_details=$(get_backup_details "$APP_NAME")
+    IFS='|' read -r db_count db_last_file db_last_size db_last_time db_total_size img_count img_last_file img_last_size img_last_time img_total_size <<< "$backup_details"
+
+    total_db_backups=$((total_db_backups + db_count))
+    total_img_backups=$((total_img_backups + img_count))
+
+    if [ "$db_count" -gt 0 ]; then
+        apps_with_db_backups=$((apps_with_db_backups + 1))
+    fi
+
+    if [ "$img_count" -gt 0 ]; then
+        apps_with_img_backups=$((apps_with_img_backups + 1))
+    fi
+done
+
+# Calculate total backup disk usage across all apps
+total_backup_usage=$(du -sh /home/andrzej/backups 2>/dev/null | cut -f1 || echo "0")
+
+echo -e "  ${BOLD}Database Backups:${NC}"
+echo -e "    Total Files:      ${total_db_backups}"
+echo -e "    Apps with DB:     ${apps_with_db_backups}/${total_apps}"
+echo ""
+echo -e "  ${BOLD}Docker Image Backups:${NC}"
+echo -e "    Total Files:      ${total_img_backups}"
+echo -e "    Apps with Images: ${apps_with_img_backups}/${total_apps}"
+echo ""
+echo -e "  ${BOLD}Storage Usage:${NC}"
+echo -e "    Total Backups:    ${total_backup_usage}"
+echo -e "    Location:         /home/andrzej/backups/"
+echo ""
+
+# Show warnings for apps without recent backups
+echo -e "  ${BOLD}Backup Health:${NC}"
+apps_need_backup=0
+
+for app_dir in "${app_dirs[@]}"; do
+    get_app_config "$app_dir" >/dev/null 2>&1
+    backup_details=$(get_backup_details "$APP_NAME")
+    IFS='|' read -r db_count db_last_file db_last_size db_last_time db_total_size img_count img_last_file img_last_size img_last_time img_total_size <<< "$backup_details"
+
+    # Check for Rails apps without DB backups
+    if [ -f "$app_dir/config.sh" ]; then
+        app_type=$(grep "^export APP_TYPE=" "$app_dir/config.sh" 2>/dev/null | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+        if [ "$app_type" = "rails" ] && [ "$db_count" -eq 0 ]; then
+            echo -e "    ${YELLOW}WARNING:${NC} ${APP_NAME} (Rails) has no database backups"
+            apps_need_backup=$((apps_need_backup + 1))
+        fi
+    fi
+
+    # Check for old backups
+    if [ -n "$db_last_time" ] && is_backup_old "$db_last_time"; then
+        echo -e "    ${YELLOW}WARNING:${NC} ${APP_NAME} database backup is older than 7 days"
+        apps_need_backup=$((apps_need_backup + 1))
+    fi
+
+    if [ -n "$img_last_time" ] && is_backup_old "$img_last_time"; then
+        echo -e "    ${YELLOW}WARNING:${NC} ${APP_NAME} image backup is older than 7 days"
+        apps_need_backup=$((apps_need_backup + 1))
+    fi
+done
+
+if [ $apps_need_backup -eq 0 ]; then
+    echo -e "    ${GREEN}All backups are up to date${NC}"
+fi
+
 echo ""
 echo -e "${BOLD}================================================================================${NC}"
 echo ""

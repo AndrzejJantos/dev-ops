@@ -399,8 +399,43 @@ rails_build_image() {
 
     # Save image as tar file backup if enabled
     if [ "${SAVE_IMAGE_BACKUPS:-false}" = "true" ] && [ -n "${IMAGE_BACKUP_DIR:-}" ]; then
+        log_info "=== Docker Image Backup ==="
+
+        # Show last backup before creating new one
+        if [ -d "$IMAGE_BACKUP_DIR" ]; then
+            local last_image_backup=$(ls -t "${IMAGE_BACKUP_DIR}"/*.tar.gz 2>/dev/null | head -1)
+            if [ -n "$last_image_backup" ]; then
+                local img_backup_name=$(basename "$last_image_backup")
+                local img_backup_size=$(du -h "$last_image_backup" | cut -f1)
+                local img_backup_time=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$last_image_backup" 2>/dev/null || stat -c "%y" "$last_image_backup" 2>/dev/null | cut -d'.' -f1)
+                log_info "Last image backup: ${img_backup_name}"
+                log_info "  Size: ${img_backup_size}"
+                log_info "  Created: ${img_backup_time}"
+            else
+                log_info "No previous image backups found"
+            fi
+        fi
+
+        log_info "Creating new Docker image backup..."
         save_docker_image "$DOCKER_IMAGE_NAME" "$image_tag" "$IMAGE_BACKUP_DIR"
-        cleanup_old_image_backups "$IMAGE_BACKUP_DIR" "${MAX_IMAGE_BACKUPS:-5}"
+
+        # Show the new backup that was just created
+        local new_image_backup="${IMAGE_BACKUP_DIR}/${DOCKER_IMAGE_NAME}_${image_tag}.tar.gz"
+        if [ -f "$new_image_backup" ]; then
+            local new_img_size=$(du -h "$new_image_backup" | cut -f1)
+            log_success "New image backup: ${DOCKER_IMAGE_NAME}_${image_tag}.tar.gz (${new_img_size})"
+        fi
+
+        # Cleanup old backups and show retention info
+        local keep_count="${MAX_IMAGE_BACKUPS:-5}"
+        log_info "Keeping last ${keep_count} image backups, cleaning up older ones..."
+        cleanup_old_image_backups "$IMAGE_BACKUP_DIR" "$keep_count"
+
+        # Show current backup count
+        local total_backups=$(ls -1 "${IMAGE_BACKUP_DIR}"/*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
+        log_info "Total image backups retained: ${total_backups}"
+
+        log_info "=========================="
     fi
 
     # Create console wrapper script
@@ -470,10 +505,37 @@ rails_check_pending_migrations() {
 rails_run_migrations_with_backup() {
     local test_container="$1"
 
-    log_info "Running migrations with database backup..."
+    log_info "=== Database Backup Before Migrations ==="
+
+    # Show last backup information before creating new one
+    if [ -d "$BACKUP_DIR" ]; then
+        local last_backup=$(ls -t "${BACKUP_DIR}"/*.sql.gz 2>/dev/null | head -1)
+        if [ -n "$last_backup" ]; then
+            local backup_name=$(basename "$last_backup")
+            local backup_size=$(du -h "$last_backup" | cut -f1)
+            local backup_time=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$last_backup" 2>/dev/null || stat -c "%y" "$last_backup" 2>/dev/null | cut -d'.' -f1)
+            log_info "Last backup: ${backup_name}"
+            log_info "  Size: ${backup_size}"
+            log_info "  Created: ${backup_time}"
+        else
+            log_info "No previous backups found"
+        fi
+    fi
+
+    log_info "Creating new database backup before migrations..."
 
     # Backup database before migrations
     backup_database "$DB_NAME" "$BACKUP_DIR"
+
+    # Show the new backup that was just created
+    local new_backup=$(ls -t "${BACKUP_DIR}"/*.sql.gz 2>/dev/null | head -1)
+    if [ -n "$new_backup" ]; then
+        local new_backup_name=$(basename "$new_backup")
+        local new_backup_size=$(du -h "$new_backup" | cut -f1)
+        log_success "New backup created: ${new_backup_name} (${new_backup_size})"
+    fi
+
+    log_info "=========================================="
 
     # Run migrations
     run_migrations "$test_container"

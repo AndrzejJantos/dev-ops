@@ -124,6 +124,33 @@ test_backend_health 3032 "web"
 echo ""
 
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  4. Brokik API (brokik-api)${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo ""
+
+test_domain "api-public.brokik.com" "/up" "Public API health endpoint"
+test_domain "api-internal.brokik.com" "/up" "Internal API health endpoint"
+
+echo -e "${YELLOW}Backend Health:${NC}"
+test_backend_health 3040 "brokik-api"
+test_backend_health 3041 "brokik-api"
+echo ""
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  5. Brokik Web (brokik-web)${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+echo ""
+
+test_domain "brokik.com" "/" "Main domain"
+test_domain "www.brokik.com" "/" "WWW domain"
+
+echo -e "${YELLOW}Backend Health:${NC}"
+test_backend_health 3050 "brokik-web"
+test_backend_health 3051 "brokik-web"
+test_backend_health 3052 "brokik-web"
+echo ""
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}  Summary${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
@@ -138,7 +165,7 @@ fi
 
 # Count running containers
 echo -n "Docker containers: "
-container_count=$(docker ps | grep cheaperfordrug | wc -l)
+container_count=$(docker ps | grep -E "(cheaperfordrug|brokik)" | wc -l)
 echo -e "${GREEN}${container_count} running${NC}"
 
 # Check for nginx errors in last 5 minutes
