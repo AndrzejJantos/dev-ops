@@ -81,6 +81,16 @@ start_container() {
     mkdir -p "${LOG_DIR}"
     chmod 777 "${LOG_DIR}"  # Allow container's app user to write logs
 
+    # Prepare Active Storage volume mount for Rails apps
+    local storage_volume_args=""
+    if [ "$APP_TYPE" = "rails" ] && [ -n "${ACTIVE_STORAGE_HOST_PATH:-}" ]; then
+        # Ensure Active Storage directory exists with proper permissions
+        mkdir -p "${ACTIVE_STORAGE_HOST_PATH}"
+        chmod 777 "${ACTIVE_STORAGE_HOST_PATH}"  # Allow container's app user to write files
+        storage_volume_args="-v ${ACTIVE_STORAGE_HOST_PATH}:${ACTIVE_STORAGE_HOST_PATH}"
+        log_info "Mounting Active Storage: ${ACTIVE_STORAGE_HOST_PATH}"
+    fi
+
     # Use host network for Rails apps to access PostgreSQL on localhost
     # For other apps, use bridge network with port mapping
     if [ "$network" = "host" ]; then
@@ -92,6 +102,7 @@ start_container() {
             -e PORT="${host_port}" \
             -e CONTAINER_NAME="${container_name}" \
             -v "${LOG_DIR}:${log_mount_path}" \
+            ${storage_volume_args} \
             --health-cmd "curl -f http://localhost:${host_port}/up || exit 1" \
             --health-interval=30s \
             --health-timeout=3s \
@@ -107,6 +118,7 @@ start_container() {
             --env-file "$env_file" \
             -e CONTAINER_NAME="${container_name}" \
             -v "${LOG_DIR}:${log_mount_path}" \
+            ${storage_volume_args} \
             --health-cmd "curl -f http://localhost:${container_port}/up || exit 1" \
             --health-interval=30s \
             --health-timeout=3s \
@@ -142,6 +154,16 @@ start_worker_container() {
     mkdir -p "${LOG_DIR}"
     chmod 777 "${LOG_DIR}"  # Allow container's app user to write logs
 
+    # Prepare Active Storage volume mount for Rails apps
+    local storage_volume_args=""
+    if [ "$APP_TYPE" = "rails" ] && [ -n "${ACTIVE_STORAGE_HOST_PATH:-}" ]; then
+        # Ensure Active Storage directory exists with proper permissions
+        mkdir -p "${ACTIVE_STORAGE_HOST_PATH}"
+        chmod 777 "${ACTIVE_STORAGE_HOST_PATH}"  # Allow container's app user to write files
+        storage_volume_args="-v ${ACTIVE_STORAGE_HOST_PATH}:${ACTIVE_STORAGE_HOST_PATH}"
+        log_info "Mounting Active Storage: ${ACTIVE_STORAGE_HOST_PATH}"
+    fi
+
     # Extract the workdir from log_mount_path (e.g., /app/log -> /app)
     local workdir=$(dirname "$log_mount_path")
 
@@ -152,6 +174,7 @@ start_worker_container() {
         --env-file "$env_file" \
         -e CONTAINER_NAME="${container_name}" \
         -v "${LOG_DIR}:${log_mount_path}" \
+        ${storage_volume_args} \
         "$image_name" \
         /bin/bash -c "cd ${workdir} && $worker_command"
 
@@ -182,6 +205,16 @@ start_scheduler_container() {
     mkdir -p "${LOG_DIR}"
     chmod 777 "${LOG_DIR}"  # Allow container's app user to write logs
 
+    # Prepare Active Storage volume mount for Rails apps
+    local storage_volume_args=""
+    if [ "$APP_TYPE" = "rails" ] && [ -n "${ACTIVE_STORAGE_HOST_PATH:-}" ]; then
+        # Ensure Active Storage directory exists with proper permissions
+        mkdir -p "${ACTIVE_STORAGE_HOST_PATH}"
+        chmod 777 "${ACTIVE_STORAGE_HOST_PATH}"  # Allow container's app user to write files
+        storage_volume_args="-v ${ACTIVE_STORAGE_HOST_PATH}:${ACTIVE_STORAGE_HOST_PATH}"
+        log_info "Mounting Active Storage: ${ACTIVE_STORAGE_HOST_PATH}"
+    fi
+
     # Extract the workdir from log_mount_path (e.g., /app/log -> /app)
     local workdir=$(dirname "$log_mount_path")
 
@@ -192,6 +225,7 @@ start_scheduler_container() {
         --env-file "$env_file" \
         -e CONTAINER_NAME="${container_name}" \
         -v "${LOG_DIR}:${log_mount_path}" \
+        ${storage_volume_args} \
         "$image_name" \
         /bin/bash -c "cd ${workdir} && $scheduler_command"
 

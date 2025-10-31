@@ -366,8 +366,36 @@ rails_pull_code() {
         log_info "Created log directory: ${REPO_DIR}/log"
     fi
 
+    # Load Active Storage configuration from environment file
+    rails_load_active_storage_config
+
     # Export commit for use in notifications
     export CURRENT_COMMIT="$new_commit"
+    return 0
+}
+
+# Hook: Load Active Storage configuration
+# This reads ACTIVE_STORAGE_HOST_PATH from .env.production and exports it
+# so docker-utils.sh can mount the volume correctly
+rails_load_active_storage_config() {
+    if [ -f "$ENV_FILE" ]; then
+        # Extract ACTIVE_STORAGE_HOST_PATH from env file
+        local storage_path=$(grep "^ACTIVE_STORAGE_HOST_PATH=" "$ENV_FILE" 2>/dev/null | cut -d '=' -f2-)
+        if [ -n "$storage_path" ]; then
+            export ACTIVE_STORAGE_HOST_PATH="$storage_path"
+            log_info "Active Storage configured: ${ACTIVE_STORAGE_HOST_PATH}"
+
+            # Ensure directory exists with proper permissions
+            if [ ! -d "$ACTIVE_STORAGE_HOST_PATH" ]; then
+                log_info "Creating Active Storage directory: ${ACTIVE_STORAGE_HOST_PATH}"
+                mkdir -p "$ACTIVE_STORAGE_HOST_PATH"
+                chmod 777 "$ACTIVE_STORAGE_HOST_PATH"
+                log_success "Active Storage directory created"
+            fi
+        else
+            log_info "No ACTIVE_STORAGE_HOST_PATH configured in environment"
+        fi
+    fi
     return 0
 }
 
