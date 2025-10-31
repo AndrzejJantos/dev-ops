@@ -89,18 +89,11 @@ check_and_update_nginx() {
         return 0
     fi
 
-    # Determine which nginx template to use
-    local nginx_template=""
-    if [ -n "${DOMAIN_INTERNAL:-}" ]; then
-        nginx_template="$DEVOPS_DIR/common/nginx/dual-api.conf.template"
-    elif [[ "$DOMAIN" == api* ]]; then
-        nginx_template="$DEVOPS_DIR/common/nginx/api.conf.template"
-    else
-        nginx_template="$DEVOPS_DIR/common/nginx/web.conf.template"
-    fi
+    # Use per-app template (same location as setup.sh uses)
+    local nginx_template="$SCRIPT_DIR/nginx.conf.template"
 
     if [ ! -f "$nginx_template" ]; then
-        log_warning "Nginx template not found: $nginx_template"
+        log_info "Nginx template not found (${nginx_template}), skipping sync"
         return 0
     fi
 
