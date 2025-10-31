@@ -109,6 +109,7 @@ check_and_update_nginx() {
 
     # Generate config from template
     sed "s/{{APP_NAME}}/$APP_NAME/g" "$nginx_template" | \
+    sed "s/{{NGINX_UPSTREAM_NAME}}/${APP_NAME}_backend/g" | \
     sed "s|{{DOMAIN}}|$DOMAIN|g" | \
     sed "s|{{DOMAIN_INTERNAL}}|${DOMAIN_INTERNAL:-}|g" | \
     sed "s|{{DOMAIN_PUBLIC}}|${DOMAIN_PUBLIC:-}|g" | \
@@ -500,12 +501,21 @@ check_and_setup_ssl() {
             done
 
             log_info "Running: certbot --nginx --expand -d ${missing_domains[*]}"
-            if $expand_cmd 2>&1 | tee /tmp/certbot_expand_$$.log; then
+
+            # Run certbot and capture both output and exit code
+            set +e  # Temporarily allow command to fail
+            $expand_cmd 2>&1 | tee /tmp/certbot_expand_$$.log
+            local certbot_exit=$?
+            set -e
+
+            if [ $certbot_exit -eq 0 ]; then
                 log_success "Certificate expanded to include: ${missing_domains[*]}"
                 export SSL_SETUP_MESSAGE="Expanded to include all domains"
+                rm -f /tmp/certbot_expand_$$.log
                 return 0  # Success
             else
-                log_error "Failed to expand certificate"
+                log_error "Failed to expand certificate (exit code: $certbot_exit)"
+                log_error "Certbot output:"
                 cat /tmp/certbot_expand_$$.log
                 export SSL_SETUP_MESSAGE="Expansion failed (${missing_domains[*]})"
                 return 2  # Failed
