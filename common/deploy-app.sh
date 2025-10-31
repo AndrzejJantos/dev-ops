@@ -138,13 +138,21 @@ check_and_update_nginx() {
 
     # Test nginx configuration
     log_info "Testing nginx configuration..."
-    if sudo nginx -t 2>&1 | grep -q "successful"; then
+    local nginx_test_output=$(sudo nginx -t 2>&1)
+    if echo "$nginx_test_output" | grep -q "successful"; then
         sudo systemctl reload nginx
         log_success "Nginx config updated and reloaded"
     else
-        log_error "Nginx configuration test failed, restoring backup"
-        sudo cp "${nginx_config}.backup."* "$nginx_config"
-        sudo systemctl reload nginx
+        log_error "Nginx configuration test failed:"
+        echo "$nginx_test_output"
+
+        log_info "Restoring backup..."
+        local latest_backup=$(ls -t "${nginx_config}.backup."* 2>/dev/null | head -1)
+        if [ -n "$latest_backup" ]; then
+            sudo cp "$latest_backup" "$nginx_config"
+            sudo systemctl reload nginx
+            log_warning "Restored previous nginx config"
+        fi
         return 1
     fi
 
