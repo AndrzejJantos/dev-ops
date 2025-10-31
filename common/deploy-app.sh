@@ -15,6 +15,150 @@
 set -e
 
 # ==============================================================================
+# PRE-DEPLOYMENT CHECKS
+# ==============================================================================
+
+# Check DNS configuration - FAIL deployment if DNS not configured
+check_dns_configuration() {
+    log_info "=== DNS Configuration Check ==="
+
+    # Get server IP
+    local server_ipv4=$(curl -4 -s ifconfig.me 2>/dev/null || curl -s api.ipify.org)
+    if [ -z "$server_ipv4" ]; then
+        log_error "Could not determine server IP address"
+        return 1
+    fi
+
+    log_info "Server IP: ${server_ipv4}"
+
+    local dns_ok=true
+    local dns_issues=()
+
+    # Build domain list to check
+    local domains_to_check=("$DOMAIN")
+    [ -n "${DOMAIN_INTERNAL:-}" ] && domains_to_check+=("$DOMAIN_INTERNAL")
+    [ -n "${DOMAIN_PUBLIC:-}" ] && domains_to_check+=("$DOMAIN_PUBLIC")
+
+    # Check each domain
+    for domain in "${domains_to_check[@]}"; do
+        log_info "Checking DNS for: ${domain}"
+
+        local domain_ip=$(dig +short "$domain" A | tail -1)
+
+        if [ -z "$domain_ip" ]; then
+            log_error "DNS NOT CONFIGURED for ${domain}"
+            log_error "  Please add A record: ${domain} -> ${server_ipv4}"
+            dns_ok=false
+            dns_issues+=("$domain: not configured")
+        elif [ "$domain_ip" != "$server_ipv4" ]; then
+            log_error "DNS MISMATCH for ${domain}"
+            log_error "  Expected: ${server_ipv4}"
+            log_error "  Got:      ${domain_ip}"
+            dns_ok=false
+            dns_issues+=("$domain: points to wrong IP")
+        else
+            log_success "DNS OK for ${domain} -> ${server_ipv4}"
+        fi
+    done
+
+    if [ "$dns_ok" = false ]; then
+        echo ""
+        log_error "DNS configuration issues detected:"
+        for issue in "${dns_issues[@]}"; do
+            log_error "  - $issue"
+        done
+        echo ""
+        log_error "DEPLOYMENT STOPPED: Fix DNS configuration before deploying"
+        log_error "Deployment cannot proceed without proper DNS configuration"
+        return 1
+    fi
+
+    log_success "All DNS records configured correctly"
+    return 0
+}
+
+# Check and update nginx configuration if template changed
+check_and_update_nginx() {
+    log_info "=== Nginx Configuration Sync ==="
+
+    local nginx_config="/etc/nginx/sites-available/$APP_NAME"
+
+    # Check if nginx config exists
+    if [ ! -f "$nginx_config" ]; then
+        log_warning "Nginx config not found - run setup.sh first"
+        return 0
+    fi
+
+    # Determine which nginx template to use
+    local nginx_template=""
+    if [ -n "${DOMAIN_INTERNAL:-}" ]; then
+        nginx_template="$DEVOPS_DIR/common/nginx/dual-api.conf.template"
+    elif [[ "$DOMAIN" == api* ]]; then
+        nginx_template="$DEVOPS_DIR/common/nginx/api.conf.template"
+    else
+        nginx_template="$DEVOPS_DIR/common/nginx/web.conf.template"
+    fi
+
+    if [ ! -f "$nginx_template" ]; then
+        log_warning "Nginx template not found: $nginx_template"
+        return 0
+    fi
+
+    # Generate what the config SHOULD be
+    local temp_config="/tmp/nginx_${APP_NAME}_check.conf"
+
+    # Build upstream servers list
+    local UPSTREAM_SERVERS=""
+    for i in $(seq 0 $((DEFAULT_SCALE - 1))); do
+        local port=$((BASE_PORT + i))
+        UPSTREAM_SERVERS="${UPSTREAM_SERVERS}    server localhost:${port} max_fails=3 fail_timeout=30s;\n"
+    done
+
+    # Generate config from template
+    sed "s/{{APP_NAME}}/$APP_NAME/g" "$nginx_template" | \
+    sed "s|{{DOMAIN}}|$DOMAIN|g" | \
+    sed "s|{{DOMAIN_INTERNAL}}|${DOMAIN_INTERNAL:-}|g" | \
+    sed "s|{{DOMAIN_PUBLIC}}|${DOMAIN_PUBLIC:-}|g" | \
+    sed "s|{{HEALTH_CHECK_PATH}}|${HEALTH_CHECK_PATH:-/up}|g" | \
+    sed "s|{{CONTAINER_PORT}}|${CONTAINER_PORT:-3000}|g" | \
+    perl -pe "BEGIN{undef $/;} s|{{UPSTREAM_SERVERS}}|${UPSTREAM_SERVERS}|gs" > "$temp_config"
+
+    # Compare with existing config (ignore comments and empty lines)
+    local current_hash=$(grep -v '^#' "$nginx_config" 2>/dev/null | grep -v '^[[:space:]]*$' | md5sum | cut -d' ' -f1)
+    local new_hash=$(grep -v '^#' "$temp_config" | grep -v '^[[:space:]]*$' | md5sum | cut -d' ' -f1)
+
+    if [ "$current_hash" = "$new_hash" ]; then
+        log_info "Nginx config is up to date"
+        rm -f "$temp_config"
+        return 0
+    fi
+
+    log_warning "Nginx config has changed, updating..."
+
+    # Backup current config
+    sudo cp "$nginx_config" "${nginx_config}.backup.$(date +%Y%m%d_%H%M%S)"
+    log_info "Backed up current config"
+
+    # Install new config
+    sudo cp "$temp_config" "$nginx_config"
+    rm -f "$temp_config"
+
+    # Test nginx configuration
+    log_info "Testing nginx configuration..."
+    if sudo nginx -t 2>&1 | grep -q "successful"; then
+        sudo systemctl reload nginx
+        log_success "Nginx config updated and reloaded"
+    else
+        log_error "Nginx configuration test failed, restoring backup"
+        sudo cp "${nginx_config}.backup."* "$nginx_config"
+        sudo systemctl reload nginx
+        return 1
+    fi
+
+    return 0
+}
+
+# ==============================================================================
 # GENERIC DEPLOYMENT WORKFLOW
 # ==============================================================================
 
@@ -36,6 +180,14 @@ deploy_application() {
 
     # Load app-type specific module
     source "$app_type_module"
+
+    # PRE-DEPLOYMENT CHECKS (run before any work)
+
+    # Check DNS configuration - STOP if not configured
+    check_dns_configuration || return 1
+
+    # Check and update nginx config if changed
+    check_and_update_nginx || return 1
 
     # Step 1: Pull latest code (app-type specific)
     ${APP_TYPE}_pull_code || return 1
