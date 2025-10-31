@@ -90,6 +90,7 @@ start_container() {
             --restart unless-stopped \
             --env-file "$env_file" \
             -e PORT="${host_port}" \
+            -e CONTAINER_NAME="${container_name}" \
             -v "${LOG_DIR}:${log_mount_path}" \
             --health-cmd "curl -f http://localhost:${host_port}/up || exit 1" \
             --health-interval=30s \
@@ -104,6 +105,7 @@ start_container() {
             --restart unless-stopped \
             -p "${host_port}:${container_port}" \
             --env-file "$env_file" \
+            -e CONTAINER_NAME="${container_name}" \
             -v "${LOG_DIR}:${log_mount_path}" \
             --health-cmd "curl -f http://localhost:${container_port}/up || exit 1" \
             --health-interval=30s \
@@ -148,6 +150,7 @@ start_worker_container() {
         --network "$network" \
         --restart unless-stopped \
         --env-file "$env_file" \
+        -e CONTAINER_NAME="${container_name}" \
         -v "${LOG_DIR}:${log_mount_path}" \
         "$image_name" \
         /bin/bash -c "cd ${workdir} && $worker_command"
@@ -187,6 +190,7 @@ start_scheduler_container() {
         --network "$network" \
         --restart unless-stopped \
         --env-file "$env_file" \
+        -e CONTAINER_NAME="${container_name}" \
         -v "${LOG_DIR}:${log_mount_path}" \
         "$image_name" \
         /bin/bash -c "cd ${workdir} && $scheduler_command"
