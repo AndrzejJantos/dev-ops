@@ -103,10 +103,11 @@ RUN rm -f .env .env.production .env.local .env.*.local
 # Copy precompiled assets from builder
 COPY --from=builder --chown=app:app /app/public/assets ./public/assets
 
-# Create necessary Rails directories
+# Create necessary Rails directories including log directory for container-prefixed logging
 RUN mkdir -p tmp/pids tmp/cache tmp/sockets log && \
     chown -R app:app /app && \
-    chmod -R 755 /app
+    chmod -R 755 /app && \
+    chmod 777 log
 
 # Switch to non-root user
 USER app
@@ -119,7 +120,6 @@ EXPOSE 3000
 
 # Set environment variables for runtime
 # These will be provided by docker run --env-file at runtime
-# Note: RAILS_LOG_TO_STDOUT removed to allow file logging to mounted volume
 ENV RAILS_ENV=production \
     RAILS_SERVE_STATIC_FILES=true \
     PORT=3000

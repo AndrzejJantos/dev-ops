@@ -37,6 +37,9 @@ services:
       - "api-scraper.localtest.me:host-gateway"
 
     environment:
+      # Container Identification
+      - CONTAINER_NAME=scraper-poland
+
       # Country Configuration
       - COUNTRY=poland
       - COUNTRY_CODE=PL
@@ -121,6 +124,9 @@ services:
       - "api-scraper.localtest.me:host-gateway"
 
     environment:
+      # Container Identification
+      - CONTAINER_NAME=scraper-germany
+
       # Country Configuration
       - COUNTRY=germany
       - COUNTRY_CODE=DE
@@ -205,6 +211,9 @@ services:
       - "api-scraper.localtest.me:host-gateway"
 
     environment:
+      # Container Identification
+      - CONTAINER_NAME=scraper-czech
+
       # Country Configuration
       - COUNTRY=czech
       - COUNTRY_CODE=CZ

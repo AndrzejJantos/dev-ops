@@ -73,6 +73,9 @@ COPY --from=builder /app/.next/static ./.next/static
 # Remove .env files from image (will be provided via docker run --env-file)
 RUN rm -f .env .env.production .env.local .env.*.local
 
+# Create log directory for container-prefixed logging (before switching to nextjs user)
+RUN mkdir -p /app/log && chmod 777 /app/log
+
 # Set ownership
 RUN chown -R nextjs:nodejs /app
 
