@@ -18,6 +18,45 @@ set -e
 # PRE-DEPLOYMENT CHECKS
 # ==============================================================================
 
+# Update DevOps repository to get latest templates and scripts
+update_devops_repo() {
+    log_info "=== Updating DevOps Repository ==="
+
+    local devops_root="$DEVOPS_DIR"
+
+    # Check if we're in a git repository
+    if [ ! -d "$devops_root/.git" ]; then
+        log_warning "DevOps directory is not a git repository, skipping update"
+        return 0
+    fi
+
+    # Save current directory
+    local original_dir=$(pwd)
+
+    # Go to DevOps root
+    cd "$devops_root"
+
+    # Check if there are uncommitted changes
+    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+        log_warning "DevOps repository has uncommitted changes, skipping update"
+        cd "$original_dir"
+        return 0
+    fi
+
+    # Pull latest changes
+    log_info "Pulling latest DevOps changes..."
+    if git pull origin master 2>&1 | grep -E "(Already up to date|Fast-forward|Updating)"; then
+        log_success "DevOps repository updated"
+    else
+        log_warning "Failed to update DevOps repository, continuing with existing version"
+    fi
+
+    # Return to original directory
+    cd "$original_dir"
+
+    return 0
+}
+
 # Check DNS configuration - FAIL deployment if DNS not configured
 check_dns_configuration() {
     log_info "=== DNS Configuration Check ==="
@@ -184,6 +223,9 @@ deploy_application() {
     source "$app_type_module"
 
     # PRE-DEPLOYMENT CHECKS (run before any work)
+
+    # Update DevOps repository to get latest templates and scripts
+    update_devops_repo || return 1
 
     # Check DNS configuration - STOP if not configured
     check_dns_configuration || return 1
