@@ -224,8 +224,8 @@ rails_update_native_gems() {
         log_info "Initialized rbenv"
     fi
 
-    # Check Ruby version
-    local REQUIRED_RUBY_VERSION=$(cat .ruby-version 2>/dev/null || echo "3.4.4")
+    # Check Ruby version (read from .ruby-version or Gemfile)
+    local REQUIRED_RUBY_VERSION=$(cat .ruby-version 2>/dev/null || grep -oP 'ruby "\K[^"]+' Gemfile 2>/dev/null || echo "3.4.5")
     local CURRENT_RUBY_VERSION=$(ruby -v | grep -oP '\d+\.\d+\.\d+' | head -1 2>/dev/null || echo "unknown")
 
     if [ "$CURRENT_RUBY_VERSION" = "unknown" ]; then
