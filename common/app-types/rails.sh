@@ -211,6 +211,66 @@ EOF
     return 0
 }
 
+# Update native Ruby gems for console access
+# This ensures that ./console.sh always has up-to-date gems matching the deployed containers
+rails_update_native_gems() {
+    log_info "Updating native Ruby environment for console access..."
+    cd "$REPO_DIR"
+
+    # Check Ruby version
+    local REQUIRED_RUBY_VERSION=$(cat .ruby-version 2>/dev/null || echo "3.4.4")
+    local CURRENT_RUBY_VERSION=$(ruby -v | grep -oP '\d+\.\d+\.\d+' | head -1 2>/dev/null || echo "unknown")
+
+    if [ "$CURRENT_RUBY_VERSION" = "unknown" ]; then
+        log_warning "Ruby not found in PATH - console.sh may not work"
+        log_warning "Install Ruby ${REQUIRED_RUBY_VERSION} using: rbenv install ${REQUIRED_RUBY_VERSION}"
+        return 0
+    fi
+
+    log_info "Required Ruby version: ${REQUIRED_RUBY_VERSION}"
+    log_info "Current Ruby version: ${CURRENT_RUBY_VERSION}"
+
+    # Warn if Ruby version mismatch
+    if [ "$CURRENT_RUBY_VERSION" != "$REQUIRED_RUBY_VERSION" ]; then
+        log_warning "Ruby version mismatch! Required: ${REQUIRED_RUBY_VERSION}, Current: ${CURRENT_RUBY_VERSION}"
+        log_warning "Install correct version: rbenv install ${REQUIRED_RUBY_VERSION} && rbenv local ${REQUIRED_RUBY_VERSION}"
+    fi
+
+    # Install bundler if not present
+    if ! command_exists bundle; then
+        log_info "Installing bundler..."
+        gem install bundler 2>/dev/null || {
+            log_warning "Could not install bundler - gem install failed"
+            return 0
+        }
+    fi
+
+    # Configure bundler to use .bundle/vendor
+    if command_exists bundle; then
+        log_info "Configuring bundler..."
+        bundle config set --local path '.bundle/vendor'
+        bundle config set --local without 'development test'
+
+        # Install application gems for production use
+        log_info "Installing/updating application gems (this may take a few minutes)..."
+        if RAILS_ENV=production bundle install 2>&1 | tee /tmp/bundle_install_$$.log | grep -E "(Installing|Using|Bundle complete)"; then
+            log_success "Native Ruby gems updated successfully"
+        else
+            log_warning "Gem installation completed with warnings (check /tmp/bundle_install_$$.log)"
+        fi
+
+        # Ensure .env.production symlink exists for console access
+        if [ ! -L "${REPO_DIR}/.env.production" ]; then
+            ln -sf "$ENV_FILE" "${REPO_DIR}/.env.production"
+            log_success "Created symlink: ${REPO_DIR}/.env.production -> ${ENV_FILE}"
+        fi
+    else
+        log_warning "Bundler not available, skipping gem installation"
+    fi
+
+    return 0
+}
+
 # Hook: Setup Rails-specific requirements
 rails_setup_requirements() {
     log_info "Setting up Rails-specific requirements..."
@@ -225,43 +285,7 @@ rails_setup_requirements() {
 
     # Setup native Rails environment for console access
     log_info "Setting up native Rails environment for console access..."
-    cd "$REPO_DIR"
-
-    # Check Ruby version
-    REQUIRED_RUBY_VERSION=$(cat .ruby-version 2>/dev/null || echo "3.4.4")
-    CURRENT_RUBY_VERSION=$(ruby -v | grep -oP '\d+\.\d+\.\d+' | head -1 2>/dev/null || echo "unknown")
-
-    log_info "Required Ruby version: ${REQUIRED_RUBY_VERSION}"
-    log_info "Current Ruby version: ${CURRENT_RUBY_VERSION}"
-
-    # Warn if Ruby version mismatch
-    if [ "$CURRENT_RUBY_VERSION" != "$REQUIRED_RUBY_VERSION" ]; then
-        log_warning "Ruby version mismatch! Required: ${REQUIRED_RUBY_VERSION}, Current: ${CURRENT_RUBY_VERSION}"
-        log_warning "Gems may not install correctly. Consider upgrading Ruby to ${REQUIRED_RUBY_VERSION}"
-    fi
-
-    # Install bundler if not present
-    if ! command_exists bundle; then
-        log_info "Installing bundler..."
-        gem install bundler 2>/dev/null || log_warning "Could not install bundler (may need manual installation)"
-    fi
-
-    # Configure bundler to use .bundle/vendor
-    if command_exists bundle; then
-        log_info "Configuring bundler to use .bundle/vendor..."
-        bundle config set --local path '.bundle/vendor'
-        bundle config set --local without 'development test'
-
-        # Install application gems for production use
-        log_info "Installing application gems (this may take a few minutes)..."
-        RAILS_ENV=production bundle install 2>&1 | grep -v "^Fetching" || log_warning "Gem installation had issues (non-critical)"
-
-        # Create symlink to .env.production for easier access
-        ln -sf "$ENV_FILE" "${REPO_DIR}/.env.production"
-        log_success "Created symlink: ${REPO_DIR}/.env.production -> ${ENV_FILE}"
-    else
-        log_warning "Bundler not available, skipping gem installation"
-    fi
+    rails_update_native_gems
 
     # Ensure log directory exists in repo for Rails file logging
     if [ ! -d "${REPO_DIR}/log" ]; then
@@ -325,36 +349,8 @@ rails_pull_code() {
         log_success "Updated from ${old_commit:0:7} to ${new_commit:0:7}"
     fi
 
-    # Install/update gems for production use
-    if command_exists bundle; then
-        log_info "Installing/updating application gems..."
-
-        # Check Ruby version compatibility
-        REQUIRED_RUBY_VERSION=$(cat .ruby-version 2>/dev/null || echo "3.4.4")
-        CURRENT_RUBY_VERSION=$(ruby -v | grep -oP '\d+\.\d+\.\d+' | head -1 2>/dev/null || echo "unknown")
-
-        if [ "$CURRENT_RUBY_VERSION" != "$REQUIRED_RUBY_VERSION" ] && [ "$CURRENT_RUBY_VERSION" != "unknown" ]; then
-            log_warning "Ruby version mismatch! Required: ${REQUIRED_RUBY_VERSION}, Current: ${CURRENT_RUBY_VERSION}"
-            log_warning "To fix: Re-run ubuntu-init-setup.sh or manually install Ruby ${REQUIRED_RUBY_VERSION}"
-        fi
-
-        # Ensure bundler config is set
-        bundle config set --local path '.bundle/vendor'
-        bundle config set --local without 'development test'
-
-        # Install gems
-        RAILS_ENV=production bundle install --quiet 2>&1 | grep -v "^Fetching" || log_warning "Gem installation completed with warnings"
-
-        # Ensure .env.production symlink exists for console access
-        if [ ! -L "${REPO_DIR}/.env.production" ]; then
-            ln -sf "$ENV_FILE" "${REPO_DIR}/.env.production"
-            log_info "Created symlink: ${REPO_DIR}/.env.production -> ${ENV_FILE}"
-        fi
-
-        log_success "Gems installed/updated successfully"
-    else
-        log_warning "Bundler not available, skipping gem installation"
-    fi
+    # Update native Ruby gems for console access
+    rails_update_native_gems
 
     # Ensure log directory exists in repo for Rails file logging
     if [ ! -d "${REPO_DIR}/log" ]; then
