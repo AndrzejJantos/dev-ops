@@ -6,8 +6,12 @@ FROM node:20-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+# Accept Font Awesome token as build argument
+ARG FONTAWESOME_NPM_AUTH_TOKEN
+ENV FONTAWESOME_NPM_AUTH_TOKEN=$FONTAWESOME_NPM_AUTH_TOKEN
+
+# Copy package files and .npmrc (for Font Awesome Pro authentication)
+COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* .npmrc* ./
 
 # Install ALL dependencies (needed for build, will be pruned later)
 # Use legacy-peer-deps to handle peer dependency conflicts

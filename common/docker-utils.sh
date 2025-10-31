@@ -28,7 +28,25 @@ build_docker_image() {
         return 1
     fi
 
-    docker build -t "${app_name}:${image_tag}" .
+    # Load environment variables and prepare build args for Docker
+    # This allows passing secrets like FONTAWESOME_NPM_AUTH_TOKEN to Docker build
+    local build_args=""
+    if [ -f "$ENV_FILE" ]; then
+        # Extract build-time secrets from env file (e.g., npm tokens)
+        while IFS='=' read -r key value || [ -n "$key" ]; do
+            # Skip empty lines and comments
+            [[ -z "$key" || "$key" =~ ^#.*  ]] && continue
+            # Remove leading/trailing whitespace
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            # Pass specific build-time variables (npm auth tokens, etc.)
+            if [[ "$key" =~ _NPM_AUTH_TOKEN$ || "$key" =~ _BUILD_ ]]; then
+                build_args="$build_args --build-arg ${key}=${value}"
+            fi
+        done < "$ENV_FILE"
+    fi
+
+    docker build $build_args -t "${app_name}:${image_tag}" .
     local build_result=$?
 
     # Remove temporary .env file after build
