@@ -120,9 +120,9 @@ server {
     listen [::]:443 ssl http2;
     server_name api-internal.brokik.com;
 
-    # SSL certificates from Let's Encrypt
-    ssl_certificate /etc/letsencrypt/live/api-internal.brokik.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api-internal.brokik.com/privkey.pem;
+    # SSL certificates from Let's Encrypt (using primary domain cert which covers all domains)
+    ssl_certificate /etc/letsencrypt/live/api-public.brokik.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api-public.brokik.com/privkey.pem;
 
     # SSL configuration
     ssl_protocols TLSv1.2 TLSv1.3;
