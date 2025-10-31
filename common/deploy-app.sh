@@ -491,9 +491,25 @@ check_and_setup_ssl() {
 
         if [ ${#missing_domains[@]} -gt 0 ]; then
             log_warning "Certificate missing domains: ${missing_domains[*]}"
-            log_warning "Use certbot to expand: sudo certbot --nginx -d ${missing_domains[0]} --expand"
-            export SSL_SETUP_MESSAGE="Partial coverage (missing: ${missing_domains[*]})"
-            return 1  # Skipped (needs manual intervention)
+            log_info "Automatically expanding certificate to include missing domains..."
+
+            # Build certbot expand command
+            local expand_cmd="sudo certbot --nginx --non-interactive --agree-tos --expand"
+            for missing_domain in "${missing_domains[@]}"; do
+                expand_cmd="$expand_cmd -d $missing_domain"
+            done
+
+            log_info "Running: certbot --nginx --expand -d ${missing_domains[*]}"
+            if $expand_cmd 2>&1 | tee /tmp/certbot_expand_$$.log; then
+                log_success "Certificate expanded to include: ${missing_domains[*]}"
+                export SSL_SETUP_MESSAGE="Expanded to include all domains"
+                return 0  # Success
+            else
+                log_error "Failed to expand certificate"
+                cat /tmp/certbot_expand_$$.log
+                export SSL_SETUP_MESSAGE="Expansion failed (${missing_domains[*]})"
+                return 2  # Failed
+            fi
         fi
 
         # Check expiry
