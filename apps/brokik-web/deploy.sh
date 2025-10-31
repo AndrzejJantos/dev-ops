@@ -9,6 +9,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVOPS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Update DevOps repository first to get latest scripts and templates
+if [ -d "$DEVOPS_DIR/.git" ]; then
+    cd "$DEVOPS_DIR"
+    if git diff-index --quiet HEAD -- 2>/dev/null; then
+        echo "[INFO] Updating DevOps repository..."
+        git pull origin master >/dev/null 2>&1 || echo "[WARNING] Failed to update DevOps repo, using existing version"
+    fi
+    cd "$SCRIPT_DIR"
+fi
+
 # Load common utilities
 source "$DEVOPS_DIR/common/utils.sh"
 source "$DEVOPS_DIR/common/docker-utils.sh"
