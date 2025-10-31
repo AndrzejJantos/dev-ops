@@ -219,47 +219,7 @@ nextjs_build_image() {
         log_info "=========================="
     fi
 
-    # Create log viewing wrapper script
-    nextjs_create_log_wrapper
-
     return 0
-}
-
-# Create log viewing wrapper script for easy access
-nextjs_create_log_wrapper() {
-    log_info "Creating log viewing wrapper script..."
-
-    cat > "${APP_DIR}/logs.sh" << 'LOGS_WRAPPER'
-#!/bin/bash
-# Next.js containers write logs to mounted volume at ~/apps/APP_NAME/logs/
-LOG_DIR="$(dirname "$0")/logs"
-PRODUCTION_LOG="${LOG_DIR}/production.log"
-APP_NAME="$(basename "$(dirname "$0")")"
-
-# Check if log file exists
-if [ ! -f "$PRODUCTION_LOG" ]; then
-    echo "Log file not found: $PRODUCTION_LOG"
-    echo ""
-    echo "Available logs in ${LOG_DIR}:"
-    ls -lh "${LOG_DIR}" 2>/dev/null || echo "  (directory is empty or doesn't exist yet)"
-    echo ""
-    echo "Note: Next.js logs to STDOUT by default, which goes to Docker logs."
-    echo "To see Docker logs, run: docker logs -f ${APP_NAME}_web_1"
-    echo ""
-    echo "To write logs to files, configure a custom logger in your Next.js app."
-    exit 1
-fi
-
-# Follow production log
-echo "Following production.log..."
-echo "Log file: $PRODUCTION_LOG"
-echo "Press Ctrl+C to stop"
-echo ""
-tail -f "$PRODUCTION_LOG"
-LOGS_WRAPPER
-
-    chmod +x "${APP_DIR}/logs.sh"
-    log_success "Log viewer created: ${APP_DIR}/logs.sh"
 }
 
 # Hook: Deploy Next.js containers (fresh deployment)
@@ -425,8 +385,6 @@ nextjs_display_deployment_summary() {
     echo ""
     echo "USEFUL COMMANDS:"
     echo "  Deploy:           cd ~/DevOps/apps/${APP_NAME} && ./deploy.sh"
-    echo "  View app logs:    ${APP_DIR}/logs.sh"
-    echo "  Docker logs:      docker logs ${APP_NAME}_web_1 -f"
     echo "  Check health:     curl https://${DOMAIN}"
     echo "  Scale to N:       cd ~/DevOps/apps/${APP_NAME} && ./deploy.sh scale N"
     echo "  Restart:          cd ~/DevOps/apps/${APP_NAME} && ./deploy.sh restart"
@@ -437,9 +395,10 @@ nextjs_display_deployment_summary() {
     echo "  Deployed app:     cd ~/apps/${APP_NAME}"
     echo "  Quick link:       cd ~/apps/${APP_NAME}/config (→ config dir)"
     echo ""
-    echo "LOG FILES:"
-    echo "  Production logs:  ${LOG_DIR}/production.log"
-    echo "  All containers write to: ${LOG_DIR}/"
+    echo "LOGS (Next.js logs to Docker stdout):"
+    echo "  Docker logs:      docker logs ${APP_NAME}_web_1 -f"
+    echo "  All containers:   docker logs ${APP_NAME}_web_1 -f --tail=100"
+    echo "  Note: To persist logs to ${LOG_DIR}/, configure a custom logger in your Next.js app"
     echo ""
     echo "================================================================================"
     echo ""

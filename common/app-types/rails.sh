@@ -469,36 +469,6 @@ CONSOLE_WRAPPER
 
     chmod +x "${APP_DIR}/console.sh"
     log_success "Console wrapper created: ${APP_DIR}/console.sh"
-
-    # Create log viewing wrapper script
-    cat > "${APP_DIR}/logs.sh" << 'LOGS_WRAPPER'
-#!/bin/bash
-# Rails containers write logs to mounted volume at ~/apps/APP_NAME/logs/
-LOG_DIR="$(dirname "$0")/logs"
-PRODUCTION_LOG="${LOG_DIR}/production.log"
-
-# Check if log file exists
-if [ ! -f "$PRODUCTION_LOG" ]; then
-    echo "Log file not found: $PRODUCTION_LOG"
-    echo ""
-    echo "Available logs in ${LOG_DIR}:"
-    ls -lh "${LOG_DIR}" 2>/dev/null || echo "  (directory is empty or doesn't exist yet)"
-    echo ""
-    echo "Logs will be created when the application starts."
-    echo "Try running: docker logs APP_NAME_web_1"
-    exit 1
-fi
-
-# Follow production log
-echo "Following production.log..."
-echo "Log file: $PRODUCTION_LOG"
-echo "Press Ctrl+C to stop"
-echo ""
-tail -f "$PRODUCTION_LOG"
-LOGS_WRAPPER
-
-    chmod +x "${APP_DIR}/logs.sh"
-    log_success "Log viewer created: ${APP_DIR}/logs.sh"
 }
 
 # Hook: Check for pending Rails migrations
@@ -901,8 +871,6 @@ rails_display_deployment_summary() {
     echo "USEFUL COMMANDS:"
     echo "  Deploy:           cd ~/DevOps/apps/${APP_NAME} && ./deploy.sh"
     echo "  Rails console:    ${APP_DIR}/console.sh"
-    echo "  View app logs:    ${APP_DIR}/logs.sh"
-    echo "  Docker logs:      docker logs ${APP_NAME}_web_1 -f"
     echo "  Check health:     curl https://${DOMAIN}${HEALTH_CHECK_PATH}"
     echo "  Scale to N:       cd ~/DevOps/apps/${APP_NAME} && ./deploy.sh scale N"
     echo "  Restart:          cd ~/DevOps/apps/${APP_NAME} && ./deploy.sh restart"
@@ -913,10 +881,11 @@ rails_display_deployment_summary() {
     echo "  Deployed app:     cd ~/apps/${APP_NAME}"
     echo "  Quick link:       cd ~/apps/${APP_NAME}/config (→ config dir)"
     echo ""
-    echo "LOG FILES:"
-    echo "  Production logs:  ${LOG_DIR}/production.log"
-    echo "  Sidekiq logs:     ${LOG_DIR}/sidekiq.log"
-    echo "  All containers write to: ${LOG_DIR}/"
+    echo "LOGS (persisted on host at ${LOG_DIR}/):"
+    echo "  Host logs:        tail -f ${LOG_DIR}/production.log"
+    echo "  Sidekiq logs:     tail -f ${LOG_DIR}/sidekiq.log"
+    echo "  Container logs:   docker logs ${APP_NAME}_web_1 -f"
+    echo "  Inside container: docker exec ${APP_NAME}_web_1 tail -f /app/log/production.log"
     echo ""
 
     echo "================================================================================"

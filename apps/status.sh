@@ -290,7 +290,7 @@ for app_dir in "${app_dirs[@]}"; do
     echo ""
     echo -e "  ${BOLD}Logs:${NC}"
     echo -e "    Location:       ${log_location}"
-    echo -e "    View:           /home/andrzej/apps/${APP_NAME}/logs.sh"
+    echo -e "    Host:           tail -f ${log_location}/production.log"
     echo -e "    Docker:         docker logs ${APP_NAME}_web_1 -f"
 
     echo ""
