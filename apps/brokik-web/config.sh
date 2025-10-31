@@ -15,7 +15,7 @@ export DOMAIN="brokik.com"
 # REPOSITORY CONFIGURATION
 # ============================================================================
 export REPO_URL="git@github.com:AndrzejJantos/brokik-web.git"
-export REPO_BRANCH="master"
+export REPO_BRANCH="main"
 
 # ============================================================================
 # CONTAINER ARCHITECTURE
