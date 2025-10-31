@@ -244,13 +244,12 @@ log_success "All applications deployed"
 if [ "$SETUP_SSL" = "true" ]; then
     log_step "5" "Setting Up SSL Certificates"
 
-    log_warning "SSL certificates need to be configured for each domain"
+    log_warning "SSL certificates are checked automatically during deployment"
     echo ""
-    echo "For each app, run:"
-    echo "  cd \$DEVOPS_DIR/apps/<app-name>"
-    echo "  ./deploy.sh ssl-setup"
+    log_info "SSL certificates will be automatically obtained when you deploy each app"
+    log_info "Ensure DNS is properly configured before deploying"
     echo ""
-    log_info "Or run manually with certbot:"
+    log_info "If manual setup is needed, run certbot directly:"
     echo "  sudo certbot --nginx -d example.com -d www.example.com"
     echo ""
 

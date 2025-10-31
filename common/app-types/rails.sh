@@ -749,7 +749,7 @@ rails_display_deployment_summary() {
         fi
     else
         echo "  Status: Not configured"
-        echo "  Setup: ./deploy.sh ssl-setup"
+        echo "  Note: SSL is automatically checked during deployment"
     fi
 
     # Show SSL setup attempt status if available
@@ -761,7 +761,7 @@ rails_display_deployment_summary() {
             failed)
                 echo "  Last Setup: ✗ FAILED"
                 [ -n "${SSL_SETUP_MESSAGE:-}" ] && echo "  Error: ${SSL_SETUP_MESSAGE}"
-                echo "  Action: Run './deploy.sh ssl-setup' to retry"
+                echo "  Action: Check DNS configuration and redeploy"
                 ;;
             skipped)
                 [ -n "${SSL_SETUP_MESSAGE:-}" ] && echo "  Note: ${SSL_SETUP_MESSAGE}"

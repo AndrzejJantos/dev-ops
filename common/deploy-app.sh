@@ -73,12 +73,7 @@ deploy_application() {
         cleanup_old_images "$DOCKER_IMAGE_NAME" "$MAX_IMAGE_VERSIONS"
     fi
 
-    # Step 5: Log deployment
-    echo "[$(date)] Deployed ${DOCKER_IMAGE_NAME}:${image_tag} with scale=${actual_scale}$([ "$APP_TYPE" = "rails" ] && echo ", migrations=${migrations_run}")" >> "${LOG_DIR}/deployments.log"
-
-    log_success "Deployment completed successfully!"
-
-    # Step 5.5: Check and setup SSL if needed
+    # Step 5: Check and setup SSL if needed (automated SSL management)
     export SSL_SETUP_STATUS="unknown"
     export SSL_SETUP_MESSAGE=""
     check_and_setup_ssl
@@ -91,7 +86,12 @@ deploy_application() {
         export SSL_SETUP_STATUS="skipped"
     fi
 
-    # Step 6: Display summary (app-type specific)
+    # Step 6: Log deployment
+    echo "[$(date)] Deployed ${DOCKER_IMAGE_NAME}:${image_tag} with scale=${actual_scale}$([ "$APP_TYPE" = "rails" ] && echo ", migrations=${migrations_run}") ssl=${SSL_SETUP_STATUS}" >> "${LOG_DIR}/deployments.log"
+
+    log_success "Deployment completed successfully!"
+
+    # Step 7: Display summary (app-type specific)
     if [ "$APP_TYPE" = "rails" ]; then
         ${APP_TYPE}_display_deployment_summary "$actual_scale" "$image_tag" "$migrations_run"
     else
@@ -285,12 +285,20 @@ handle_status() {
 }
 
 # Function: Check and setup SSL certificates if missing or invalid
+# This function is called automatically during deployment to ensure SSL is always configured
+# It will:
+# - Check if certificates exist and are valid
+# - Verify certificates are not expiring soon (within 30 days)
+# - Automatically obtain new certificates if missing (when DNS is configured)
+# - Skip if DNS is not configured or certbot account doesn't exist
 check_and_setup_ssl() {
+    log_info "=== Automated SSL Certificate Management ==="
     log_info "Checking SSL certificates for ${DOMAIN}..."
 
     # Check if certbot is installed
     if ! command -v certbot >/dev/null 2>&1; then
-        log_warning "Certbot not installed, skipping SSL check"
+        log_warning "Certbot not installed, skipping automated SSL check"
+        log_info "Install certbot: sudo apt-get install certbot python3-certbot-nginx"
         export SSL_SETUP_MESSAGE="Certbot not installed"
         return 1  # Skipped
     fi
@@ -330,7 +338,7 @@ check_and_setup_ssl() {
 
         if [ ${#missing_domains[@]} -gt 0 ]; then
             log_warning "Certificate missing domains: ${missing_domains[*]}"
-            log_warning "Run: ./deploy.sh ssl-setup to expand certificate"
+            log_warning "Use certbot to expand: sudo certbot --nginx -d ${missing_domains[0]} --expand"
             export SSL_SETUP_MESSAGE="Partial coverage (missing: ${missing_domains[*]})"
             return 1  # Skipped (needs manual intervention)
         fi
@@ -379,7 +387,7 @@ check_and_setup_ssl() {
 
     if [ "$dns_ok" = false ]; then
         log_warning "DNS not properly configured. Skipping SSL setup."
-        log_info "To setup SSL manually, run: ./deploy.sh ssl-setup"
+        log_info "Configure DNS properly and redeploy to automatically obtain SSL certificates"
         export SSL_SETUP_MESSAGE="Skipped - DNS issues: ${dns_issues[*]}"
         return 1  # Skipped
     fi
@@ -411,14 +419,14 @@ check_and_setup_ssl() {
             local error_msg=$(grep -i "error\|failed\|problem" "$certbot_output" | head -3 | tr '\n' '; ')
             log_error "SSL certificate setup FAILED"
             log_error "Error: ${error_msg}"
-            log_info "To retry manually, run: ./deploy.sh ssl-setup"
+            log_info "Check DNS configuration and redeploy to automatically retry"
             export SSL_SETUP_MESSAGE="FAILED: ${error_msg}"
             rm -f "$certbot_output"
             return 2  # Failed
         fi
     else
         log_warning "No existing certbot account found"
-        log_info "To setup SSL manually, run: ./deploy.sh ssl-setup"
+        log_info "Run certbot manually to create account: sudo certbot --nginx -d ${DOMAIN}"
         export SSL_SETUP_MESSAGE="Skipped - No certbot account"
         return 1  # Skipped
     fi
@@ -549,34 +557,6 @@ handle_deploy_command() {
             log_info "Starting Rails console in ${container_name}..."
             docker exec -it "$container_name" /bin/bash -c "cd /app && bundle exec rails console"
             ;;
-        ssl-setup)
-            log_info "Setting up SSL certificates for ${DOMAIN}"
-            # Force SSL setup by temporarily removing certificate check
-            local force_ssl=true
-
-            # Build domain list
-            local cert_domains="-d $DOMAIN"
-            [[ ! "$DOMAIN" =~ ^api ]] && cert_domains="$cert_domains -d www.$DOMAIN"
-            [ -n "${DOMAIN_INTERNAL:-}" ] && cert_domains="$cert_domains -d $DOMAIN_INTERNAL"
-
-            # Get email from existing certbot account or prompt
-            local existing_email=$(sudo certbot show_account 2>/dev/null | grep -oP 'Email contact: \K.*' || echo "")
-
-            if [ -n "$existing_email" ]; then
-                log_info "Obtaining/expanding SSL certificate for domains: ${cert_domains}"
-                sudo certbot --nginx $cert_domains --email "${existing_email}" --non-interactive --agree-tos --redirect --expand
-                if [ $? -eq 0 ]; then
-                    log_success "SSL certificate configured successfully"
-                    sudo systemctl reload nginx
-                else
-                    log_error "SSL setup failed. Check logs: /var/log/letsencrypt/letsencrypt.log"
-                fi
-            else
-                # Interactive mode if no account exists
-                log_info "No certbot account found, running in interactive mode"
-                sudo certbot --nginx $cert_domains --expand
-            fi
-            ;;
         help|*)
             echo "${APP_DISPLAY_NAME} Deployment Script"
             echo ""
@@ -592,7 +572,6 @@ handle_deploy_command() {
             if [ "$APP_TYPE" = "rails" ]; then
                 echo "  console             Open Rails console"
             fi
-            echo "  ssl-setup           Setup SSL certificates with Let's Encrypt"
             echo "  help                Show this help message"
             echo ""
             echo "Examples:"
