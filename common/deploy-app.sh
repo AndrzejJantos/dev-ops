@@ -495,12 +495,13 @@ check_and_setup_ssl() {
             log_info "Automatically expanding certificate to include missing domains..."
 
             # Build certbot expand command with --cert-name to expand existing cert
+            # MUST include ALL domains (existing + missing) when expanding
             local expand_cmd="sudo certbot --nginx --non-interactive --agree-tos --expand --cert-name ${DOMAIN}"
-            for missing_domain in "${missing_domains[@]}"; do
-                expand_cmd="$expand_cmd -d $missing_domain"
+            for domain in "${all_domains_array[@]}"; do
+                expand_cmd="$expand_cmd -d $domain"
             done
 
-            log_info "Running: certbot --nginx --expand --cert-name ${DOMAIN} -d ${missing_domains[*]}"
+            log_info "Running: certbot --nginx --expand --cert-name ${DOMAIN} -d ${all_domains_array[*]}"
 
             # Run certbot and capture both output and exit code
             set +e  # Temporarily allow command to fail
