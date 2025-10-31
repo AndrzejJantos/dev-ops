@@ -453,6 +453,12 @@ rails_create_console_wrapper() {
 
     cat > "${APP_DIR}/console.sh" << 'CONSOLE_WRAPPER'
 #!/bin/bash
+# Initialize rbenv if available
+if [ -d "$HOME/.rbenv" ]; then
+    export PATH="$HOME/.rbenv/bin:$PATH"
+    eval "$(rbenv init - bash 2>/dev/null || true)"
+fi
+
 cd "$(dirname "$0")/repo"
 export RAILS_ENV=production
 set -a
