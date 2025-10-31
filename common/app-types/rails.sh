@@ -217,6 +217,13 @@ rails_update_native_gems() {
     log_info "Updating native Ruby environment for console access..."
     cd "$REPO_DIR"
 
+    # Initialize rbenv if available
+    if [ -d "$HOME/.rbenv" ]; then
+        export PATH="$HOME/.rbenv/bin:$PATH"
+        eval "$(rbenv init - bash 2>/dev/null || true)"
+        log_info "Initialized rbenv"
+    fi
+
     # Check Ruby version
     local REQUIRED_RUBY_VERSION=$(cat .ruby-version 2>/dev/null || echo "3.4.4")
     local CURRENT_RUBY_VERSION=$(ruby -v | grep -oP '\d+\.\d+\.\d+' | head -1 2>/dev/null || echo "unknown")
