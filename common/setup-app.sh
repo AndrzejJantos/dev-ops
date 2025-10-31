@@ -162,7 +162,10 @@ setup_nginx() {
     conflicting_configs=()
     for config in /etc/nginx/sites-enabled/*; do
         if [ -f "$config" ] && [ "$(basename $config)" != "${APP_NAME}" ]; then
-            if sudo grep -q "server_name.*${DOMAIN}" "$config" 2>/dev/null; then
+            # Use word boundaries to match exact domain, not subdomains
+            # Match: server_name example.com; or server_name www.example.com example.com;
+            # Don't match: server_name api.example.com; when looking for example.com
+            if sudo grep -q "server_name.*[[:space:]]${DOMAIN}[[:space:]]*;" "$config" 2>/dev/null; then
                 conflicting_configs+=("$(basename $config)")
             fi
         fi
