@@ -97,6 +97,7 @@ start_container() {
         docker run -d \
             --name "$container_name" \
             --network host \
+            --add-host=host.docker.internal:host-gateway \
             --restart unless-stopped \
             --env-file "$env_file" \
             -e PORT="${host_port}" \
@@ -113,6 +114,7 @@ start_container() {
         docker run -d \
             --name "$container_name" \
             --network "$network" \
+            --add-host=host.docker.internal:host-gateway \
             --restart unless-stopped \
             -p "${host_port}:${container_port}" \
             --env-file "$env_file" \
@@ -170,6 +172,7 @@ start_worker_container() {
     docker run -d \
         --name "$container_name" \
         --network "$network" \
+        --add-host=host.docker.internal:host-gateway \
         --restart unless-stopped \
         --env-file "$env_file" \
         -e CONTAINER_NAME="${container_name}" \
@@ -221,6 +224,7 @@ start_scheduler_container() {
     docker run -d \
         --name "$container_name" \
         --network "$network" \
+        --add-host=host.docker.internal:host-gateway \
         --restart unless-stopped \
         --env-file "$env_file" \
         -e CONTAINER_NAME="${container_name}" \
