@@ -91,7 +91,10 @@ setup_application() {
     # Step 10: Setup SSL certificate
     setup_ssl
 
-    # Step 11: Create deployment info file
+    # Step 11: Setup CDN (if enabled)
+    setup_cdn
+
+    # Step 12: Create deployment info file
     create_deployment_info
 
     log_success "Setup completed successfully!"
@@ -429,7 +432,49 @@ setup_ssl() {
     return 0
 }
 
-# Step 11: Create deployment info file
+# Step 11: Setup CDN (if enabled)
+setup_cdn() {
+    # Check if CDN is enabled in config
+    if [ "${CDN_ENABLED:-false}" != "true" ]; then
+        log_info "CDN disabled, skipping CDN setup"
+        return 0
+    fi
+
+    # Validate CDN_DOMAIN is set
+    if [ -z "${CDN_DOMAIN:-}" ]; then
+        log_error "CDN_ENABLED is true but CDN_DOMAIN is not set in config.sh"
+        log_error "Please set CDN_DOMAIN (e.g., export CDN_DOMAIN=\"cdn.yourdomain.com\")"
+        return 1
+    fi
+
+    log_info "CDN enabled for domain: ${CDN_DOMAIN}"
+    log_info "Deploying CDN configuration..."
+
+    # Check if deploy-cdn.sh exists
+    local cdn_script="$DEVOPS_DIR/scripts/deploy-cdn.sh"
+    if [ ! -f "$cdn_script" ]; then
+        log_error "CDN deployment script not found: ${cdn_script}"
+        return 1
+    fi
+
+    # Export CDN_DOMAIN for the script to use
+    export CDN_DOMAIN="${CDN_DOMAIN}"
+
+    # Run CDN deployment script
+    if bash "$cdn_script"; then
+        log_success "CDN deployment completed successfully"
+        log_info "CDN URL: https://${CDN_DOMAIN}"
+    else
+        log_error "CDN deployment failed"
+        log_warning "You can run it manually later: $cdn_script"
+        log_info "Continuing with setup..."
+        # Don't fail setup if CDN deployment fails - it can be done manually
+    fi
+
+    return 0
+}
+
+# Step 12: Create deployment info file
 create_deployment_info() {
     local extra_info=""
 
@@ -463,6 +508,7 @@ Type: ${APP_TYPE}
 Domain: ${DOMAIN}$([ -n "${DOMAIN_INTERNAL:-}" ] && echo ", ${DOMAIN_INTERNAL}" || echo "")
 Repository: ${REPO_URL}
 Branch: ${REPO_BRANCH}
+$([ "${CDN_ENABLED:-false}" = "true" ] && echo "CDN: https://${CDN_DOMAIN} (Enabled)" || echo "")
 ${extra_info}
 
 Directories:

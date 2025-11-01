@@ -83,3 +83,16 @@ export IMAGE_BACKUP_DIR="$APP_DIR/docker-images"
 export MAILGUN_API_KEY=""           # Set if you want email notifications
 export MAILGUN_DOMAIN=""            # Set if you want email notifications
 export NOTIFICATION_EMAIL=""        # Set if you want email notifications
+
+# ============================================================================
+# CDN CONFIGURATION (Optional)
+# ============================================================================
+# CDN is typically not needed for frontend apps (static assets served by Next.js)
+# Enable only if you need to serve media files through nginx CDN
+export CDN_ENABLED=false            # Usually leave disabled for Next.js apps
+export CDN_DOMAIN=""                # e.g., cdn.yourdomain.com
+
+# CDN notes:
+# - Frontend apps usually don't need CDN (Next.js serves static assets efficiently)
+# - Enable only if you have specific media hosting requirements
+# - Most projects should leave this disabled and use the backend API's CDN

@@ -104,3 +104,17 @@ export IMAGE_BACKUP_DIR="$APP_DIR/docker-images"
 export MAILGUN_API_KEY=""           # Set if you want email notifications
 export MAILGUN_DOMAIN=""            # Set if you want email notifications
 export NOTIFICATION_EMAIL=""        # Set if you want email notifications
+
+# ============================================================================
+# CDN CONFIGURATION (Optional)
+# ============================================================================
+# Enable CDN for Active Storage files (images, uploads, etc.)
+export CDN_ENABLED=false            # Set to true to enable CDN deployment
+export CDN_DOMAIN=""                # e.g., cdn.yourdomain.com
+
+# CDN notes:
+# - When enabled, setup script will automatically deploy CDN configuration
+# - CDN serves Active Storage files via nginx (faster, reduced app server load)
+# - Domain must have DNS configured and SSL certificate obtained
+# - Storage path: /var/storage/${APP_NAME}/active_storage
+# - See docs/cdn-setup.md for detailed documentation

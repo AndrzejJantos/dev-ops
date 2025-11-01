@@ -111,3 +111,16 @@ export NOTIFICATION_EMAIL=""        # Set during setup
 # ERROR TRACKING CONFIGURATION
 # ============================================================================
 export ROLLBAR_ACCESS_TOKEN="${ROLLBAR_ACCESS_TOKEN:-}"  # Set via environment variable
+
+# ============================================================================
+# CDN CONFIGURATION
+# ============================================================================
+# Enable CDN for Active Storage files (images, uploads, etc.)
+export CDN_ENABLED=true
+export CDN_DOMAIN="cdn.webet.pl"
+
+# CDN notes:
+# - When enabled, setup script will automatically deploy CDN configuration
+# - CDN serves Active Storage files via nginx (faster, reduced app server load)
+# - Domain must have DNS configured and SSL certificate obtained
+# - Storage path: /var/storage/${APP_NAME}/active_storage
