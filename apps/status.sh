@@ -125,9 +125,10 @@ get_backup_details() {
 
         if [ -n "$db_last_file" ]; then
             db_last_size=$(du -h "$db_last_file" | cut -f1)
-            # macOS vs Linux stat command
-            db_last_time=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$db_last_file" 2>/dev/null)
-            if [ -z "$db_last_time" ]; then
+            # Get modification time (works on both macOS and Linux)
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                db_last_time=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$db_last_file" 2>/dev/null)
+            else
                 db_last_time=$(stat -c "%y" "$db_last_file" 2>/dev/null | cut -d'.' -f1)
             fi
             db_last_file=$(basename "$db_last_file")
@@ -153,9 +154,10 @@ get_backup_details() {
 
         if [ -n "$img_last_file" ]; then
             img_last_size=$(du -h "$img_last_file" | cut -f1)
-            # macOS vs Linux stat command
-            img_last_time=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$img_last_file" 2>/dev/null)
-            if [ -z "$img_last_time" ]; then
+            # Get modification time (works on both macOS and Linux)
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                img_last_time=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$img_last_file" 2>/dev/null)
+            else
                 img_last_time=$(stat -c "%y" "$img_last_file" 2>/dev/null | cut -d'.' -f1)
             fi
             img_last_file=$(basename "$img_last_file")
