@@ -392,14 +392,14 @@ for app_dir in "${app_dirs[@]}"; do
     backup_details=$(get_backup_details "$APP_NAME")
     IFS='|' read -r db_count db_last_file db_last_size db_last_time db_total_size img_count img_last_file img_last_size img_last_time img_total_size <<< "$backup_details"
 
-    total_db_backups=$((total_db_backups + db_count))
-    total_img_backups=$((total_img_backups + img_count))
+    total_db_backups=$((total_db_backups + ${db_count:-0}))
+    total_img_backups=$((total_img_backups + ${img_count:-0}))
 
-    if [ "$db_count" -gt 0 ]; then
+    if [ "${db_count:-0}" -gt 0 ]; then
         apps_with_db_backups=$((apps_with_db_backups + 1))
     fi
 
-    if [ "$img_count" -gt 0 ]; then
+    if [ "${img_count:-0}" -gt 0 ]; then
         apps_with_img_backups=$((apps_with_img_backups + 1))
     fi
 done
@@ -420,39 +420,26 @@ echo -e "    Total Backups:    ${total_backup_usage}"
 echo -e "    Location:         /home/andrzej/apps/{app-name}/backups/"
 echo ""
 
-# Show warnings for apps without recent backups
-echo -e "  ${BOLD}Backup Health:${NC}"
-apps_need_backup=0
+# Show last backup times for each app
+echo -e "  ${BOLD}Last Backup Times:${NC}"
 
 for app_dir in "${app_dirs[@]}"; do
     get_app_config "$app_dir" >/dev/null 2>&1
     backup_details=$(get_backup_details "$APP_NAME")
     IFS='|' read -r db_count db_last_file db_last_size db_last_time db_total_size img_count img_last_file img_last_size img_last_time img_total_size <<< "$backup_details"
 
-    # Check for Rails apps without DB backups
+    # Show database backup status
     if [ -f "$app_dir/config.sh" ]; then
         app_type=$(grep "^export APP_TYPE=" "$app_dir/config.sh" 2>/dev/null | cut -d '=' -f2 | tr -d '"' | tr -d "'")
-        if [ "$app_type" = "rails" ] && [ "$db_count" -eq 0 ]; then
-            echo -e "    ${YELLOW}WARNING:${NC} ${APP_NAME} (Rails) has no database backups"
-            apps_need_backup=$((apps_need_backup + 1))
+        if [ "$app_type" = "rails" ]; then
+            if [ "${db_count:-0}" -gt 0 ]; then
+                echo -e "    ${GREEN}✓${NC} ${APP_NAME}: DB backup at ${GREEN}${db_last_time}${NC} (${db_count} backups, ${db_total_size})"
+            else
+                echo -e "    ${YELLOW}✗${NC} ${APP_NAME}: ${YELLOW}No database backups${NC}"
+            fi
         fi
     fi
-
-    # Check for old backups
-    if [ -n "$db_last_time" ] && is_backup_old "$db_last_time"; then
-        echo -e "    ${YELLOW}WARNING:${NC} ${APP_NAME} database backup is older than 7 days"
-        apps_need_backup=$((apps_need_backup + 1))
-    fi
-
-    if [ -n "$img_last_time" ] && is_backup_old "$img_last_time"; then
-        echo -e "    ${YELLOW}WARNING:${NC} ${APP_NAME} image backup is older than 7 days"
-        apps_need_backup=$((apps_need_backup + 1))
-    fi
 done
-
-if [ $apps_need_backup -eq 0 ]; then
-    echo -e "    ${GREEN}All backups are up to date${NC}"
-fi
 
 echo ""
 echo -e "${BOLD}================================================================================${NC}"
