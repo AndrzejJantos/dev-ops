@@ -109,10 +109,10 @@ get_log_location() {
 # Function to get detailed backup information
 get_backup_details() {
     local app_name="$1"
-    local backup_base="/home/andrzej/backups/${app_name}"
+    local backup_base="/home/andrzej/apps/${app_name}"
 
     # Database backups
-    local db_backup_dir="${backup_base}/db"
+    local db_backup_dir="${backup_base}/backups"
     local db_count=0
     local db_last_file=""
     local db_last_size=""
@@ -136,7 +136,7 @@ get_backup_details() {
     fi
 
     # Image backups
-    local img_backup_dir="${backup_base}/images"
+    local img_backup_dir="${backup_base}/docker-images"
     local img_count=0
     local img_last_file=""
     local img_last_size=""
@@ -417,7 +417,7 @@ echo -e "    Apps with Images: ${apps_with_img_backups}/${total_apps}"
 echo ""
 echo -e "  ${BOLD}Storage Usage:${NC}"
 echo -e "    Total Backups:    ${total_backup_usage}"
-echo -e "    Location:         /home/andrzej/backups/"
+echo -e "    Location:         /home/andrzej/apps/{app-name}/backups/"
 echo ""
 
 # Show warnings for apps without recent backups
