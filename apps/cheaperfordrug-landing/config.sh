@@ -50,10 +50,11 @@ export SCHEDULER_ENABLED=false # Enable Clockwork scheduler container (false = d
 # Full application with jobs:     DEFAULT_SCALE=2, WORKER_COUNT=1, SCHEDULER_ENABLED=true
 # High-traffic app:               DEFAULT_SCALE=4, WORKER_COUNT=2, SCHEDULER_ENABLED=true
 
-# Mailgun configuration for notifications
-export MAILGUN_API_KEY="dummy_mailgun_key_change_me"
-export MAILGUN_DOMAIN="mg.taniejpolek.pl"
-export MAILGUN_FROM_EMAIL="noreply@${MAILGUN_DOMAIN}"
+# SendGrid configuration for email notifications
+# Note: Application uses SendGrid API (not SMTP) for email delivery
+# API key must be configured in .env.production file
+export SENDGRID_API_KEY="dummy_sendgrid_key_change_me"
+export SENDGRID_FROM_EMAIL="noreply@${DOMAIN}"
 export NOTIFICATION_EMAIL="andrzej@webet.pl"
 
 # Nginx configuration
@@ -68,12 +69,20 @@ export DOCKER_NETWORK="bridge"
 # Application-specific environment variables
 # These will be written to .env.production during setup
 export APP_ENV_VARS=(
+    # Payment processing
     "STRIPE_PUBLISHABLE_KEY=pk_test_dummy_change_me"
     "STRIPE_SECRET_KEY=sk_test_dummy_change_me"
+    # Email configuration (SendGrid API)
+    "SENDGRID_API_KEY=${SENDGRID_API_KEY}"
+    "SENDGRID_FROM_EMAIL=${SENDGRID_FROM_EMAIL}"
+    "NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL}"
+    # Analytics and tracking
     "GOOGLE_ANALYTICS_ID=G-DUMMY000000"
     "GOOGLE_TAG_MANAGER_ID=GTM-DUMMY00"
     "FACEBOOK_PIXEL_ID=000000000000000"
+    # Error tracking
     "ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN:-}"
+    # Admin authentication
     "ADMIN_EMAIL=andrzej@webet.pl"
 )
 
