@@ -492,6 +492,11 @@ export RAILS_ENV=production
 set -a
 source .env.production 2>/dev/null || source ../.env.production
 set +a
+
+# Override DB_HOST for native console (not running in Docker)
+# Replace host.docker.internal with localhost in DATABASE_URL
+export DATABASE_URL=${DATABASE_URL//host.docker.internal/localhost}
+
 exec bundle exec rails console "$@"
 CONSOLE_WRAPPER
 
