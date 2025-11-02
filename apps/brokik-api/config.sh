@@ -47,6 +47,8 @@ export CONTAINER_PORT=3000          # Port inside container (consistent across R
 # ============================================================================
 # DATABASE CONFIGURATION
 # ============================================================================
+# Database connection settings
+# Uses localhost because containers run in --network host mode
 export DB_NAME="brokik_production"
 export DB_USER="brokik_user"
 export DB_HOST="localhost"
