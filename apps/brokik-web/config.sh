@@ -9,7 +9,7 @@
 export APP_TYPE="nextjs"
 export APP_NAME="brokik-web"
 export APP_DISPLAY_NAME="Brokik Web"
-export DOMAIN="brokik.com"
+export DOMAIN="www.brokik.com"
 
 # ============================================================================
 # REPOSITORY CONFIGURATION
