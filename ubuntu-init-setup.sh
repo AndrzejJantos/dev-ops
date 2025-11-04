@@ -717,6 +717,46 @@ install_databases() {
             print_info "Creating PostgreSQL user for ${USERNAME}..."
             sudo -u postgres createuser -s "${USERNAME}" 2>/dev/null || print_warning "PostgreSQL user already exists"
 
+            # Create read-only user for database backups
+            print_info "Creating read-only PostgreSQL user for database backups..."
+            local readonly_user="readonly_user"
+            local readonly_password=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+
+            # Create user
+            sudo -u postgres psql <<SQL 2>/dev/null || print_warning "Read-only user may already exist"
+-- Create read-only user
+CREATE USER ${readonly_user} WITH PASSWORD '${readonly_password}';
+SQL
+
+            # Get all databases and grant permissions
+            local databases=$(sudo -u postgres psql -t -c "SELECT datname FROM pg_database WHERE datname NOT IN ('postgres', 'template0', 'template1');")
+
+            for db in $databases; do
+                sudo -u postgres psql -d "$db" <<SQL 2>/dev/null || true
+-- Grant permissions on database
+GRANT CONNECT ON DATABASE "$db" TO ${readonly_user};
+
+-- Grant permissions on schemas and tables
+DO \$\$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('pg_catalog', 'information_schema')
+    LOOP
+        EXECUTE 'GRANT USAGE ON SCHEMA ' || quote_ident(r.schema_name) || ' TO ${readonly_user}';
+        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA ' || quote_ident(r.schema_name) || ' TO ${readonly_user}';
+        EXECUTE 'GRANT SELECT ON ALL SEQUENCES IN SCHEMA ' || quote_ident(r.schema_name) || ' TO ${readonly_user}';
+        EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA ' || quote_ident(r.schema_name) || ' GRANT SELECT ON TABLES TO ${readonly_user}';
+        EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA ' || quote_ident(r.schema_name) || ' GRANT SELECT ON SEQUENCES TO ${readonly_user}';
+    END LOOP;
+END \$\$;
+SQL
+            done
+
+            print_success "Read-only PostgreSQL user '${readonly_user}' created"
+            print_info "Password for ${readonly_user}: ${readonly_password}"
+            log_message "INFO" "Read-only PostgreSQL user created with password: ${readonly_password}"
+
             show_version "PostgreSQL" "psql --version"
         else
             print_warning "Failed to install PostgreSQL"
