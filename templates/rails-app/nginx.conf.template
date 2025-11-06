@@ -4,7 +4,16 @@
 # Upstream servers (load balanced)
 upstream {{NGINX_UPSTREAM_NAME}} {
     least_conn;  # Use least connections load balancing algorithm
+
+    # Passive health monitoring configuration
+    # max_fails: Number of failed attempts before marking server as down
+    # fail_timeout: Time to consider server down after max_fails (also retry timeout)
+    # After fail_timeout, nginx will attempt to use the server again
 {{UPSTREAM_SERVERS}}
+
+    # Keep alive connections to upstream servers for better performance
+    keepalive 32;
+    keepalive_timeout 60s;
 }
 
 # HTTP server (redirect to HTTPS)

@@ -455,8 +455,17 @@ full_setup() {
     # Start containers
     start_containers
 
-    # Wait for healthy status
-    sleep 10
+    # Wait for containers to become healthy
+    log_info "Waiting for containers to pass health checks..."
+    if source "${DEVOPS_DIR}/common/docker-utils.sh" && \
+       wait_for_compose_health "${CONTAINER_POLAND}" "${CONTAINER_GERMANY}" "${CONTAINER_CZECH}"; then
+        log_success "All containers are healthy"
+    else
+        log_error "Health check failed - deployment may have issues"
+        log_warning "Check container logs for details"
+        show_status
+        return 1
+    fi
 
     # Show status
     show_status
@@ -531,8 +540,19 @@ deploy_only() {
     set -e
     trap - ERR
 
-    # Wait for healthy status
-    sleep 10
+    # Wait for containers to become healthy
+    log_info "Waiting for containers to pass health checks..."
+    if source "${DEVOPS_DIR}/common/docker-utils.sh" && \
+       wait_for_compose_health "${CONTAINER_POLAND}" "${CONTAINER_GERMANY}" "${CONTAINER_CZECH}"; then
+        log_success "All containers are healthy"
+    else
+        log_error "Health check failed - deployment incomplete"
+        local end_time
+        end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        send_deployment_email "failure" "${duration}" "Containers failed health checks after restart"
+        return 1
+    fi
 
     # Show status
     show_status
@@ -598,8 +618,19 @@ rebuild_deploy() {
     set -e
     trap - ERR
 
-    # Wait for healthy status
-    sleep 10
+    # Wait for containers to become healthy
+    log_info "Waiting for containers to pass health checks..."
+    if source "${DEVOPS_DIR}/common/docker-utils.sh" && \
+       wait_for_compose_health "${CONTAINER_POLAND}" "${CONTAINER_GERMANY}" "${CONTAINER_CZECH}"; then
+        log_success "All containers are healthy"
+    else
+        log_error "Health check failed - deployment incomplete"
+        local end_time
+        end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        send_deployment_email "failure" "${duration}" "Containers failed health checks after rebuild"
+        return 1
+    fi
 
     # Show status
     show_status

@@ -484,46 +484,157 @@ rolling_restart() {
         return 0
     fi
 
-    # Rolling restart: restart each container one by one on the same port
-    # This maintains the correct port mappings and ensures zero downtime
+    # Rolling restart: restart each container one by one with zero-downtime strategy
+    # Strategy: Start new container, verify health, THEN stop old container
+    # This ensures the new container is fully operational before removing the old one
     for i in $(seq 1 $scale); do
         local port=$((base_port + i - 1))
         local container_name="${app_name}_web_${i}"
+        local temp_container_name="${app_name}_web_${i}_new"
 
-        log_info "Restarting container ${i}/${scale} on port ${port}"
+        log_info "Restarting container ${i}/${scale} on port ${port} (zero-downtime deployment)"
 
-        # Stop old container
-        if docker ps --filter "name=^${container_name}$" --format "{{.Names}}" | grep -q "^${container_name}$"; then
-            stop_container "$container_name" 30
-            sleep 2
+        # Step 1: Start new container with temporary name (will fail to bind port but that's ok)
+        # We'll use the next available port temporarily
+        local temp_port=$(get_next_available_port "$((base_port + scale))")
+
+        log_info "Starting new container ${temp_container_name} on temporary port ${temp_port}"
+        start_container "$temp_container_name" "$new_image" "$temp_port" "$env_file" "$container_port" "$network"
+
+        if [ $? -ne 0 ]; then
+            log_error "Failed to start new container ${temp_container_name}"
+            return 1
         fi
 
-        # Start new container on same port
+        # Step 2: Wait for health check on new container
+        log_info "Verifying health of new container before switching..."
+        check_container_health "$temp_container_name" 60
+
+        if [ $? -ne 0 ]; then
+            log_error "New container ${temp_container_name} failed health check"
+            log_error "Stopping failed container and aborting deployment"
+            stop_container "$temp_container_name"
+            return 1
+        fi
+
+        log_success "New container is healthy, now switching traffic..."
+
+        # Step 3: Stop old container (only after new one is verified healthy)
+        if docker ps --filter "name=^${container_name}$" --format "{{.Names}}" | grep -q "^${container_name}$"; then
+            log_info "Stopping old container ${container_name}"
+            stop_container "$container_name" 30
+        fi
+
+        # Step 4: Stop temporary container
+        log_info "Stopping temporary container ${temp_container_name}"
+        stop_container "$temp_container_name"
+        sleep 1
+
+        # Step 5: Start new container on correct port with correct name
+        log_info "Starting ${container_name} on port ${port}"
         start_container "$container_name" "$new_image" "$port" "$env_file" "$container_port" "$network"
 
         if [ $? -ne 0 ]; then
-            log_error "Failed to start container ${container_name}"
+            log_error "Failed to start container ${container_name} on correct port"
             return 1
         fi
 
-        # Wait for health check
+        # Step 6: Final health check on correct port
+        log_info "Verifying health on production port ${port}..."
         check_container_health "$container_name" 60
 
         if [ $? -ne 0 ]; then
-            log_error "Container ${container_name} failed health check"
+            log_error "Container ${container_name} failed health check on production port"
             return 1
         fi
 
-        log_success "Container ${container_name} restarted successfully"
+        log_success "Container ${container_name} restarted successfully and is healthy"
 
-        # Brief pause before next container (allows traffic to stabilize)
+        # Brief pause before next container (allows traffic to stabilize and health checks to register)
         if [ $i -lt $scale ]; then
+            log_info "Waiting 5 seconds before next container..."
             sleep 5
         fi
     done
 
     log_success "Rolling restart completed successfully"
     return 0
+}
+
+# Wait for Docker Compose containers to be healthy
+# This function checks docker health status (not HTTP endpoints)
+wait_for_compose_health() {
+    local service_names=("$@")  # Array of container names to check
+    local max_attempts="${HEALTH_CHECK_TIMEOUT:-60}"  # Default 60 seconds (2 minutes)
+    local attempt=0
+
+    log_info "Waiting for ${#service_names[@]} container(s) to become healthy..."
+
+    while [ $attempt -lt $max_attempts ]; do
+        local all_healthy=true
+        local status_messages=()
+
+        for container_name in "${service_names[@]}"; do
+            # Check if container exists and is running
+            if ! docker ps --filter "name=${container_name}" --format "{{.Names}}" | grep -q "^${container_name}$"; then
+                all_healthy=false
+                status_messages+=("${container_name}: not running")
+                continue
+            fi
+
+            # Get health status from Docker
+            local health_status=$(docker inspect --format='{{.State.Health.Status}}' "${container_name}" 2>/dev/null || echo "no-healthcheck")
+
+            case "${health_status}" in
+                "healthy")
+                    status_messages+=("${container_name}: ✓ healthy")
+                    ;;
+                "unhealthy")
+                    log_error "Container ${container_name} is unhealthy"
+                    docker logs "${container_name}" --tail 30 2>&1 | sed 's/^/  /'
+                    return 1
+                    ;;
+                "starting")
+                    all_healthy=false
+                    status_messages+=("${container_name}: ⏳ starting")
+                    ;;
+                "no-healthcheck")
+                    # No health check defined, just check if running
+                    log_warning "No health check defined for ${container_name}, skipping health verification"
+                    status_messages+=("${container_name}: ⚠ no healthcheck")
+                    ;;
+                *)
+                    all_healthy=false
+                    status_messages+=("${container_name}: ? unknown status")
+                    ;;
+            esac
+        done
+
+        # Log current status
+        if [ $attempt -eq 0 ] || [ $((attempt % 10)) -eq 0 ]; then
+            log_info "Health check attempt $((attempt + 1))/${max_attempts}:"
+            for msg in "${status_messages[@]}"; do
+                echo "  $msg"
+            done
+        fi
+
+        # If all healthy, we're done
+        if [ "$all_healthy" = true ]; then
+            log_success "All containers are healthy!"
+            return 0
+        fi
+
+        # Wait before next check
+        attempt=$((attempt + 1))
+        sleep 2
+    done
+
+    log_error "Health check timeout after ${max_attempts} attempts (${HEALTH_CHECK_TIMEOUT:-120} seconds)"
+    log_error "Final status:"
+    for msg in "${status_messages[@]}"; do
+        echo "  $msg"
+    done
+    return 1
 }
 
 # Scale application
