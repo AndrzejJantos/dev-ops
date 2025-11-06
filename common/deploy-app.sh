@@ -415,6 +415,185 @@ stop_application() {
     return $?
 }
 
+# Function: List available image versions for rollback
+list_image_versions() {
+    log_info "Available Docker images for ${APP_DISPLAY_NAME}:"
+    echo ""
+
+    # Get all images with timestamps (excluding latest)
+    local images=$(docker images "${DOCKER_IMAGE_NAME}" --format "{{.Tag}}\t{{.CreatedAt}}\t{{.Size}}" | grep -v "^latest" | sort -r)
+
+    if [ -z "$images" ]; then
+        log_warning "No previous versions found"
+        echo ""
+        echo "Previous images may have been cleaned up. To preserve images for rollback:"
+        echo "  - Set AUTO_CLEANUP_ENABLED=false in config.sh"
+        echo "  - Or increase MAX_IMAGE_VERSIONS in config.sh"
+        return 1
+    fi
+
+    # Print header
+    printf "%-3s  %-20s  %-20s  %-10s\n" "#" "VERSION (TAG)" "CREATED" "SIZE"
+    echo "--------------------------------------------------------------"
+
+    # Print images with index
+    local index=1
+    echo "$images" | while IFS=$'\t' read -r tag created size; do
+        printf "%-3s  %-20s  %-20s  %-10s\n" "$index" "$tag" "$created" "$size"
+        index=$((index + 1))
+    done
+
+    echo ""
+    return 0
+}
+
+# Function: Get currently deployed image tag
+get_current_image_tag() {
+    # Check first running container to see what version is deployed
+    local first_container="${APP_NAME}_web_1"
+
+    if docker ps --filter "name=^${first_container}$" --format "{{.Names}}" | grep -q "^${first_container}$"; then
+        local current_image=$(docker inspect -f '{{.Image}}' "$first_container" 2>/dev/null)
+        local current_tag=$(docker inspect -f '{{index .Config.Image}}' "$first_container" 2>/dev/null | cut -d':' -f2)
+
+        if [ -n "$current_tag" ] && [ "$current_tag" != "latest" ]; then
+            echo "$current_tag"
+            return 0
+        fi
+    fi
+
+    # Fallback: check what :latest points to
+    local latest_id=$(docker images "${DOCKER_IMAGE_NAME}:latest" --format "{{.ID}}" 2>/dev/null | head -1)
+    if [ -n "$latest_id" ]; then
+        docker images "${DOCKER_IMAGE_NAME}" --format "{{.Tag}}\t{{.ID}}" | grep "$latest_id" | grep -v "^latest" | cut -f1 | head -1
+    fi
+}
+
+# Function: Rollback to a specific version
+rollback_to_version() {
+    local target_tag="$1"
+    local current_tag=$(get_current_image_tag)
+
+    log_header "Rolling Back ${APP_DISPLAY_NAME}"
+
+    # Verify target image exists
+    if ! docker image inspect "${DOCKER_IMAGE_NAME}:${target_tag}" >/dev/null 2>&1; then
+        log_error "Image ${DOCKER_IMAGE_NAME}:${target_tag} not found"
+        return 1
+    fi
+
+    log_info "Current version: ${current_tag:-unknown}"
+    log_info "Target version:  ${target_tag}"
+    echo ""
+
+    # Confirmation
+    read -p "Continue with rollback? (yes/no): " -r
+    echo
+    if [[ ! $REPLY =~ ^yes$ ]]; then
+        log_info "Rollback cancelled"
+        return 0
+    fi
+
+    # Tag the target version as latest
+    log_info "Tagging ${DOCKER_IMAGE_NAME}:${target_tag} as latest..."
+    docker tag "${DOCKER_IMAGE_NAME}:${target_tag}" "${DOCKER_IMAGE_NAME}:latest"
+
+    if [ $? -ne 0 ]; then
+        log_error "Failed to tag image"
+        return 1
+    fi
+
+    # Get current scale
+    local current_count=$(get_container_count "$APP_NAME")
+
+    if [ $current_count -eq 0 ]; then
+        log_warning "No containers currently running"
+        log_info "Use './deploy.sh deploy' to start containers with rolled back version"
+        return 0
+    fi
+
+    # Perform rolling restart with the target version
+    log_info "Performing rolling restart to version ${target_tag}..."
+
+    # Load app-type specific module
+    source "$DEVOPS_DIR/common/app-types/${APP_TYPE}.sh"
+
+    local current_image="${DOCKER_IMAGE_NAME}:latest"
+
+    # Perform rolling restart
+    rolling_restart "$APP_NAME" "$current_image" "$ENV_FILE" "$BASE_PORT" "$current_count" "$CONTAINER_PORT"
+
+    if [ $? -ne 0 ]; then
+        log_error "Rollback failed during rolling restart"
+        log_warning "System may be in inconsistent state"
+        log_info "Check status: ./deploy.sh status"
+        return 1
+    fi
+
+    # Log rollback
+    echo "[$(date)] Rolled back from ${current_tag:-unknown} to ${target_tag}" >> "${LOG_DIR}/deployments.log"
+
+    log_success "Rollback completed successfully!"
+    echo ""
+    echo "Summary:"
+    echo "  Previous version: ${current_tag:-unknown}"
+    echo "  Current version:  ${target_tag}"
+    echo "  Running containers: ${current_count}"
+    echo ""
+    echo "To verify:"
+    echo "  ./deploy.sh status"
+    echo "  curl https://${DOMAIN}"
+    echo ""
+
+    return 0
+}
+
+# Function: Interactive rollback
+handle_rollback() {
+    log_header "Rollback ${APP_DISPLAY_NAME}"
+
+    # Show current version
+    local current_tag=$(get_current_image_tag)
+    if [ -n "$current_tag" ]; then
+        log_info "Currently deployed version: ${current_tag}"
+        echo ""
+    fi
+
+    # List available versions
+    if ! list_image_versions; then
+        return 1
+    fi
+
+    # Get user selection
+    echo "Enter the version number to rollback to (or 'cancel' to abort):"
+    read -p "> " selection
+
+    if [ "$selection" = "cancel" ] || [ -z "$selection" ]; then
+        log_info "Rollback cancelled"
+        return 0
+    fi
+
+    # Validate selection is a number
+    if ! [[ "$selection" =~ ^[0-9]+$ ]]; then
+        log_error "Invalid selection. Please enter a number."
+        return 1
+    fi
+
+    # Get the tag for the selected version
+    local images_array=($(docker images "${DOCKER_IMAGE_NAME}" --format "{{.Tag}}" | grep -v "^latest" | sort -r))
+    local target_index=$((selection - 1))
+
+    if [ $target_index -lt 0 ] || [ $target_index -ge ${#images_array[@]} ]; then
+        log_error "Invalid selection. Please choose a number from the list."
+        return 1
+    fi
+
+    local target_tag="${images_array[$target_index]}"
+
+    # Perform rollback
+    rollback_to_version "$target_tag"
+}
+
 # Function: Show status
 handle_status() {
     log_info "Checking status of ${APP_DISPLAY_NAME} containers"
@@ -742,6 +921,9 @@ handle_deploy_command() {
         stop)
             stop_application
             ;;
+        rollback)
+            handle_rollback
+            ;;
         scale)
             if [ -z "$2" ]; then
                 log_error "Usage: $0 scale <number>"
@@ -788,6 +970,7 @@ handle_deploy_command() {
             echo "  deploy              Pull latest code, build, and deploy application"
             echo "  restart             Restart all running containers with current image"
             echo "  stop                Stop all containers"
+            echo "  rollback            Rollback to a previous version (interactive)"
             echo "  scale <N>           Scale web containers to N instances (1-10)"
             echo "  status              Show status of all containers"
             echo "  logs [container]    Show logs (default: ${APP_NAME}_web_1)"
@@ -798,6 +981,7 @@ handle_deploy_command() {
             echo ""
             echo "Examples:"
             echo "  $0 deploy           # Deploy latest code"
+            echo "  $0 rollback         # Rollback to previous version"
             echo "  $0 scale 3          # Scale to 3 web containers"
             echo "  $0 status           # Show container status"
             echo "  $0 logs web_2       # Show logs for web_2"
