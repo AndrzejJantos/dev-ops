@@ -47,9 +47,13 @@ generate_deployment_success_email() {
     local containers_info=""
     local containers=($(docker ps --filter "name=${app_name}_web" --format "{{.Names}}" 2>/dev/null))
     for container in "${containers[@]}"; do
-        local port=$(docker port "$container" 2>/dev/null | grep -oP '\d+:\d+' | head -1 || echo "-")
+        local port=$(docker port "$container" 2>/dev/null | grep -oP '\d+:\d+' | head -1)
         local status=$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null)
-        containers_info="${containers_info}- ${container} (port ${port}, status: ${status})\n"
+        if [ -z "$port" ]; then
+            containers_info="${containers_info}    - ${container} (behind nginx, status: ${status})\n"
+        else
+            containers_info="${containers_info}    - ${container} (port ${port}, status: ${status})\n"
+        fi
     done
 
     # Collect worker information
@@ -67,9 +71,9 @@ generate_deployment_success_email() {
     # Collect SSL certificate information
     local ssl_info=""
     if command -v certbot >/dev/null 2>&1 && sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${domain}"; then
-        local cert_info=$(sudo certbot certificates 2>/dev/null | grep -A 15 "Certificate Name: ${domain}")
-        local domains=$(echo "$cert_info" | grep "Domains:" | sed 's/.*Domains: //')
-        local expiry_date=$(echo "$cert_info" | grep "Expiry Date:" | awk '{print $3}')
+        local cert_info=$(sudo certbot certificates 2>/dev/null | grep -A 6 "Certificate Name: ${domain}" | head -7)
+        local domains=$(echo "$cert_info" | grep "Domains:" | head -1 | sed 's/.*Domains: //')
+        local expiry_date=$(echo "$cert_info" | grep "Expiry Date:" | head -1 | awk '{print $3}')
 
         if [ -n "$expiry_date" ]; then
             local expiry_ts=$(date -d "$expiry_date" +%s 2>/dev/null || echo "0")
@@ -108,7 +112,7 @@ generate_deployment_success_email() {
     # Collect internal domain info if exists
     local internal_url=""
     if [ -n "${DOMAIN_INTERNAL:-}" ]; then
-        internal_url="Internal URL: https://${DOMAIN_INTERNAL}\n"
+        internal_url="  Internal Domain:  ${DOMAIN_INTERNAL}\n"
     fi
 
     # Subject (clean text, no emojis)
@@ -120,6 +124,8 @@ generate_deployment_success_email() {
     local clean_containers_info=$(echo -e "$containers_info" | sed 's/\x1b\[[0-9;]*m//g')
     local clean_workers_info=$(echo -e "$workers_info" | sed 's/\x1b\[[0-9;]*m//g')
     local clean_internal_url=$(echo -e "$internal_url" | sed 's/\x1b\[[0-9;]*m//g')
+    local clean_image_backup_info=$(echo -e "$image_backup_info" | sed 's/\x1b\[[0-9;]*m//g')
+    local clean_db_backup_info=$(echo -e "$db_backup_info" | sed 's/\x1b\[[0-9;]*m//g')
 
     export EMAIL_TEXT_BODY=$(cat << EOF
 ================================================================
@@ -145,8 +151,8 @@ DEPLOYMENT STATUS
 ------------------------------------------------------------
 AVAILABILITY
 ------------------------------------------------------------
-  Primary URL:      https://$domain
-  ${clean_internal_url}Health Check:     https://$domain/up
+  Primary Domain:   $domain
+${clean_internal_url}  Health Check:     https://$domain/up
 
 ------------------------------------------------------------
 ${clean_ssl_info}------------------------------------------------------------
@@ -156,7 +162,7 @@ WEB CONTAINERS
 
   Containers:
 $(echo -e "$clean_containers_info")
-${clean_workers_info}${image_backup_info}${db_backup_info}================================================================
+${clean_workers_info}${clean_image_backup_info}${clean_db_backup_info}================================================================
 USEFUL COMMANDS
 ================================================================
 
@@ -262,7 +268,7 @@ DEPLOYMENT STATUS
 ------------------------------------------------------------
 AVAILABILITY
 ------------------------------------------------------------
-  Primary URL:      https://$domain
+  Primary Domain:   $domain
   Health Check:     https://$domain/up
 
 ------------------------------------------------------------
