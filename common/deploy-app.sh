@@ -261,6 +261,9 @@ deploy_application() {
         git_commit=$(cd "$REPO_DIR" && git rev-parse --short HEAD 2>/dev/null || echo "N/A")
     fi
 
+    # Send deployment start notification (after we have git commit)
+    send_deployment_start_notification "$git_commit"
+
     # Step 2: Build Docker image (app-type specific)
     if ! ${APP_TYPE}_build_image "$image_tag"; then
         send_deployment_failure_notification "Docker image build failed"
@@ -332,6 +335,28 @@ deploy_application() {
     send_deployment_success_notification "$actual_scale" "$image_tag" "$migrations_run" "$git_commit"
 
     return 0
+}
+
+# Function: Send deployment start notification
+send_deployment_start_notification() {
+    local git_commit="$1"
+
+    # Check if email notification function exists and is enabled
+    if [ "${DEPLOYMENT_EMAIL_ENABLED:-true}" != "true" ]; then
+        return 0
+    fi
+
+    if declare -f send_deployment_start_email > /dev/null 2>&1; then
+        log_info "Sending deployment start notification..."
+        send_deployment_start_email \
+            "$APP_NAME" \
+            "$APP_DISPLAY_NAME" \
+            "${DOMAIN:-$APP_NAME}" \
+            "$git_commit" \
+            2>&1 | while read -r line; do
+                log_info "$line"
+            done
+    fi
 }
 
 # Function: Send deployment success notification

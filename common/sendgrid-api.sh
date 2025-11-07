@@ -1,14 +1,16 @@
 #!/bin/bash
 
-# SendGrid API Email Sender
+# SendGrid API Email Sender - PLAIN TEXT ONLY
 # Location: /home/andrzej/DevOps/common/sendgrid-api.sh
 #
 # Simple, focused SendGrid API v3 sender using curl
 # Single responsibility: Send emails via SendGrid API
 #
+# IMPORTANT: Sends PLAIN TEXT ONLY emails (no HTML)
+#
 # Usage:
 #   source sendgrid-api.sh
-#   send_email_via_sendgrid "from@example.com" "to@example.com" "Subject" "Plain text body" "HTML body"
+#   send_email_via_sendgrid "from@example.com" "to@example.com" "Subject" "Plain text body"
 #
 # Requirements:
 #   - SENDGRID_API_KEY environment variable must be set
@@ -27,13 +29,12 @@ SENDGRID_API_URL="https://api.sendgrid.com/v3/mail/send"
 # SENDGRID API SENDER
 # ==============================================================================
 
-# Send email via SendGrid API v3
+# Send email via SendGrid API v3 - PLAIN TEXT ONLY
 # Arguments:
 #   $1 - from_email (e.g., "sender@example.com")
 #   $2 - to_email (e.g., "recipient@example.com")
 #   $3 - subject
 #   $4 - text_body (plain text version)
-#   $5 - html_body (HTML version)
 # Returns:
 #   0 on success, 1 on failure
 send_email_via_sendgrid() {
@@ -41,12 +42,11 @@ send_email_via_sendgrid() {
     local to_email="$2"
     local subject="$3"
     local text_body="$4"
-    local html_body="$5"
 
     # Validate inputs
     if [ -z "$from_email" ] || [ -z "$to_email" ] || [ -z "$subject" ]; then
         log_error "Missing required parameters for send_email_via_sendgrid"
-        log_error "Usage: send_email_via_sendgrid FROM TO SUBJECT TEXT_BODY HTML_BODY"
+        log_error "Usage: send_email_via_sendgrid FROM TO SUBJECT TEXT_BODY"
         return 1
     fi
 
@@ -76,6 +76,7 @@ send_email_via_sendgrid() {
     }
 
     # Build JSON payload using temporary file to avoid escaping issues
+    # PLAIN TEXT ONLY - NO HTML
     local json_payload=$(mktemp)
 
     cat > "$json_payload" <<EOF
@@ -97,10 +98,6 @@ send_email_via_sendgrid() {
     {
       "type": "text/plain",
       "value": $(echo "$text_body" | python3 -c "import sys, json; print(json.dumps(sys.stdin.read()))" 2>/dev/null || echo '""')
-    },
-    {
-      "type": "text/html",
-      "value": $(echo "$html_body" | python3 -c "import sys, json; print(json.dumps(sys.stdin.read()))" 2>/dev/null || echo '""')
     }
   ]
 }
