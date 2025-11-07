@@ -50,12 +50,11 @@ export SCHEDULER_ENABLED=false # Enable Clockwork scheduler container (false = d
 # Full application with jobs:     DEFAULT_SCALE=2, WORKER_COUNT=1, SCHEDULER_ENABLED=true
 # High-traffic app:               DEFAULT_SCALE=4, WORKER_COUNT=2, SCHEDULER_ENABLED=true
 
-# SendGrid configuration for email notifications
+# SendGrid configuration for application email delivery (not deployment notifications)
 # Note: Application uses SendGrid API (not SMTP) for email delivery
 # API key must be configured in .env.production file
 export SENDGRID_API_KEY="dummy_sendgrid_key_change_me"
 export SENDGRID_FROM_EMAIL="noreply@${DOMAIN}"
-export NOTIFICATION_EMAIL="andrzej@webet.pl"
 
 # Nginx configuration
 export NGINX_CONF="/etc/nginx/sites-available/${APP_NAME}"
@@ -75,7 +74,6 @@ export APP_ENV_VARS=(
     # Email configuration (SendGrid API)
     "SENDGRID_API_KEY=${SENDGRID_API_KEY}"
     "SENDGRID_FROM_EMAIL=${SENDGRID_FROM_EMAIL}"
-    "NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL}"
     # Analytics and tracking
     "GOOGLE_ANALYTICS_ID=G-DUMMY000000"
     "GOOGLE_TAG_MANAGER_ID=GTM-DUMMY00"
@@ -104,3 +102,15 @@ export MAX_IMAGE_BACKUPS=20     # Keep last 20 image tar files
 export MIGRATION_BACKUP_ENABLED=true
 export ZERO_DOWNTIME_ENABLED=true
 export AUTO_CLEANUP_ENABLED=true
+
+# ============================================================================
+# EMAIL NOTIFICATION CONFIGURATION
+# ============================================================================
+# Email notifications for deployments (success/failure) via SendGrid API
+# Centralized configuration is in DevOps/common/email-config.sh
+export DEPLOYMENT_EMAIL_ENABLED=true
+export DEPLOYMENT_EMAIL_FROM="biuro@webet.pl"
+export DEPLOYMENT_EMAIL_TO="andrzej@webet.pl"
+
+# SendGrid API Key (can also be set in email-config.sh or environment)
+# export SENDGRID_API_KEY="SG.xxxxxxxxxxxxxxxxxxxx"

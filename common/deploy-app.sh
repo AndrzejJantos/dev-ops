@@ -208,6 +208,8 @@ deploy_application() {
     local scale="$1"
     local image_tag="$(date +%Y%m%d_%H%M%S)"
     local migrations_run="false"
+    local deployment_start_time=$(date +%s)
+    local git_commit="N/A"
 
     log_info "Starting deployment of ${APP_DISPLAY_NAME}"
     log_info "Application Type: ${APP_TYPE}"
@@ -216,28 +218,54 @@ deploy_application() {
     local app_type_module="$DEVOPS_DIR/common/app-types/${APP_TYPE}.sh"
     if [ ! -f "$app_type_module" ]; then
         log_error "App type module not found: ${app_type_module}"
+        send_deployment_failure_notification "App type module not found: ${app_type_module}"
         return 1
     fi
 
     # Load app-type specific module
     source "$app_type_module"
 
+    # Load email notification module
+    if [ -f "$DEVOPS_DIR/common/email-notification.sh" ]; then
+        source "$DEVOPS_DIR/common/email-notification.sh"
+    fi
+
     # PRE-DEPLOYMENT CHECKS (run before any work)
 
     # Update DevOps repository to get latest templates and scripts
-    update_devops_repo || return 1
+    if ! update_devops_repo; then
+        send_deployment_failure_notification "Failed to update DevOps repository"
+        return 1
+    fi
 
     # Check DNS configuration - STOP if not configured
-    check_dns_configuration || return 1
+    if ! check_dns_configuration; then
+        send_deployment_failure_notification "DNS configuration check failed"
+        return 1
+    fi
 
     # Check and update nginx config if changed
-    check_and_update_nginx || return 1
+    if ! check_and_update_nginx; then
+        send_deployment_failure_notification "Failed to update nginx configuration"
+        return 1
+    fi
 
     # Step 1: Pull latest code (app-type specific)
-    ${APP_TYPE}_pull_code || return 1
+    if ! ${APP_TYPE}_pull_code; then
+        send_deployment_failure_notification "Failed to pull latest code from repository"
+        return 1
+    fi
+
+    # Get git commit hash for the notification
+    if [ -d "$REPO_DIR/.git" ]; then
+        git_commit=$(cd "$REPO_DIR" && git rev-parse --short HEAD 2>/dev/null || echo "N/A")
+    fi
 
     # Step 2: Build Docker image (app-type specific)
-    ${APP_TYPE}_build_image "$image_tag" || return 1
+    if ! ${APP_TYPE}_build_image "$image_tag"; then
+        send_deployment_failure_notification "Docker image build failed"
+        return 1
+    fi
 
     # Step 3: Check if any containers are running
     local current_count=$(get_container_count "$APP_NAME")
@@ -245,7 +273,10 @@ deploy_application() {
     if [ $current_count -eq 0 ]; then
         # No containers running - fresh deployment
         log_info "No existing containers found, deploying fresh with ${scale} container(s)"
-        ${APP_TYPE}_deploy_fresh "$scale" "$image_tag" || return 1
+        if ! ${APP_TYPE}_deploy_fresh "$scale" "$image_tag"; then
+            send_deployment_failure_notification "Fresh deployment failed"
+            return 1
+        fi
         actual_scale="$scale"
 
         # For Rails, migrations run during fresh deployment
@@ -255,7 +286,10 @@ deploy_application() {
     else
         # Containers already running - rolling restart
         log_info "Found ${current_count} running container(s), will restart all of them"
-        ${APP_TYPE}_deploy_rolling "$current_count" "$image_tag" || return 1
+        if ! ${APP_TYPE}_deploy_rolling "$current_count" "$image_tag"; then
+            send_deployment_failure_notification "Rolling restart failed during container replacement"
+            return 1
+        fi
         actual_scale="$current_count"
 
         # For Rails, check if migrations were run
@@ -294,7 +328,59 @@ deploy_application() {
         ${APP_TYPE}_display_deployment_summary "$actual_scale" "$image_tag"
     fi
 
+    # Step 8: Send success notification email
+    send_deployment_success_notification "$actual_scale" "$image_tag" "$migrations_run" "$git_commit"
+
     return 0
+}
+
+# Function: Send deployment success notification
+send_deployment_success_notification() {
+    local scale="$1"
+    local image_tag="$2"
+    local migrations_run="$3"
+    local git_commit="$4"
+
+    # Check if email notification function exists and is enabled
+    if [ "${DEPLOYMENT_EMAIL_ENABLED:-true}" != "true" ]; then
+        return 0
+    fi
+
+    if declare -f send_deployment_success_email > /dev/null 2>&1; then
+        log_info "Sending deployment success notification..."
+        send_deployment_success_email \
+            "$APP_NAME" \
+            "$APP_DISPLAY_NAME" \
+            "${DOMAIN:-$APP_NAME}" \
+            "$scale" \
+            "$image_tag" \
+            "$migrations_run" \
+            "$git_commit" \
+            2>&1 | while read -r line; do
+                log_info "$line"
+            done
+    fi
+}
+
+# Function: Send deployment failure notification
+send_deployment_failure_notification() {
+    local error_message="$1"
+
+    # Check if email notification function exists and is enabled
+    if [ "${DEPLOYMENT_EMAIL_ENABLED:-true}" != "true" ]; then
+        return 0
+    fi
+
+    if declare -f send_deployment_failure_email > /dev/null 2>&1; then
+        log_info "Sending deployment failure notification..."
+        send_deployment_failure_email \
+            "$APP_NAME" \
+            "$APP_DISPLAY_NAME" \
+            "$error_message" \
+            2>&1 | while read -r line; do
+                log_info "$line"
+            done
+    fi
 }
 
 # Function: Restart application

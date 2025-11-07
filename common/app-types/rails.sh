@@ -885,7 +885,7 @@ rails_display_deployment_summary() {
         local backup_count=$(ls -1 "${IMAGE_BACKUP_DIR}"/*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
         echo "  Available: ${backup_count} backups"
         echo "  Location: ${IMAGE_BACKUP_DIR}"
-        echo "  Latest: ${APP_NAME}_${image_tag}.tar.gz"
+        echo "  Latest: ${IMAGE_BACKUP_DIR}/${APP_NAME}_${image_tag}.tar.gz"
     else
         echo "  Status: Disabled"
     fi
@@ -907,6 +907,7 @@ rails_display_deployment_summary() {
     echo "  Check health:     curl https://${DOMAIN}${HEALTH_CHECK_PATH}"
     echo "  Scale to N:       cd ~/DevOps/apps/${APP_NAME} && ./deploy.sh scale N"
     echo "  Restart:          cd ~/DevOps/apps/${APP_NAME} && ./deploy.sh restart"
+    echo "  Rollback:         cd ~/DevOps/apps/${APP_NAME} && ./deploy.sh rollback"
     echo "  Stop:             cd ~/DevOps/apps/${APP_NAME} && ./deploy.sh stop"
     echo ""
     echo "NAVIGATION:"

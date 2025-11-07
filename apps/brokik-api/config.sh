@@ -102,12 +102,16 @@ export LOG_DIR="$APP_DIR/logs"
 export IMAGE_BACKUP_DIR="$APP_DIR/docker-images"
 
 # ============================================================================
-# NOTIFICATION CONFIGURATION
+# EMAIL NOTIFICATION CONFIGURATION
 # ============================================================================
-# Mailgun configuration for deployment notifications
-export MAILGUN_API_KEY=""           # Set during setup
-export MAILGUN_DOMAIN=""            # Set during setup
-export NOTIFICATION_EMAIL=""        # Set during setup
+# Email notifications for deployments (success/failure) via SendGrid API
+# Centralized configuration is in DevOps/common/email-config.sh
+export DEPLOYMENT_EMAIL_ENABLED=true
+export DEPLOYMENT_EMAIL_FROM="biuro@webet.pl"
+export DEPLOYMENT_EMAIL_TO="andrzej@webet.pl"
+
+# SendGrid API Key (can also be set in email-config.sh or environment)
+# export SENDGRID_API_KEY="SG.xxxxxxxxxxxxxxxxxxxx"
 
 # ============================================================================
 # ERROR TRACKING CONFIGURATION
