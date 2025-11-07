@@ -125,6 +125,8 @@ generate_deployment_success_email() {
 Deployment Successful
 All Containers Replaced
 
+From: WebET Data Center
+
 APPLICATION
 Name: $app_display_name
 Type: Rails API
@@ -200,6 +202,8 @@ generate_deployment_start_email() {
     export EMAIL_TEXT_BODY=$(cat << EOF
 Deployment Starting
 
+From: WebET Data Center
+
 APPLICATION
 Name: $app_display_name
 Type: Rails API
@@ -261,6 +265,8 @@ generate_deployment_failure_email() {
     export EMAIL_TEXT_BODY=$(cat << EOF
 Deployment Failed
 ACTION REQUIRED
+
+From: WebET Data Center
 
 Application: $app_display_name
 Server: $server_hostname
