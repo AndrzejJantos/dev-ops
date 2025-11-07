@@ -116,7 +116,7 @@ EOF
 
     # Check HTTP response code
     if [ "$http_code" = "202" ]; then
-        log_success "Email sent successfully via SendGrid API"
+        # log_success "Email sent successfully via SendGrid API"  # Removed: silent email sending
         rm -f /tmp/sendgrid_response_$$.json
         return 0
     else

@@ -347,15 +347,13 @@ send_deployment_start_notification() {
     fi
 
     if declare -f send_deployment_start_email > /dev/null 2>&1; then
-        log_info "Sending deployment start notification..."
+        # log_info "Sending deployment start notification..."  # Removed: silent email sending
         send_deployment_start_email \
             "$APP_NAME" \
             "$APP_DISPLAY_NAME" \
             "${DOMAIN:-$APP_NAME}" \
             "$git_commit" \
-            2>&1 | while read -r line; do
-                log_info "$line"
-            done
+            > /dev/null 2>&1  # Silent: redirect all output to /dev/null
     fi
 }
 
@@ -372,7 +370,7 @@ send_deployment_success_notification() {
     fi
 
     if declare -f send_deployment_success_email > /dev/null 2>&1; then
-        log_info "Sending deployment success notification..."
+        # log_info "Sending deployment success notification..."  # Removed: silent email sending
         send_deployment_success_email \
             "$APP_NAME" \
             "$APP_DISPLAY_NAME" \
@@ -381,9 +379,7 @@ send_deployment_success_notification() {
             "$image_tag" \
             "$migrations_run" \
             "$git_commit" \
-            2>&1 | while read -r line; do
-                log_info "$line"
-            done
+            > /dev/null 2>&1  # Silent: redirect all output to /dev/null
     fi
 }
 
@@ -397,14 +393,12 @@ send_deployment_failure_notification() {
     fi
 
     if declare -f send_deployment_failure_email > /dev/null 2>&1; then
-        log_info "Sending deployment failure notification..."
+        # log_info "Sending deployment failure notification..."  # Removed: silent email sending
         send_deployment_failure_email \
             "$APP_NAME" \
             "$APP_DISPLAY_NAME" \
             "$error_message" \
-            2>&1 | while read -r line; do
-                log_info "$line"
-            done
+            > /dev/null 2>&1  # Silent: redirect all output to /dev/null
     fi
 }
 
@@ -1015,7 +1009,7 @@ update_nginx_upstream() {
 
 # Function: Handle command-line arguments
 handle_deploy_command() {
-    local command="${1:-help}"
+    local command="${1:-deploy}"
 
     case "$command" in
         deploy)

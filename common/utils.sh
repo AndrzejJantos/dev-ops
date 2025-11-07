@@ -28,6 +28,14 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+log_header() {
+    echo ""
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}$1${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+}
+
 # Send Mailgun notification
 send_mailgun_notification() {
     local subject="$1"
