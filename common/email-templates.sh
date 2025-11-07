@@ -122,54 +122,93 @@ generate_deployment_success_email() {
     local clean_internal_url=$(echo -e "$internal_url" | sed 's/\x1b\[[0-9;]*m//g')
 
     export EMAIL_TEXT_BODY=$(cat << EOF
-Deployment Successful
-All Containers Replaced
+================================================================
+    DEPLOYMENT SUCCESSFUL - ALL CONTAINERS REPLACED
+================================================================
 
-From: WebET Data Center
+------------------------------------------------------------
+APPLICATION DETAILS
+------------------------------------------------------------
+  Name:             $app_display_name
+  Type:             Rails API
+  App ID:           $app_name
+  Git Commit:       $git_commit
+  Image Tag:        $image_tag
 
-APPLICATION
-Name: $app_display_name
-Type: Rails API
-App ID: $app_name
-Git Commit: $git_commit
-Image Tag: $image_tag
-
+------------------------------------------------------------
 DEPLOYMENT STATUS
-Status: SUCCESS
-Timestamp: $deployment_time
-Migrations: $migrations_run
+------------------------------------------------------------
+  Status:           SUCCESS
+  Timestamp:        $deployment_time
+  Migrations Run:   $migrations_run
 
+------------------------------------------------------------
 AVAILABILITY
-Primary URL: https://$domain
-${clean_internal_url}Health Check: https://$domain/up
+------------------------------------------------------------
+  Primary URL:      https://$domain
+  ${clean_internal_url}Health Check:     https://$domain/up
 
-${clean_ssl_info}WEB CONTAINERS
-Count: ${#containers[@]} instances
-Containers:
+------------------------------------------------------------
+${clean_ssl_info}------------------------------------------------------------
+WEB CONTAINERS
+------------------------------------------------------------
+  Count:            ${#containers[@]} instances
+
+  Containers:
 $(echo -e "$clean_containers_info")
-${clean_workers_info}${image_backup_info}${db_backup_info}USEFUL COMMANDS
-Deploy: cd ~/DevOps/apps/${app_name} && ./deploy.sh
-Rails console: ~/apps/${app_name}/console.sh
-Check health: curl https://${domain}/up
-Scale to N: cd ~/DevOps/apps/${app_name} && ./deploy.sh scale N
-Restart: cd ~/DevOps/apps/${app_name} && ./deploy.sh restart
-Rollback: cd ~/DevOps/apps/${app_name} && ./deploy.sh rollback
-Stop: cd ~/DevOps/apps/${app_name} && ./deploy.sh stop
+${clean_workers_info}${image_backup_info}${db_backup_info}================================================================
+USEFUL COMMANDS
+================================================================
 
+  Deploy Application:
+    cd ~/DevOps/apps/${app_name} && ./deploy.sh
+
+  Rails Console:
+    ~/apps/${app_name}/console.sh
+
+  Health Check:
+    curl https://${domain}/up
+
+  Scale Containers:
+    cd ~/DevOps/apps/${app_name} && ./deploy.sh scale N
+
+  Restart Services:
+    cd ~/DevOps/apps/${app_name} && ./deploy.sh restart
+
+  Rollback Deployment:
+    cd ~/DevOps/apps/${app_name} && ./deploy.sh rollback
+
+  Stop Application:
+    cd ~/DevOps/apps/${app_name} && ./deploy.sh stop
+
+------------------------------------------------------------
 NAVIGATION
-Config dir: cd ~/DevOps/apps/${app_name}
-Deployed app: cd ~/apps/${app_name}
-Quick link: cd ~/apps/${app_name}/config
+------------------------------------------------------------
+  Config Directory:     cd ~/DevOps/apps/${app_name}
+  Deployed App:         cd ~/apps/${app_name}
+  Quick Config Link:    cd ~/apps/${app_name}/config
 
-LOGS
-All logs: tail -f ~/apps/${app_name}/logs/production.log
-Sidekiq only: tail -f ~/apps/${app_name}/logs/production.log | grep Sidekiq
-Container logs: docker logs ${app_name}_web_1 -f
-Inside container: docker exec ${app_name}_web_1 tail -f /app/log/production.log
+------------------------------------------------------------
+LOGS & MONITORING
+------------------------------------------------------------
+  All Logs:
+    tail -f ~/apps/${app_name}/logs/production.log
+
+  Sidekiq Only:
+    tail -f ~/apps/${app_name}/logs/production.log | grep Sidekiq
+
+  Container Logs:
+    docker logs ${app_name}_web_1 -f
+
+  Inside Container:
+    docker exec ${app_name}_web_1 tail -f /app/log/production.log
+
+================================================================
 
 Deployed on $deployment_time
 
-This is an automated notification from the CheaperForDrug deployment system.
+This is an automated notification from the CheaperForDrug
+deployment system.
 EOF
 )
 }
@@ -200,38 +239,55 @@ generate_deployment_start_email() {
 
     # Plain text body (NO color codes, NO emojis for clean TXT mode)
     export EMAIL_TEXT_BODY=$(cat << EOF
-Deployment Starting
+================================================================
+    DEPLOYMENT STARTING
+================================================================
 
-From: WebET Data Center
+------------------------------------------------------------
+APPLICATION DETAILS
+------------------------------------------------------------
+  Name:             $app_display_name
+  Type:             Rails API
+  App ID:           $app_name
+  Git Commit:       $git_commit
+  Domain:           $domain
 
-APPLICATION
-Name: $app_display_name
-Type: Rails API
-App ID: $app_name
-Git Commit: $git_commit
-Domain: $domain
-
+------------------------------------------------------------
 DEPLOYMENT STATUS
-Status: IN PROGRESS
-Started: $deployment_time
-Server: $server_hostname
+------------------------------------------------------------
+  Status:           IN PROGRESS
+  Started:          $deployment_time
+  Server:           $server_hostname
 
+------------------------------------------------------------
 AVAILABILITY
-Primary URL: https://$domain
-Health Check: https://$domain/up
+------------------------------------------------------------
+  Primary URL:      https://$domain
+  Health Check:     https://$domain/up
 
+------------------------------------------------------------
 NEXT STEPS
-- Pulling latest code from repository
-- Building Docker image
-- Running database migrations (if configured)
-- Performing rolling restart of containers
-- Setting up SSL certificates (if needed)
+------------------------------------------------------------
+  The deployment process will perform the following actions:
 
+    1. Pulling latest code from repository
+    2. Building Docker image
+    3. Running database migrations (if configured)
+    4. Performing rolling restart of containers
+    5. Setting up SSL certificates (if needed)
+
+------------------------------------------------------------
 MONITORING
-You will receive another email when the deployment completes or fails.
+------------------------------------------------------------
+  You will receive another email when the deployment
+  completes successfully or if any errors occur.
+
+================================================================
 
 Started on $deployment_time
-This is an automated notification from the CheaperForDrug deployment system.
+
+This is an automated notification from the CheaperForDrug
+deployment system.
 EOF
 )
 }
@@ -263,32 +319,72 @@ generate_deployment_failure_email() {
     local clean_error_message=$(echo "$error_message" | sed 's/\x1b\[[0-9;]*m//g')
 
     export EMAIL_TEXT_BODY=$(cat << EOF
-Deployment Failed
-ACTION REQUIRED
+================================================================
+    DEPLOYMENT FAILED - ACTION REQUIRED
+================================================================
 
-From: WebET Data Center
+------------------------------------------------------------
+APPLICATION DETAILS
+------------------------------------------------------------
+  Application:      $app_display_name
+  Server:           $server_hostname
+  Timestamp:        $deployment_time
 
-Application: $app_display_name
-Server: $server_hostname
-Time: $deployment_time
-
+------------------------------------------------------------
 ERROR DETAILS
+------------------------------------------------------------
+
 $clean_error_message
 
+------------------------------------------------------------
 RECOMMENDED ACTIONS
-1. Check the deployment logs for detailed error information
-2. Verify that all prerequisites are met (database, Redis, etc.)
-3. Check if there are any configuration issues
-4. Review recent code changes that may have caused the failure
+------------------------------------------------------------
 
-USEFUL COMMANDS
-View logs: docker logs ${app_name}_web_1 -f
-Check status: cd ~/DevOps/apps/${app_name} && ./deploy.sh status
-Check health: curl https://${DOMAIN:-$app_name}/up
+  1. Check the deployment logs for detailed error information
+
+  2. Verify that all prerequisites are met:
+     - Database connectivity
+     - Redis availability
+     - Required environment variables
+
+  3. Check for configuration issues:
+     - Review docker-compose.yml
+     - Verify environment files
+     - Check port conflicts
+
+  4. Review recent code changes:
+     - Check git log for breaking changes
+     - Verify database migration compatibility
+     - Review dependency updates
+
+------------------------------------------------------------
+TROUBLESHOOTING COMMANDS
+------------------------------------------------------------
+
+  View Container Logs:
+    docker logs ${app_name}_web_1 -f
+
+  Check Deployment Status:
+    cd ~/DevOps/apps/${app_name} && ./deploy.sh status
+
+  Check Application Health:
+    curl https://${DOMAIN:-$app_name}/up
+
+  View All Running Containers:
+    docker ps -a | grep ${app_name}
+
+  Check Docker Resources:
+    docker system df
+    docker stats --no-stream
+
+================================================================
 
 Failed on $deployment_time
 
-This is an automated notification from the CheaperForDrug deployment system.
+This is an automated notification from the CheaperForDrug
+deployment system.
+
+PLEASE INVESTIGATE AND RESOLVE THE ISSUE PROMPTLY.
 EOF
 )
 }

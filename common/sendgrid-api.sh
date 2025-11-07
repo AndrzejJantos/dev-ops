@@ -92,7 +92,8 @@ send_email_via_sendgrid() {
     }
   ],
   "from": {
-    "email": "$from_email"
+    "email": "$from_email",
+    "name": "WebET Data Center"
   },
   "content": [
     {
