@@ -170,6 +170,14 @@ docker_build() {
 docker_up() {
     print_header "Starting Scraper Containers"
 
+    # Create required directories for volume mounts
+    print_color "$GREEN" "Creating required directories..."
+    mkdir -p "${APP_DIR}/logs/poland" "${APP_DIR}/logs/germany" "${APP_DIR}/logs/czech"
+    mkdir -p "${APP_DIR}/outputs/poland" "${APP_DIR}/outputs/germany" "${APP_DIR}/outputs/czech"
+    mkdir -p "${APP_DIR}/state/poland" "${APP_DIR}/state/germany" "${APP_DIR}/state/czech"
+    print_color "$GREEN" "✓ Directories created"
+    echo ""
+
     cd "$DEVOPS_DIR/apps/cheaperfordrug-scraper"
 
     # Start containers in detached mode
