@@ -142,9 +142,22 @@ load_env() {
 docker_build() {
     print_header "Building Docker Image: ${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
 
+    # Pull latest scraper code from git
+    print_color "$GREEN" "Pulling latest scraper code from git..."
+    cd "${APP_DIR}/repo"
+
+    if [ -d ".git" ]; then
+        git fetch origin
+        git pull origin master
+        print_color "$GREEN" "✓ Latest code pulled from git"
+        echo ""
+    else
+        print_color "$YELLOW" "Warning: Not a git repository, skipping git pull"
+    fi
+
+    # Build Docker image
     cd "$DEVOPS_DIR/apps/cheaperfordrug-scraper"
 
-    # Build from Dockerfile in .docker directory
     if [ -f ".docker/Dockerfile" ]; then
         docker build -f .docker/Dockerfile -t "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}" "${APP_DIR}/repo"
         print_color "$GREEN" "✓ Docker image built successfully"
@@ -308,14 +321,14 @@ case "$COMMAND" in
         print_color "$GREEN" "Usage: $0 <command>"
         echo ""
         echo "Commands:"
-        echo "  deploy         Full deployment (build if needed + start containers)"
-        echo "  build          Build Docker image"
+        echo "  deploy         Full deployment (git pull + build if needed + start)"
+        echo "  build          Pull latest code from git + build Docker image"
         echo "  up|start       Start all containers"
         echo "  down|stop      Stop and remove containers"
         echo "  restart        Restart all containers"
         echo "  logs [service] View logs (optional: specific service name)"
         echo "  status|ps      Show container status"
-        echo "  rebuild        Rebuild image and restart containers"
+        echo "  rebuild        Git pull + rebuild image + restart containers"
         echo "  help           Show this help message"
         echo ""
         echo "Services:"
