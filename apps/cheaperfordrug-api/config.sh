@@ -115,6 +115,12 @@ export DEPLOYMENT_EMAIL_TO="andrzej@webet.pl"
 
 
 # ============================================================================
+# ELASTICSEARCH CONFIGURATION
+# ============================================================================
+export ELASTICSEARCH_ENABLED=true
+export ELASTICSEARCH_PROVIDER="${ELASTICSEARCH_PROVIDER:-aws}"  # aws or docker
+
+# ============================================================================
 # ERROR TRACKING CONFIGURATION
 # ============================================================================
 export ROLLBAR_ACCESS_TOKEN="${ROLLBAR_ACCESS_TOKEN:-}"  # Set via environment variable
