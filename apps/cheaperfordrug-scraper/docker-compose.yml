@@ -28,7 +28,7 @@ services:
     devices:
       - /dev/net/tun            # Required for TUN/TAP interface
 
-    # Use host network mode to access API on localhost:4100
+    # Use host network mode to access API on localhost:4200
     # Alternative: use bridge mode with extra_hosts if localhost access needed
     network_mode: bridge
 
@@ -46,7 +46,7 @@ services:
       - VPN_COUNTRY=Poland
 
       # API Configuration
-      - API_ENDPOINT=${API_ENDPOINT:-http://api-scraper.localtest.me:4100/api/scraper/online_pharmacy_drugs}
+      - API_ENDPOINT=${API_ENDPOINT:-http://api-scraper.localtest.me:4200/api/scraper/online_pharmacy_drugs}
       - API_TOKEN=${API_TOKEN:-${SCRAPER_AUTH_TOKEN:-Andrzej12345}}
       - SCRAPER_AUTH_TOKEN=${SCRAPER_AUTH_TOKEN:-Andrzej12345}
       - SEND_TO_API=${SEND_TO_API:-true}
@@ -133,7 +133,7 @@ services:
       - VPN_COUNTRY=Germany
 
       # API Configuration
-      - API_ENDPOINT=${API_ENDPOINT:-http://api-scraper.localtest.me:4100/api/scraper/online_pharmacy_drugs}
+      - API_ENDPOINT=${API_ENDPOINT:-http://api-scraper.localtest.me:4200/api/scraper/online_pharmacy_drugs}
       - API_TOKEN=${API_TOKEN:-${SCRAPER_AUTH_TOKEN:-Andrzej12345}}
       - SCRAPER_AUTH_TOKEN=${SCRAPER_AUTH_TOKEN:-Andrzej12345}
       - SEND_TO_API=${SEND_TO_API:-true}
@@ -220,7 +220,7 @@ services:
       - VPN_COUNTRY=Czech_Republic
 
       # API Configuration
-      - API_ENDPOINT=${API_ENDPOINT:-http://api-scraper.localtest.me:4100/api/scraper/online_pharmacy_drugs}
+      - API_ENDPOINT=${API_ENDPOINT:-http://api-scraper.localtest.me:4200/api/scraper/online_pharmacy_drugs}
       - API_TOKEN=${API_TOKEN:-${SCRAPER_AUTH_TOKEN:-Andrzej12345}}
       - SCRAPER_AUTH_TOKEN=${SCRAPER_AUTH_TOKEN:-Andrzej12345}
       - SEND_TO_API=${SEND_TO_API:-true}

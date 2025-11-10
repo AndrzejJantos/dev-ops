@@ -45,7 +45,7 @@ export CONTAINER_PORT=""
 # API CONFIGURATION
 # ============================================================================
 # Scrapers send data to the CheaperForDrug API
-export API_ENDPOINT="http://api-scraper.localtest.me:4100/api/scraper/online_pharmacy_drugs"
+export API_ENDPOINT="http://api-scraper.localtest.me:4200/api/scraper/online_pharmacy_drugs"
 
 # ============================================================================
 # NORDVPN CONFIGURATION
