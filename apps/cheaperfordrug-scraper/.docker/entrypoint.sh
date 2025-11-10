@@ -127,11 +127,9 @@ login_nordvpn() {
 set timeout 30
 set token [lindex $argv 0]
 
-spawn nordvpn login --token
+spawn nordvpn login --token $token
 expect "Do you allow us to collect and use limited app performance data? (y/n)"
 send "n\r"
-expect "Token:"
-send "$token\r"
 expect eof
 EXPECT_EOF
 
