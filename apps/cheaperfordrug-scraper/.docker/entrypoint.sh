@@ -120,8 +120,8 @@ login_nordvpn() {
         return 0
     fi
 
-    # Login with token
-    if echo "$NORDVPN_TOKEN" | nordvpn login --token 2>&1 | tee -a /app/logs/nordvpn-login.log | grep -qE "(Welcome|logged in)"; then
+    # Login with token (automatically decline telemetry with 'n')
+    if (echo "$NORDVPN_TOKEN"; echo "n") | nordvpn login --token 2>&1 | tee -a /app/logs/nordvpn-login.log | grep -qE "(Welcome|logged in)"; then
         log_success "Successfully logged in to NordVPN"
     else
         log_error "Failed to login to NordVPN"
