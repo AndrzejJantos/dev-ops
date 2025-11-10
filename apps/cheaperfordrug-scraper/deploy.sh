@@ -221,6 +221,49 @@ docker_rebuild() {
     print_color "$GREEN" "✓ Rebuild complete"
 }
 
+docker_deploy() {
+    print_header "Deploying Scraper Containers"
+
+    # Check if image exists
+    if docker images "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}" | grep -q "${DOCKER_IMAGE_NAME}"; then
+        print_color "$YELLOW" "Image ${DOCKER_IMAGE_NAME}:${IMAGE_TAG} already exists"
+        print_color "$YELLOW" "Use './deploy.sh rebuild' to force rebuild"
+        echo ""
+    else
+        print_color "$GREEN" "Image not found, building..."
+        docker_build
+        echo ""
+    fi
+
+    # Check if containers are running
+    RUNNING_CONTAINERS=$(docker ps --filter "name=cheaperfordrug-scraper" --format "{{.Names}}" | wc -l)
+    if [ "$RUNNING_CONTAINERS" -gt 0 ]; then
+        print_color "$YELLOW" "Found $RUNNING_CONTAINERS running scraper container(s)"
+        print_color "$YELLOW" "Stopping existing containers..."
+        docker_down
+        echo ""
+    fi
+
+    # Start containers
+    print_color "$GREEN" "Starting containers..."
+    docker_up
+
+    echo ""
+    print_header "Deployment Complete!"
+
+    # Provide helpful next steps
+    print_color "$GREEN" "Scraper containers are now running with:"
+    print_color "$GREEN" "  ✓ NordVPN connection per country"
+    print_color "$GREEN" "  ✓ Internal cron scheduling"
+    print_color "$GREEN" "  ✓ API connection to localhost:4200"
+    echo ""
+    print_color "$BLUE" "Useful commands:"
+    print_color "$BLUE" "  ./deploy.sh logs             - View all logs"
+    print_color "$BLUE" "  ./deploy.sh logs scraper-poland - View Poland logs"
+    print_color "$BLUE" "  ./deploy.sh status           - Check container status"
+    print_color "$BLUE" "  ./deploy.sh restart          - Restart containers"
+}
+
 # ============================================================================
 # MAIN SCRIPT
 # ============================================================================
@@ -233,10 +276,13 @@ check_requirements
 # Load environment variables
 load_env
 
-# Parse command
-COMMAND="${1:-help}"
+# Parse command (default to deploy if no command given)
+COMMAND="${1:-deploy}"
 
 case "$COMMAND" in
+    deploy)
+        docker_deploy
+        ;;
     build)
         docker_build
         ;;
@@ -262,6 +308,7 @@ case "$COMMAND" in
         print_color "$GREEN" "Usage: $0 <command>"
         echo ""
         echo "Commands:"
+        echo "  deploy         Full deployment (build if needed + start containers)"
         echo "  build          Build Docker image"
         echo "  up|start       Start all containers"
         echo "  down|stop      Stop and remove containers"
@@ -277,7 +324,8 @@ case "$COMMAND" in
         echo "  scraper-czech     Czech Republic scraper container"
         echo ""
         echo "Examples:"
-        echo "  $0 build                      # Build the image"
+        echo "  $0 deploy                     # Full deployment (recommended)"
+        echo "  $0 build                      # Build the image only"
         echo "  $0 up                         # Start all scrapers"
         echo "  $0 logs scraper-poland        # View Poland scraper logs"
         echo "  $0 restart                    # Restart all containers"
