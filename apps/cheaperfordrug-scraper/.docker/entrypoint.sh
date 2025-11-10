@@ -88,11 +88,11 @@ validate_environment() {
 setup_nordvpn_daemon() {
     log_info "Starting NordVPN daemon..."
 
-    # Start the daemon
-    /etc/init.d/nordvpn start 2>&1 | tee -a /app/logs/nordvpn-daemon.log || {
-        log_error "Failed to start NordVPN daemon"
-        exit 1
-    }
+    # Start the daemon as background process with logging
+    /usr/sbin/nordvpnd >> /app/logs/nordvpn-daemon.log 2>&1 &
+
+    local daemon_pid=$!
+    log_info "NordVPN daemon started with PID: $daemon_pid"
 
     # Wait for daemon to be ready
     local max_attempts=30
