@@ -1,5 +1,3 @@
-version: '3.8'
-
 # CheaperForDrug Scraper - Multi-Country Docker Compose Configuration
 # Deploys 3 containers, one per country (Poland, Germany, Czech Republic)
 # Each container runs with NordVPN connected to the respective country
@@ -72,7 +70,7 @@ services:
 
     volumes:
       # Application code (read-only in production)
-      - ${APP_DIR}/repo:/app:ro
+      - ${APP_DIR}/repo:/app
 
       # Persistent data directories
       - ${APP_DIR}/logs/poland:/app/logs
@@ -159,7 +157,7 @@ services:
 
     volumes:
       # Application code (read-only in production)
-      - ${APP_DIR}/repo:/app:ro
+      - ${APP_DIR}/repo:/app
 
       # Persistent data directories
       - ${APP_DIR}/logs/germany:/app/logs
@@ -246,7 +244,7 @@ services:
 
     volumes:
       # Application code (read-only in production)
-      - ${APP_DIR}/repo:/app:ro
+      - ${APP_DIR}/repo:/app
 
       # Persistent data directories
       - ${APP_DIR}/logs/czech:/app/logs
