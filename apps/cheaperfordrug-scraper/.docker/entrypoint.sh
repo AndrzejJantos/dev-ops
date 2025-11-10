@@ -180,18 +180,28 @@ connect_vpn() {
 
     while [ $attempt -lt $max_attempts ]; do
         if nordvpn connect "$VPN_COUNTRY" 2>&1 | tee -a /app/logs/nordvpn-connect.log | grep -q "Connected"; then
-            sleep 5  # Wait for connection to stabilize
+            log_info "Connection command succeeded, verifying..."
+            sleep 8  # Wait for connection to fully stabilize
 
-            # Verify connection
-            if nordvpn status | grep -q "Status: Connected"; then
-                local ip=$(curl -s --max-time 10 https://api.ipify.org || echo "unknown")
-                log_success "Connected to VPN in ${VPN_COUNTRY}. IP: ${ip}"
-                return 0
-            fi
+            # Verify connection with retries
+            local verify_attempts=0
+            local max_verify_attempts=5
+            while [ $verify_attempts -lt $max_verify_attempts ]; do
+                if nordvpn status | grep -q "Status: Connected"; then
+                    local ip=$(curl -s --max-time 10 https://api.ipify.org || echo "unknown")
+                    log_success "Connected to VPN in ${VPN_COUNTRY}. IP: ${ip}"
+                    return 0
+                fi
+                verify_attempts=$((verify_attempts + 1))
+                log_info "Verification attempt $verify_attempts/$max_verify_attempts..."
+                sleep 2
+            done
+            log_warning "Connection established but verification failed"
         fi
 
         attempt=$((attempt + 1))
         log_warning "Connection attempt $attempt failed. Retrying..."
+        nordvpn disconnect 2>&1 | tee -a /app/logs/nordvpn-connect.log || true
         sleep 5
     done
 
