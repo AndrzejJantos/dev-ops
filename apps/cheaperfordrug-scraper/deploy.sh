@@ -91,21 +91,31 @@ check_requirements() {
         exit 1
     fi
 
-    # Check if NORDVPN_TOKEN is set
+    # Check if NORDVPN_TOKEN is set (can be in host environment or .env file)
     if [ -z "$NORDVPN_TOKEN" ]; then
-        print_color "$YELLOW" "Warning: NORDVPN_TOKEN environment variable is not set"
+        print_color "$YELLOW" "Warning: NORDVPN_TOKEN environment variable is not set in host environment"
         print_color "$YELLOW" "VPN will not work without this token"
-        print_color "$YELLOW" "Set it with: export NORDVPN_TOKEN='your_token_here'"
+        print_color "$YELLOW" "Set it with: export NORDVPN_TOKEN='your_token_here' in ~/.bashrc or ~/.profile"
+    else
+        print_color "$GREEN" "✓ NORDVPN_TOKEN found in host environment"
     fi
 }
 
 load_env() {
     print_color "$GREEN" "Loading environment variables from $ENV_FILE"
 
-    # Export variables from .env file
-    set -a
-    source "$ENV_FILE"
-    set +a
+    # Load variables from .env file, but preserve existing environment variables
+    # This allows host environment variables (like NORDVPN_TOKEN) to take precedence
+    while IFS='=' read -r key value; do
+        # Skip comments and empty lines
+        [[ $key =~ ^#.*$ ]] && continue
+        [[ -z $key ]] && continue
+
+        # Only set if not already set in environment
+        if [ -z "${!key}" ]; then
+            export "$key=$value"
+        fi
+    done < <(grep -v '^#' "$ENV_FILE" | grep -v '^[[:space:]]*$')
 
     # Export Docker-specific variables
     export APP_DIR
@@ -115,6 +125,14 @@ load_env() {
     export HOME
 
     print_color "$GREEN" "Environment variables loaded successfully"
+
+    # Show which important variables are set
+    if [ -n "$NORDVPN_TOKEN" ]; then
+        print_color "$GREEN" "  ✓ NORDVPN_TOKEN: loaded from host environment"
+    fi
+    if [ -n "$API_ENDPOINT" ]; then
+        print_color "$GREEN" "  ✓ API_ENDPOINT: $API_ENDPOINT"
+    fi
 }
 
 # ============================================================================
