@@ -179,7 +179,7 @@ connect_vpn() {
     local attempt=0
 
     while [ $attempt -lt $max_attempts ]; do
-        if nordvpn connect "$VPN_COUNTRY" 2>&1 | tee -a /app/logs/nordvpn-connect.log | grep -q "Connected"; then
+        if nordvpn connect "$VPN_COUNTRY" 2>&1 | tee -a /app/logs/nordvpn-connect.log | grep -qi "connected"; then
             log_info "Connection command succeeded, verifying..."
             sleep 8  # Wait for connection to fully stabilize
 
