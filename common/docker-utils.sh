@@ -104,9 +104,9 @@ start_container() {
             -e CONTAINER_NAME="${container_name}" \
             -v "${LOG_DIR}:${log_mount_path}" \
             ${storage_volume_args} \
-            --health-cmd "curl -f http://localhost:${host_port}/up || exit 1" \
+            --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:${host_port}/ || exit 1" \
             --health-interval=30s \
-            --health-timeout=3s \
+            --health-timeout=10s \
             --health-start-period=40s \
             --health-retries=3 \
             "$image_name"
@@ -121,9 +121,9 @@ start_container() {
             -e CONTAINER_NAME="${container_name}" \
             -v "${LOG_DIR}:${log_mount_path}" \
             ${storage_volume_args} \
-            --health-cmd "curl -f http://localhost:${container_port}/up || exit 1" \
+            --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:${container_port}/ || exit 1" \
             --health-interval=30s \
-            --health-timeout=3s \
+            --health-timeout=10s \
             --health-start-period=40s \
             --health-retries=3 \
             "$image_name"

@@ -152,8 +152,7 @@ DEPLOYMENT STATUS
 AVAILABILITY
 ------------------------------------------------------------
   Primary Domain:   $domain
-${clean_internal_url}  Health Check:     https://$domain/up
-
+${clean_internal_url}
 ------------------------------------------------------------
 ${clean_ssl_info}------------------------------------------------------------
 WEB CONTAINERS
@@ -171,9 +170,6 @@ USEFUL COMMANDS
 
   Rails Console:
     ~/apps/${app_name}/console.sh
-
-  Health Check:
-    curl https://${domain}/up
 
   Scale Containers:
     cd ~/DevOps/apps/${app_name} && ./deploy.sh scale N
@@ -269,7 +265,6 @@ DEPLOYMENT STATUS
 AVAILABILITY
 ------------------------------------------------------------
   Primary Domain:   $domain
-  Health Check:     https://$domain/up
 
 ------------------------------------------------------------
 NEXT STEPS
@@ -373,9 +368,6 @@ TROUBLESHOOTING COMMANDS
   Check Deployment Status:
     cd ~/DevOps/apps/${app_name} && ./deploy.sh status
 
-  Check Application Health:
-    curl https://${DOMAIN:-$app_name}/up
-
   View All Running Containers:
     docker ps -a | grep ${app_name}
 
@@ -391,6 +383,154 @@ This is an automated notification from the CheaperForDrug
 deployment system.
 
 PLEASE INVESTIGATE AND RESOLVE THE ISSUE PROMPTLY.
+EOF
+)
+}
+
+# ==============================================================================
+# CONTAINER RESTART EMAIL TEMPLATE
+# ==============================================================================
+
+# Generate container restart email
+# Arguments:
+#   $1 - restart_type ("Sequential" or "Parallel")
+#   $2 - total_containers (total number of containers)
+#   $3 - success_count
+#   $4 - fail_count
+#   $5 - timeout_count (optional, for sequential restarts)
+#   $6 - container_list (newline-separated list of "container_name (status)")
+# Returns:
+#   Sets EMAIL_SUBJECT, EMAIL_TEXT_BODY variables
+generate_container_restart_email() {
+    local restart_type="$1"
+    local total_containers="$2"
+    local success_count="$3"
+    local fail_count="$4"
+    local timeout_count="${5:-0}"
+    local container_list="$6"
+
+    local restart_time="$(date '+%Y-%m-%d %H:%M:%S %Z')"
+    local server_hostname="$(hostname)"
+
+    # Determine restart type description
+    local type_description=""
+    if [ "$restart_type" = "Sequential" ]; then
+        type_description="Sequential (one by one with health checks)"
+    else
+        type_description="Parallel (all at once)"
+    fi
+
+    # Subject
+    export EMAIL_SUBJECT="Containers Restarted: ${server_hostname}"
+
+    # Plain text body (NO color codes, NO emojis - clean TXT mode)
+    # Strip any ANSI color codes from container list
+    local clean_container_list=$(echo -e "$container_list" | sed 's/\x1b\[[0-9;]*m//g')
+
+    export EMAIL_TEXT_BODY=$(cat << EOF
+================================================================
+    CONTAINERS RESTARTED
+================================================================
+
+From: WebET Data Center
+
+------------------------------------------------------------
+RESTART DETAILS
+------------------------------------------------------------
+  Type:             $type_description
+  Server:           $server_hostname
+  Timestamp:        $restart_time
+  Total Containers: $total_containers
+
+------------------------------------------------------------
+RESTARTED CONTAINERS
+------------------------------------------------------------
+$clean_container_list
+
+------------------------------------------------------------
+RESULTS
+------------------------------------------------------------
+  Success:          $success_count
+  Failed:           $fail_count
+  Timeouts:         $timeout_count
+
+================================================================
+
+Restarted on $restart_time
+
+This is an automated notification from the container management system.
+EOF
+)
+}
+
+# ==============================================================================
+# CONTAINER KILL EMAIL TEMPLATE
+# ==============================================================================
+
+# Generate container kill email
+# Arguments:
+#   $1 - total_killed (number of containers killed)
+#   $2 - success_count
+#   $3 - fail_count
+#   $4 - container_list (newline-separated list of "container_name (status)")
+# Returns:
+#   Sets EMAIL_SUBJECT, EMAIL_TEXT_BODY variables
+generate_container_kill_email() {
+    local total_killed="$1"
+    local success_count="$2"
+    local fail_count="$3"
+    local container_list="$4"
+
+    local kill_time="$(date '+%Y-%m-%d %H:%M:%S %Z')"
+    local server_hostname="$(hostname)"
+
+    # Subject
+    export EMAIL_SUBJECT="Unhealthy Containers Killed: ${server_hostname}"
+
+    # Plain text body (NO color codes, NO emojis - clean TXT mode)
+    # Strip any ANSI color codes from container list
+    local clean_container_list=$(echo -e "$container_list" | sed 's/\x1b\[[0-9;]*m//g')
+
+    export EMAIL_TEXT_BODY=$(cat << EOF
+================================================================
+    UNHEALTHY CONTAINERS KILLED
+================================================================
+
+From: WebET Data Center
+
+------------------------------------------------------------
+OPERATION DETAILS
+------------------------------------------------------------
+  Server:           $server_hostname
+  Timestamp:        $kill_time
+  Total Killed:     $total_killed
+  Reason:           Containers were unhealthy
+
+------------------------------------------------------------
+KILLED CONTAINERS
+------------------------------------------------------------
+$clean_container_list
+
+------------------------------------------------------------
+RESULTS
+------------------------------------------------------------
+  Successfully Killed: $success_count
+  Failed:              $fail_count
+
+------------------------------------------------------------
+RECOMMENDED ACTIONS
+------------------------------------------------------------
+  1. Check container logs to identify the root cause
+  2. Verify application health and dependencies
+  3. If containers were managed by docker-compose or orchestration,
+     they may automatically restart
+  4. Review recent deployments or configuration changes
+
+================================================================
+
+Killed on $kill_time
+
+This is an automated notification from the container management system.
 EOF
 )
 }

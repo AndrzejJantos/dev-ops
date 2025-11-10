@@ -234,6 +234,94 @@ Note: This email is sent in PLAIN TEXT ONLY format (no HTML)."
     return $?
 }
 
+# Send container restart email
+# Arguments:
+#   $1 - restart_type ("Sequential" or "Parallel")
+#   $2 - total_containers (total number of containers)
+#   $3 - success_count
+#   $4 - fail_count
+#   $5 - timeout_count (optional, for sequential restarts)
+#   $6 - container_list (newline-separated list of "container_name (status)")
+# Returns:
+#   0 on success, 1 on failure
+send_container_restart_email() {
+    local restart_type="$1"
+    local total_containers="$2"
+    local success_count="$3"
+    local fail_count="$4"
+    local timeout_count="${5:-0}"
+    local container_list="$6"
+
+    # Check if email is enabled
+    if [ "${DEPLOYMENT_EMAIL_ENABLED:-true}" != "true" ]; then
+        return 0
+    fi
+
+    # Check SendGrid requirements (silently fail if not available)
+    if ! check_sendgrid_requirements >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Generate email content using template
+    generate_container_restart_email \
+        "$restart_type" \
+        "$total_containers" \
+        "$success_count" \
+        "$fail_count" \
+        "$timeout_count" \
+        "$container_list"
+
+    # Send email via SendGrid API (plain text only)
+    send_email_via_sendgrid \
+        "$EMAIL_FROM" \
+        "$EMAIL_TO" \
+        "$EMAIL_SUBJECT" \
+        "$EMAIL_TEXT_BODY" 2>/dev/null
+
+    return $?
+}
+
+# Send container kill email
+# Arguments:
+#   $1 - total_killed (number of containers killed)
+#   $2 - success_count
+#   $3 - fail_count
+#   $4 - container_list (newline-separated list of "container_name (status)")
+# Returns:
+#   0 on success, 1 on failure
+send_container_kill_email() {
+    local total_killed="$1"
+    local success_count="$2"
+    local fail_count="$3"
+    local container_list="$4"
+
+    # Check if email is enabled
+    if [ "${DEPLOYMENT_EMAIL_ENABLED:-true}" != "true" ]; then
+        return 0
+    fi
+
+    # Check SendGrid requirements (silently fail if not available)
+    if ! check_sendgrid_requirements >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Generate email content using template
+    generate_container_kill_email \
+        "$total_killed" \
+        "$success_count" \
+        "$fail_count" \
+        "$container_list"
+
+    # Send email via SendGrid API (plain text only)
+    send_email_via_sendgrid \
+        "$EMAIL_FROM" \
+        "$EMAIL_TO" \
+        "$EMAIL_SUBJECT" \
+        "$EMAIL_TEXT_BODY" 2>/dev/null
+
+    return $?
+}
+
 # ==============================================================================
 # ADDING NEW EMAIL TYPES
 # ==============================================================================

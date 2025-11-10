@@ -11,6 +11,43 @@
 
 set -euo pipefail
 
+# ==============================================================================
+# EMAIL NOTIFICATION SYSTEM
+# ==============================================================================
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Try to find the common directory (supports both local and server paths)
+COMMON_DIR=""
+if [ -d "/home/andrzej/DevOps/common" ]; then
+    # Server path
+    COMMON_DIR="/home/andrzej/DevOps/common"
+elif [ -d "$SCRIPT_DIR/../common" ]; then
+    # Local development path
+    COMMON_DIR="$SCRIPT_DIR/../common"
+fi
+
+# Load email notification functions if available
+EMAIL_NOTIFICATIONS_AVAILABLE=false
+if [ -n "$COMMON_DIR" ] && [ -f "$COMMON_DIR/email-notification.sh" ]; then
+    # Create minimal log functions if not already defined
+    if ! type log_error >/dev/null 2>&1; then
+        log_error() { echo "ERROR: $*" >&2; }
+    fi
+    if ! type log_warning >/dev/null 2>&1; then
+        log_warning() { echo "WARNING: $*" >&2; }
+    fi
+    if ! type log_info >/dev/null 2>&1; then
+        log_info() { echo "INFO: $*"; }
+    fi
+
+    # Try to source the email notification system
+    if source "$COMMON_DIR/email-notification.sh" 2>/dev/null; then
+        EMAIL_NOTIFICATIONS_AVAILABLE=true
+    fi
+fi
+
 # ANSI Color Codes
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
@@ -192,18 +229,50 @@ show_container_status() {
         # Calculate uptime
         local uptime=""
         if [ "$status" = "running" ]; then
-            local started_ts=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${started:0:19}" "+%s" 2>/dev/null || echo "0")
-            local current_ts=$(date "+%s")
-            local diff=$((current_ts - started_ts))
+            # Docker returns timestamps in ISO 8601 format with UTC timezone: 2025-01-08T14:30:45.123456789Z
+            # We need to parse this as UTC time, not local time
 
-            if [ $diff -lt 60 ]; then
-                uptime="${diff}s"
-            elif [ $diff -lt 3600 ]; then
-                uptime="$((diff / 60))m"
-            elif [ $diff -lt 86400 ]; then
-                uptime="$((diff / 3600))h $((diff % 3600 / 60))m"
+            local started_ts=""
+
+            # Parse the timestamp - handle both macOS (BSD) and Linux (GNU) date commands
+            if date --version >/dev/null 2>&1; then
+                # GNU date (Linux) - can parse ISO 8601 directly with UTC timezone
+                started_ts=$(date -u -d "$started" "+%s" 2>/dev/null)
             else
-                uptime="$((diff / 86400))d $((diff % 86400 / 3600))h"
+                # macOS date (BSD) - requires manual format specification
+                # Remove fractional seconds and Z suffix for parsing
+                local started_clean=$(echo "$started" | sed 's/\.[0-9]*Z$//' | sed 's/Z$//')
+                started_ts=$(date -u -j -f "%Y-%m-%dT%H:%M:%S" "$started_clean" "+%s" 2>/dev/null)
+            fi
+
+            # If parsing failed, try alternative method using docker ps
+            if [ -z "$started_ts" ] || [ "$started_ts" = "0" ]; then
+                # Fallback: parse from docker ps status field
+                local status_line=$(docker ps --filter "id=$container_id" --format "{{.Status}}" 2>/dev/null)
+                if [[ "$status_line" =~ Up[[:space:]]+(.*) ]]; then
+                    uptime=$(format_uptime "${BASH_REMATCH[1]}")
+                else
+                    uptime="N/A"
+                fi
+            else
+                # Calculate uptime from timestamps (both in UTC)
+                local current_ts=$(date -u "+%s")
+                local diff=$((current_ts - started_ts))
+
+                # Ensure diff is positive
+                if [ $diff -lt 0 ]; then
+                    diff=0
+                fi
+
+                if [ $diff -lt 60 ]; then
+                    uptime="${diff}s"
+                elif [ $diff -lt 3600 ]; then
+                    uptime="$((diff / 60))m"
+                elif [ $diff -lt 86400 ]; then
+                    uptime="$((diff / 3600))h $((diff % 3600 / 60))m"
+                else
+                    uptime="$((diff / 86400))d $((diff % 86400 / 3600))h"
+                fi
             fi
             running_containers=$((running_containers + 1))
         else
@@ -309,7 +378,429 @@ show_container_status() {
     echo ""
 }
 
+# Confirmation prompt function
+confirm_action() {
+    local action="$1"
+    echo -e "${YELLOW}${BOLD}Are you sure you want to ${action}?${NC}"
+    read -p "Type 'yes' to confirm: " confirmation
+    if [[ "$confirmation" != "yes" ]]; then
+        echo -e "${CYAN}Action cancelled.${NC}"
+        echo ""
+        return 1
+    fi
+    return 0
+}
+
+# Function to wait for container to become healthy
+wait_for_container_health() {
+    local container_id="$1"
+    local container_name="$2"
+    local max_wait=60  # seconds
+    local elapsed=0
+    local interval=2   # check every 2 seconds
+
+    echo -e "  ${CYAN}Waiting for ${container_name} to become healthy...${NC}"
+
+    while [ $elapsed -lt $max_wait ]; do
+        # Check if container is still running
+        local status=$(docker inspect --format='{{.State.Status}}' "$container_id" 2>/dev/null)
+
+        if [ "$status" != "running" ]; then
+            echo -e "  ${RED}✗ Container stopped unexpectedly${NC}"
+            return 1
+        fi
+
+        # Check health status
+        local health=$(docker inspect --format='{{.State.Health.Status}}' "$container_id" 2>/dev/null || echo "no_healthcheck")
+
+        # Container is ready if:
+        # - It has healthcheck and is healthy, OR
+        # - It has no healthcheck and is running
+        if [ "$health" = "healthy" ] || [ "$health" = "no_healthcheck" ]; then
+            echo -e "  ${GREEN}✓ ${container_name} is ready${NC}"
+            return 0
+        fi
+
+        # Show current status
+        if [ "$health" = "starting" ]; then
+            echo -e "    ${DIM}Health check in progress... (${elapsed}s/${max_wait}s)${NC}"
+        elif [ "$health" = "unhealthy" ]; then
+            echo -e "    ${YELLOW}Container unhealthy, waiting... (${elapsed}s/${max_wait}s)${NC}"
+        fi
+
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+
+    # Timeout reached
+    echo -e "  ${YELLOW}⚠ Warning: ${container_name} did not become healthy within ${max_wait}s${NC}"
+    return 1
+}
+
+# Function to restart all containers sequentially (one by one)
+restart_containers_sequential() {
+    echo -e "\n${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${CYAN}                     RESTART ALL CONTAINERS (ONE BY ONE)${NC}"
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+
+    # Get all running containers
+    local running_containers=$(docker ps --format "{{.ID}}" 2>/dev/null)
+
+    if [ -z "$running_containers" ]; then
+        echo -e "${YELLOW}No running containers to restart.${NC}\n"
+        return
+    fi
+
+    local container_count=$(echo "$running_containers" | wc -l | tr -d ' ')
+    echo -e "Found ${BOLD}${container_count}${NC} running container(s).\n"
+    echo -e "${YELLOW}Note: This will wait for each container to become healthy before proceeding to the next.${NC}"
+    echo -e "${YELLOW}Estimated time: ~$(( container_count * 15 )) seconds (depending on healthcheck configurations)${NC}\n"
+
+    if ! confirm_action "restart all containers sequentially with health checks"; then
+        return
+    fi
+
+    echo -e "\n${CYAN}Restarting containers with health monitoring...${NC}\n"
+
+    local success_count=0
+    local fail_count=0
+    local timeout_count=0
+    local current=0
+    local container_list=""
+
+    while IFS= read -r container_id; do
+        if [ -z "$container_id" ]; then
+            continue
+        fi
+
+        current=$((current + 1))
+        local name=$(docker inspect --format='{{.Name}}' "$container_id" 2>/dev/null | sed 's/^\///')
+
+        echo -e "${BOLD}[${current}/${container_count}]${NC} ${CYAN}Restarting:${NC} ${name}"
+
+        if docker restart "$container_id" >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✓ Restart command sent${NC}"
+
+            # Wait for container to become healthy
+            if wait_for_container_health "$container_id" "$name"; then
+                success_count=$((success_count + 1))
+                container_list="${container_list}  - ${name} (success)\n"
+            else
+                timeout_count=$((timeout_count + 1))
+                container_list="${container_list}  - ${name} (timeout)\n"
+                echo -e "  ${YELLOW}⚠ Container restarted but may not be fully ready${NC}"
+            fi
+        else
+            echo -e "  ${RED}✗ Failed to restart${NC} ${name}"
+            fail_count=$((fail_count + 1))
+            container_list="${container_list}  - ${name} (failed)\n"
+        fi
+
+        echo ""
+    done <<< "$running_containers"
+
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}Results Summary:${NC}"
+    echo -e "  ${GREEN}Successfully restarted and healthy:${NC} ${success_count}"
+    if [ $timeout_count -gt 0 ]; then
+        echo -e "  ${YELLOW}Restarted but health timeout:${NC} ${timeout_count}"
+    fi
+    if [ $fail_count -gt 0 ]; then
+        echo -e "  ${RED}Failed to restart:${NC} ${fail_count}"
+    fi
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    # Send email notification if available
+    if [ "$EMAIL_NOTIFICATIONS_AVAILABLE" = true ] && type send_container_restart_email >/dev/null 2>&1; then
+        send_container_restart_email \
+            "Sequential" \
+            "$container_count" \
+            "$success_count" \
+            "$fail_count" \
+            "$timeout_count" \
+            "$container_list"
+    fi
+}
+
+# Function to restart all containers in parallel (simultaneously)
+restart_containers_parallel() {
+    echo -e "\n${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${CYAN}                     FORCE RESTART ALL CONTAINERS (SIMULTANEOUS)${NC}"
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+
+    # Get all running containers
+    local running_containers=$(docker ps --format "{{.ID}}" 2>/dev/null)
+
+    if [ -z "$running_containers" ]; then
+        echo -e "${YELLOW}No running containers to restart.${NC}\n"
+        return
+    fi
+
+    # Convert container IDs to array
+    local container_array=()
+    local container_names=()
+
+    while IFS= read -r container_id; do
+        if [ -z "$container_id" ]; then
+            continue
+        fi
+        container_array+=("$container_id")
+        local name=$(docker inspect --format='{{.Name}}' "$container_id" 2>/dev/null | sed 's/^\///')
+        container_names+=("$name")
+    done <<< "$running_containers"
+
+    local container_count=${#container_array[@]}
+    echo -e "Found ${BOLD}${container_count}${NC} running container(s).\n"
+
+    # Display container names
+    echo -e "${BOLD}Containers to restart:${NC}"
+    for name in "${container_names[@]}"; do
+        echo -e "  - ${name}"
+    done
+    echo ""
+
+    if ! confirm_action "force-restart all containers simultaneously"; then
+        return
+    fi
+
+    echo -e "\n${CYAN}Force-restarting all containers simultaneously...${NC}\n"
+
+    local success_count=0
+    local fail_count=0
+    local container_list=""
+
+    # Execute single docker restart command with all container IDs
+    if docker restart "${container_array[@]}" >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Successfully restarted all ${container_count} container(s) simultaneously${NC}\n"
+        success_count=$container_count
+        # Build container list
+        for name in "${container_names[@]}"; do
+            container_list="${container_list}  - ${name} (success)\n"
+        done
+    else
+        echo -e "${RED}✗ Failed to restart containers${NC}\n"
+        echo -e "${YELLOW}Some containers may have been restarted. Check status for details.${NC}\n"
+        fail_count=$container_count
+        # Build container list
+        for name in "${container_names[@]}"; do
+            container_list="${container_list}  - ${name} (failed)\n"
+        done
+    fi
+
+    # Send email notification if available
+    if [ "$EMAIL_NOTIFICATIONS_AVAILABLE" = true ] && type send_container_restart_email >/dev/null 2>&1; then
+        send_container_restart_email \
+            "Parallel" \
+            "$container_count" \
+            "$success_count" \
+            "$fail_count" \
+            "0" \
+            "$container_list"
+    fi
+}
+
+# Function to kill unhealthy containers
+kill_unhealthy_containers() {
+    echo -e "\n${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${CYAN}                     KILL UNHEALTHY CONTAINERS${NC}"
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+
+    # Get all running containers
+    local all_containers=$(docker ps --format "{{.ID}}" 2>/dev/null)
+
+    if [ -z "$all_containers" ]; then
+        echo -e "${YELLOW}No running containers found.${NC}\n"
+        return
+    fi
+
+    # Find unhealthy containers
+    local unhealthy_containers=""
+    local unhealthy_names=""
+
+    while IFS= read -r container_id; do
+        if [ -z "$container_id" ]; then
+            continue
+        fi
+
+        local health=$(docker inspect --format='{{.State.Health.Status}}' "$container_id" 2>/dev/null || echo "none")
+
+        if [ "$health" = "unhealthy" ]; then
+            local name=$(docker inspect --format='{{.Name}}' "$container_id" 2>/dev/null | sed 's/^\///')
+            unhealthy_containers="${unhealthy_containers}${container_id}\n"
+            unhealthy_names="${unhealthy_names}  - ${name}\n"
+        fi
+    done <<< "$all_containers"
+
+    if [ -z "$unhealthy_containers" ]; then
+        echo -e "${GREEN}No unhealthy containers found. All containers are healthy!${NC}\n"
+        return
+    fi
+
+    local unhealthy_count=$(echo -e "$unhealthy_containers" | grep -v '^$' | wc -l | tr -d ' ')
+    echo -e "Found ${BOLD}${RED}${unhealthy_count}${NC} unhealthy container(s):\n"
+    echo -e "$unhealthy_names"
+
+    if ! confirm_action "kill these unhealthy containers"; then
+        return
+    fi
+
+    echo -e "\n${CYAN}Killing unhealthy containers...${NC}\n"
+
+    local success_count=0
+    local fail_count=0
+    local container_list=""
+
+    while IFS= read -r container_id; do
+        if [ -z "$container_id" ]; then
+            continue
+        fi
+
+        local name=$(docker inspect --format='{{.Name}}' "$container_id" 2>/dev/null | sed 's/^\///')
+        echo -e "  ${CYAN}Killing:${NC} ${name}"
+
+        if docker kill "$container_id" >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✓ Successfully killed${NC} ${name}"
+            success_count=$((success_count + 1))
+            container_list="${container_list}  - ${name} (killed successfully)\n"
+        else
+            echo -e "  ${RED}✗ Failed to kill${NC} ${name}"
+            fail_count=$((fail_count + 1))
+            container_list="${container_list}  - ${name} (failed to kill)\n"
+        fi
+    done <<< "$(echo -e "$unhealthy_containers")"
+
+    echo ""
+    echo -e "${BOLD}Results:${NC}"
+    echo -e "  ${GREEN}Success:${NC} ${success_count}"
+    if [ $fail_count -gt 0 ]; then
+        echo -e "  ${RED}Failed:${NC} ${fail_count}"
+    fi
+    echo ""
+
+    # Send email notification if available
+    if [ "$EMAIL_NOTIFICATIONS_AVAILABLE" = true ] && type send_container_kill_email >/dev/null 2>&1; then
+        send_container_kill_email \
+            "$unhealthy_count" \
+            "$success_count" \
+            "$fail_count" \
+            "$container_list"
+    fi
+}
+
+# Function to stop all containers
+stop_all_containers() {
+    echo -e "\n${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${CYAN}                     STOP ALL CONTAINERS${NC}"
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+
+    # Get all running containers
+    local running_containers=$(docker ps --format "{{.ID}}" 2>/dev/null)
+
+    if [ -z "$running_containers" ]; then
+        echo -e "${YELLOW}No running containers to stop.${NC}\n"
+        return
+    fi
+
+    local container_count=$(echo "$running_containers" | wc -l | tr -d ' ')
+    echo -e "Found ${BOLD}${container_count}${NC} running container(s).\n"
+
+    if ! confirm_action "stop all containers"; then
+        return
+    fi
+
+    echo -e "\n${CYAN}Stopping containers...${NC}\n"
+
+    local success_count=0
+    local fail_count=0
+
+    while IFS= read -r container_id; do
+        if [ -z "$container_id" ]; then
+            continue
+        fi
+
+        local name=$(docker inspect --format='{{.Name}}' "$container_id" 2>/dev/null | sed 's/^\///')
+        echo -e "  ${CYAN}Stopping:${NC} ${name}"
+
+        if docker stop "$container_id" >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✓ Successfully stopped${NC} ${name}"
+            success_count=$((success_count + 1))
+        else
+            echo -e "  ${RED}✗ Failed to stop${NC} ${name}"
+            fail_count=$((fail_count + 1))
+        fi
+    done <<< "$running_containers"
+
+    echo ""
+    echo -e "${BOLD}Results:${NC}"
+    echo -e "  ${GREEN}Success:${NC} ${success_count}"
+    if [ $fail_count -gt 0 ]; then
+        echo -e "  ${RED}Failed:${NC} ${fail_count}"
+    fi
+    echo ""
+}
+
+# Interactive menu function
+show_management_menu() {
+    while true; do
+        echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BOLD}${CYAN}                     CONTAINER MANAGEMENT MENU${NC}"
+        echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+
+        echo -e "${BOLD}What would you like to do?${NC}\n"
+        echo -e "  ${CYAN}1)${NC} Restart all containers (one by one)"
+        echo -e "  ${CYAN}2)${NC} Force-restart all containers (simultaneous)"
+        echo -e "  ${CYAN}3)${NC} Kill unhealthy containers"
+        echo -e "  ${CYAN}4)${NC} Stop all containers"
+        echo -e "  ${CYAN}5)${NC} Refresh status display"
+        echo -e "  ${CYAN}6)${NC} Exit"
+        echo ""
+
+        read -p "Enter your choice [1-6]: " choice
+        echo ""
+
+        case $choice in
+            1)
+                restart_containers_sequential
+                echo -e "${CYAN}Press Enter to continue...${NC}"
+                read
+                ;;
+            2)
+                restart_containers_parallel
+                echo -e "${CYAN}Press Enter to continue...${NC}"
+                read
+                ;;
+            3)
+                kill_unhealthy_containers
+                echo -e "${CYAN}Press Enter to continue...${NC}"
+                read
+                ;;
+            4)
+                stop_all_containers
+                echo -e "${CYAN}Press Enter to continue...${NC}"
+                read
+                ;;
+            5)
+                clear
+                show_container_status
+                ;;
+            6)
+                echo -e "${GREEN}Exiting. Goodbye!${NC}\n"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}Invalid choice. Please enter a number between 1 and 6.${NC}\n"
+                echo -e "${CYAN}Press Enter to continue...${NC}"
+                read
+                ;;
+        esac
+    done
+}
+
 # Run the main function
 show_container_status
+
+# Show interactive menu
+show_management_menu
 
 exit 0
