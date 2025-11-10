@@ -76,7 +76,7 @@ connect_vpn() {
     log_info "Connecting to NordVPN in ${country}..."
 
     while [ $retry -lt $max_retries ]; do
-        if nordvpn connect "$country" 2>&1 | tee -a "$LOG_FILE" | grep -q "Connected"; then
+        if nordvpn connect "$country" 2>&1 | tee -a "$LOG_FILE" | grep -qi "connected"; then
             sleep 5  # Wait for connection to stabilize
             local new_ip=$(get_current_ip)
             log_success "Connected to VPN in ${country}. New IP: ${new_ip}"
