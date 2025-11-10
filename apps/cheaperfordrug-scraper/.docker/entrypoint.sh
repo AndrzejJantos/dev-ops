@@ -120,8 +120,24 @@ login_nordvpn() {
         return 0
     fi
 
-    # Login with token (automatically decline telemetry with 'no')
-    if (echo "$NORDVPN_TOKEN"; echo "no") | nordvpn login --token 2>&1 | tee -a /app/logs/nordvpn-login.log | grep -qE "(Welcome|logged in)"; then
+    # Login with token (using expect to handle interactive prompt)
+    log_info "Creating expect script for login..."
+    cat > /tmp/nordvpn-login.exp << 'EXPECT_EOF'
+#!/usr/bin/expect -f
+set timeout 30
+set token [lindex $argv 0]
+
+spawn nordvpn login --token
+expect "Press 'n' (no) to send only the essential data our app needs to work."
+send "$token\r"
+expect "Do you allow us to collect and use limited app performance data?"
+send "n\r"
+expect eof
+EXPECT_EOF
+
+    chmod +x /tmp/nordvpn-login.exp
+
+    if /tmp/nordvpn-login.exp "$NORDVPN_TOKEN" 2>&1 | tee -a /app/logs/nordvpn-login.log | grep -qE "(Welcome|logged in)"; then
         log_success "Successfully logged in to NordVPN"
     else
         log_error "Failed to login to NordVPN"

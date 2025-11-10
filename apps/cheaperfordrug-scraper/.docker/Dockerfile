@@ -29,6 +29,8 @@ RUN apt-get update && apt-get install -y \
     # VPN dependencies
     iptables \
     iproute2 \
+    # Automation tools
+    expect \
     # Cron for VPN rotation
     cron \
     # Process management
