@@ -33,6 +33,7 @@ export REDIS_DB_NUMBER=1  # Dedicated Redis database for this app
 export REDIS_URL="redis://localhost:6379/${REDIS_DB_NUMBER}"
 
 # Network configuration
+export SERVER_IP="65.109.22.232"  # Hetzner server IP
 export DOMAIN="taniejpolek.pl"
 export DOMAIN_INTERNAL="presale.taniejpolek.pl"  # Additional domain (presale subdomain)
 export BASE_PORT=3010          # Starting port for containers (host side)
