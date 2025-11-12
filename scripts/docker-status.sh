@@ -97,6 +97,41 @@ if ! docker info >/dev/null 2>&1; then
     error_exit "Docker is not running or you don't have permission to access it"
 fi
 
+# Function to get system memory usage
+get_system_memory() {
+    if command -v free >/dev/null 2>&1; then
+        # Use free command (Linux)
+        local mem_info=$(free -h | grep '^Mem:')
+        local total=$(echo "$mem_info" | awk '{print $2}')
+        local used=$(echo "$mem_info" | awk '{print $3}')
+        local available=$(echo "$mem_info" | awk '{print $7}')
+        local percent=$(free | grep '^Mem:' | awk '{printf "%.1f", ($3/$2)*100}')
+        echo "${used}/${total} (${percent}% used, ${available} available)"
+    else
+        echo "N/A"
+    fi
+}
+
+# Function to get disk usage
+get_disk_usage() {
+    # Get disk usage for root filesystem and docker data root
+    local root_usage=$(df -h / | tail -1 | awk '{print $3"/"$2" ("$5" used)"}')
+
+    # Try to get Docker data root
+    local docker_root=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || echo "/var/lib/docker")
+    local docker_usage=$(df -h "$docker_root" 2>/dev/null | tail -1 | awk '{print $3"/"$2" ("$5" used)"}' || echo "N/A")
+
+    # If docker is on the same filesystem as root, only show root
+    local root_device=$(df / | tail -1 | awk '{print $1}')
+    local docker_device=$(df "$docker_root" 2>/dev/null | tail -1 | awk '{print $1}' || echo "")
+
+    if [ "$root_device" = "$docker_device" ]; then
+        echo "Root: ${root_usage}"
+    else
+        echo "Root: ${root_usage}, Docker: ${docker_usage}"
+    fi
+}
+
 # Print header
 print_header() {
     echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -349,6 +384,10 @@ show_container_status() {
         total_containers=$((total_containers + 1))
     done <<< "$container_ids"
 
+    # Get system-wide statistics
+    local system_memory=$(get_system_memory)
+    local disk_usage=$(get_disk_usage)
+
     # Print summary
     echo ""
     echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -373,6 +412,11 @@ show_container_status() {
     if [ "$running_containers" -gt 0 ]; then
         printf "  ${BOLD}Total CPU Usage:${NC}        %.2f%%\n" "$total_cpu"
     fi
+
+    # Add system memory and disk usage
+    echo ""
+    printf "  ${BOLD}System Memory:${NC}          %s\n" "$system_memory"
+    printf "  ${BOLD}Disk Usage:${NC}             %s\n" "$disk_usage"
 
     echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
