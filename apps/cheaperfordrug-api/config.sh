@@ -27,13 +27,13 @@ export REPO_BRANCH="master"
 # CONTAINER ARCHITECTURE
 # ============================================================================
 # API needs workers for background processing
-export DEFAULT_SCALE=2              # 2 web containers for API
+export DEFAULT_SCALE=3              # 3 web containers for API
 export WORKER_COUNT=1               # 1 worker container for background jobs
 export SCHEDULER_ENABLED=false      # No scheduled tasks configured (no config/clock.rb)
 export WORKER_SHUTDOWN_TIMEOUT=90   # Seconds to wait for workers to finish jobs during deployment
 
 # Architecture note:
-# - 2 web containers handle API requests with load balancing
+# - 3 web containers handle API requests with load balancing
 # - 1 worker processes background jobs (emails, data processing, external API calls)
 # - No scheduler needed (no recurring tasks configured)
 
