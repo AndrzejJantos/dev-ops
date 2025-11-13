@@ -1718,3 +1718,108 @@ For production use, follow the best practices outlined in this README, maintain 
 **Version**: 2.0.0
 **Last Updated**: 2025-10-30
 **Maintained By**: DevOps Team
+
+---
+
+## Container Networking on Linux (Critical for Rails APIs)
+
+### Host Networking Requirement
+
+**IMPORTANT**: On native Linux (Ubuntu/Hetzner), Rails API applications **must use `--network host`** mode to access PostgreSQL, Redis, and Elasticsearch running on the host machine.
+
+**Why**: Unlike Docker Desktop (macOS/Windows), native Linux does NOT support `host.docker.internal` hostname for accessing host services from containers.
+
+### Required Pattern
+
+```bash
+# ✅ CORRECT Configuration for Linux
+DATABASE_URL=postgresql://user:password@localhost/database_name
+REDIS_URL=redis://localhost:6379/0
+ELASTICSEARCH_URL=http://localhost:9200
+
+# Container creation
+docker run -d \
+  --name app_web_1 \
+  --network host \
+  --env-file .env.production \
+  -e PORT=3000 \
+  app:latest
+
+# ❌ WRONG - Does NOT work on native Linux
+DATABASE_URL=postgresql://user:password@host.docker.internal/database_name
+docker run -d --network bridge -p 3000:3000 ...
+```
+
+### Port Management with Host Networking
+
+**Trade-off**: With `--network host`, multiple containers cannot bind to the same port. Each web container needs a unique `PORT` environment variable.
+
+**Solution**: Use sequential ports starting from a base port:
+
+```bash
+# config.sh
+export BASE_PORT=3020
+export DEFAULT_SCALE=3
+
+# Results in:
+app_web_1 on PORT=3020
+app_web_2 on PORT=3021
+app_web_3 on PORT=3022
+```
+
+**Nginx Load Balancing**:
+```nginx
+upstream app_backend {
+    server localhost:3020;
+    server localhost:3021;
+    server localhost:3022;
+}
+```
+
+### Comprehensive Documentation
+
+For complete details on container networking patterns, port allocation strategy, scaling patterns, and troubleshooting, see:
+
+**[Global Container Patterns Documentation](/home/andrzej/DevOps/CONTAINER-PATTERNS.md)**
+
+This document provides:
+- Detailed networking requirements for Linux
+- Port allocation strategy and current allocations
+- Container naming conventions
+- Scaling patterns for web and worker containers
+- Database connectivity patterns
+- Configuration templates
+- Troubleshooting guides
+- Best practices
+
+**Application-Specific Documentation**:
+- **CheaperForDrug API**: `/home/andrzej/DevOps/apps/cheaperfordrug-api/CONTAINER-MANAGEMENT.md`
+
+### Quick Reference
+
+```bash
+# Add new web container (host networking)
+docker run -d \
+  --name ${APP_NAME}_web_${N} \
+  --network host \
+  --env-file /home/andrzej/DevOps/apps/${APP_NAME}/.env.production \
+  -e PORT=$((BASE_PORT + N - 1)) \
+  --restart unless-stopped \
+  ${APP_NAME}:latest
+
+# Add worker container (no port needed)
+docker run -d \
+  --name ${APP_NAME}_worker_${N} \
+  --network host \
+  --env-file /home/andrzej/DevOps/apps/${APP_NAME}/.env.production \
+  --restart unless-stopped \
+  ${APP_NAME}:latest \
+  bundle exec sidekiq
+
+# Update nginx after scaling
+cd /home/andrzej/DevOps
+./rebuild-nginx-configs.sh
+```
+
+**See CONTAINER-PATTERNS.md for full details on adding new applications and scaling strategies.**
+
