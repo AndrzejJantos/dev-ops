@@ -347,8 +347,8 @@ send_deployment_start_notification() {
     fi
 
     if declare -f send_deployment_start_email > /dev/null 2>&1; then
-        # log_info "Sending deployment start notification..."  # Removed: silent email sending
-        ( send_deployment_start_email "$APP_NAME" "$APP_DISPLAY_NAME" "${DOMAIN:-$APP_NAME}" "$git_commit" & EMAIL_PID=$!; sleep 15 && kill $EMAIL_PID 2>/dev/null ) > /dev/null 2>&1 || true
+        # Send email in background with timeout (errors logged to /tmp/email_error.log)
+        ( send_deployment_start_email "$APP_NAME" "$APP_DISPLAY_NAME" "${DOMAIN:-$APP_NAME}" "$git_commit" 2>/tmp/email_error_$$.log & EMAIL_PID=$!; sleep 15 && kill $EMAIL_PID 2>/dev/null ) || true
     fi
 }
 
@@ -365,8 +365,8 @@ send_deployment_success_notification() {
     fi
 
     if declare -f send_deployment_success_email > /dev/null 2>&1; then
-        # log_info "Sending deployment success notification..."  # Removed: silent email sending
-        ( send_deployment_success_email "$APP_NAME" "$APP_DISPLAY_NAME" "${DOMAIN:-$APP_NAME}" "$scale" "$image_tag" "$migrations_run" "$git_commit" & EMAIL_PID=$!; sleep 15 && kill $EMAIL_PID 2>/dev/null ) > /dev/null 2>&1 || true
+        # Send email in background with timeout (errors logged to /tmp/email_error.log)
+        ( send_deployment_success_email "$APP_NAME" "$APP_DISPLAY_NAME" "${DOMAIN:-$APP_NAME}" "$scale" "$image_tag" "$migrations_run" "$git_commit" 2>/tmp/email_error_$$.log & EMAIL_PID=$!; sleep 15 && kill $EMAIL_PID 2>/dev/null ) || true
     fi
 }
 
@@ -380,8 +380,8 @@ send_deployment_failure_notification() {
     fi
 
     if declare -f send_deployment_failure_email > /dev/null 2>&1; then
-        # log_info "Sending deployment failure notification..."  # Removed: silent email sending
-        ( send_deployment_failure_email "$APP_NAME" "$APP_DISPLAY_NAME" "$error_message" & EMAIL_PID=$!; sleep 15 && kill $EMAIL_PID 2>/dev/null ) > /dev/null 2>&1 || true
+        # Send email in background with timeout (errors logged to /tmp/email_error.log)
+        ( send_deployment_failure_email "$APP_NAME" "$APP_DISPLAY_NAME" "$error_message" 2>/tmp/email_error_$$.log & EMAIL_PID=$!; sleep 15 && kill $EMAIL_PID 2>/dev/null ) || true
     fi
 }
 

@@ -21,6 +21,14 @@
 
 set -e
 
+# Load logging utilities if not already loaded
+if ! declare -f log_error > /dev/null 2>&1; then
+    SCRIPT_DIR_EMAIL_NOTIF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -f "$SCRIPT_DIR_EMAIL_NOTIF/utils.sh" ]; then
+        source "$SCRIPT_DIR_EMAIL_NOTIF/utils.sh"
+    fi
+fi
+
 # ==============================================================================
 # EMAIL CONFIGURATION
 # ==============================================================================
