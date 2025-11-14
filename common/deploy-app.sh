@@ -225,6 +225,11 @@ deploy_application() {
     # Load app-type specific module
     source "$app_type_module"
 
+    # Load email configuration (API keys, sender/recipient addresses)
+    if [ -f "$DEVOPS_DIR/common/email-config.sh" ]; then
+        source "$DEVOPS_DIR/common/email-config.sh"
+    fi
+
     # Load email notification module
     if [ -f "$DEVOPS_DIR/common/email-notification.sh" ]; then
         source "$DEVOPS_DIR/common/email-notification.sh"
