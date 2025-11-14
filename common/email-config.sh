@@ -34,6 +34,16 @@ export DEPLOYMENT_EMAIL_TO="andrzej@webet.pl"
 # - Consider using environment variables instead: export SENDGRID_API_KEY="your-key"
 # - Or use a secrets management system for production
 #
+
+# Try to load SENDGRID_API_KEY from /etc/environment if not already set
+if [ -z "${SENDGRID_API_KEY:-}" ] && [ -f /etc/environment ]; then
+    # Source /etc/environment to get the API key
+    # Use set +a to avoid exporting all variables
+    set -a
+    source /etc/environment
+    set +a
+fi
+
 export SENDGRID_API_KEY="${SENDGRID_API_KEY:-}"
 
 # ==============================================================================
@@ -48,14 +58,19 @@ export SENDGRID_API_KEY="${SENDGRID_API_KEY:-}"
 #
 # 2. Configure the API key (choose one method):
 #
-#    Method A - Set in this file (easier for testing):
+#    Method A - Set in /etc/environment (RECOMMENDED - works for all sessions):
+#      sudo sh -c 'echo "SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxx" >> /etc/environment'
+#      Note: This file will automatically load the key from /etc/environment
+#
+#    Method B - Set in this file (easier for testing):
+#      Uncomment and set the key below (before the auto-load block above)
 #      export SENDGRID_API_KEY="SG.xxxxxxxxxxxxxxxxxxxx"
 #
-#    Method B - Set as environment variable (more secure):
-#      Add to ~/.bashrc or /etc/environment:
-#        export SENDGRID_API_KEY="SG.xxxxxxxxxxxxxxxxxxxx"
+#    Method C - Set in ~/.bashrc (only works for interactive sessions):
+#      echo 'export SENDGRID_API_KEY="SG.xxxxxxxxxxxxxxxxxxxx"' >> ~/.bashrc
+#      Note: Won't work for non-interactive deployments - use Method A instead
 #
-#    Method C - Set in app's .env file:
+#    Method D - Set in app's .env file:
 #      Add to ~/apps/APP_NAME/.env.production:
 #        SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxx
 #
