@@ -105,7 +105,7 @@ send_email_via_sendgrid() {
 EOF
 
     # Send request to SendGrid API
-    local http_code=$(curl -s -o /tmp/sendgrid_response_$$.json -w "%{http_code}" \
+    local http_code=$(curl --max-time 10 -s -o /tmp/sendgrid_response_$$.json -w "%{http_code}" \
         -X POST \
         "$SENDGRID_API_URL" \
         -H "Authorization: Bearer $SENDGRID_API_KEY" \
