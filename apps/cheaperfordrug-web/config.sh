@@ -34,7 +34,7 @@ export SCHEDULER_ENABLED=false      # No scheduler needed
 # DOCKER CONFIGURATION
 # ============================================================================
 export DOCKER_IMAGE_NAME="$APP_NAME"
-export BASE_PORT=3030              # Ports 3030-3032 for web containers (host side)
+export BASE_PORT=3055              # Ports 3055-3057 for web containers (host side)
 export CONTAINER_PORT=3000          # Port inside container (Next.js uses 3000)
 
 # ============================================================================
