@@ -235,6 +235,11 @@ deploy_application() {
         source "$DEVOPS_DIR/common/email-notification.sh"
     fi
 
+    # Load release logging module
+    if [ -f "$DEVOPS_DIR/common/release-log.sh" ]; then
+        source "$DEVOPS_DIR/common/release-log.sh"
+    fi
+
     # PRE-DEPLOYMENT CHECKS (run before any work)
 
     # Update DevOps repository to get latest templates and scripts
@@ -264,6 +269,11 @@ deploy_application() {
     # Get git commit hash for the notification
     if [ -d "$REPO_DIR/.git" ]; then
         git_commit=$(cd "$REPO_DIR" && git rev-parse --short HEAD 2>/dev/null || echo "N/A")
+    fi
+
+    # Log deployment start to release.log
+    if declare -f log_deployment_start > /dev/null 2>&1; then
+        log_deployment_start "$APP_NAME" "$APP_DISPLAY_NAME" "$git_commit"
     fi
 
     # Send deployment start notification (after we have git commit)
@@ -364,6 +374,11 @@ send_deployment_success_notification() {
     local migrations_run="$3"
     local git_commit="$4"
 
+    # Log to release.log
+    if declare -f log_deployment_success > /dev/null 2>&1; then
+        log_deployment_success "$APP_NAME" "$APP_DISPLAY_NAME" "${DOMAIN:-$APP_NAME}" "$scale" "$image_tag" "$migrations_run" "$git_commit"
+    fi
+
     # Check if email notification function exists and is enabled
     if [ "${DEPLOYMENT_EMAIL_ENABLED:-true}" != "true" ]; then
         return 0
@@ -378,6 +393,11 @@ send_deployment_success_notification() {
 # Function: Send deployment failure notification
 send_deployment_failure_notification() {
     local error_message="$1"
+
+    # Log to release.log
+    if declare -f log_deployment_failure > /dev/null 2>&1; then
+        log_deployment_failure "$APP_NAME" "$APP_DISPLAY_NAME" "$error_message" "${git_commit:-N/A}"
+    fi
 
     # Check if email notification function exists and is enabled
     if [ "${DEPLOYMENT_EMAIL_ENABLED:-true}" != "true" ]; then
