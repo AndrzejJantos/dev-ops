@@ -109,7 +109,7 @@ export AUTO_CLEANUP_ENABLED=true
 # ============================================================================
 # Email notifications for deployments (success/failure) via SendGrid API
 # Centralized configuration is in DevOps/common/email-config.sh
-export DEPLOYMENT_EMAIL_ENABLED=false
+export DEPLOYMENT_EMAIL_ENABLED=true
 export DEPLOYMENT_EMAIL_FROM="biuro@webet.pl"
 export DEPLOYMENT_EMAIL_TO="andrzej@webet.pl"
 
