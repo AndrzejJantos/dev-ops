@@ -348,12 +348,7 @@ send_deployment_start_notification() {
 
     if declare -f send_deployment_start_email > /dev/null 2>&1; then
         # log_info "Sending deployment start notification..."  # Removed: silent email sending
-        timeout 15 send_deployment_start_email \
-            "$APP_NAME" \
-            "$APP_DISPLAY_NAME" \
-            "${DOMAIN:-$APP_NAME}" \
-            "$git_commit" \
-            > /dev/null 2>&1  # Silent: redirect all output to /dev/null
+        ( timeout 15 bash -c "send_deployment_start_email '$APP_NAME' '$APP_DISPLAY_NAME' '${DOMAIN:-$APP_NAME}' '$git_commit'" ) > /dev/null 2>&1 || true
     fi
 }
 
@@ -371,15 +366,7 @@ send_deployment_success_notification() {
 
     if declare -f send_deployment_success_email > /dev/null 2>&1; then
         # log_info "Sending deployment success notification..."  # Removed: silent email sending
-        timeout 15 send_deployment_success_email \
-            "$APP_NAME" \
-            "$APP_DISPLAY_NAME" \
-            "${DOMAIN:-$APP_NAME}" \
-            "$scale" \
-            "$image_tag" \
-            "$migrations_run" \
-            "$git_commit" \
-            > /dev/null 2>&1  # Silent: redirect all output to /dev/null
+        ( timeout 15 bash -c "send_deployment_success_email '$APP_NAME' '$APP_DISPLAY_NAME' '${DOMAIN:-$APP_NAME}' '$scale' '$image_tag' '$migrations_run' '$git_commit'" ) > /dev/null 2>&1 || true
     fi
 }
 
@@ -394,11 +381,7 @@ send_deployment_failure_notification() {
 
     if declare -f send_deployment_failure_email > /dev/null 2>&1; then
         # log_info "Sending deployment failure notification..."  # Removed: silent email sending
-        timeout 15 send_deployment_failure_email \
-            "$APP_NAME" \
-            "$APP_DISPLAY_NAME" \
-            "$error_message" \
-            > /dev/null 2>&1  # Silent: redirect all output to /dev/null
+        ( timeout 15 bash -c "send_deployment_failure_email '$APP_NAME' '$APP_DISPLAY_NAME' '$error_message'" ) > /dev/null 2>&1 || true
     fi
 }
 
