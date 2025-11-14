@@ -256,10 +256,34 @@ cheaperfordrug-api_worker_1  [No exposed port]    - Sidekiq worker
 - Active Storage for file uploads
 
 #### Scraper Integration
-- Receives data from scraper system
-- Processes pharmacy product updates
+
+**API Endpoint for Scrapers:**
+- **Port:** 4200 (HTTP, internal only)
+- **Access:** Via Nginx reverse proxy (api-scraper-local)
+- **Backend:** Load balanced across all 3 web containers (ports 3020-3022)
+- **URL:** http://api-scraper.localtest.me:4200 (resolves to localhost)
+
+**Configuration:**
+- All 3 web containers serve BOTH public API (via HTTPS) AND scraper API (via port 4200)
+- Nginx load balances scraper requests using `least_conn` algorithm
+- No dedicated scraper containers within API - web containers handle all requests
+
+**Nginx Upstream Configuration:**
+```nginx
+upstream api_scraper_local_backend {
+    least_conn;
+    server 127.0.0.1:3020;  # cheaperfordrug-api_web_1
+    server 127.0.0.1:3021;  # cheaperfordrug-api_web_2
+    server 127.0.0.1:3022;  # cheaperfordrug-api_web_3
+}
+```
+
+**Data Processing:**
+- Receives scraped pharmacy product data from worker containers
+- Processes and validates drug information
 - Maintains drug name groupings and variants
 - Handles multi-country drug information
+- Updates Elasticsearch indexes
 
 ---
 
@@ -268,27 +292,54 @@ cheaperfordrug-api_worker_1  [No exposed port]    - Sidekiq worker
 **Location:** ~/apps/cheaperfordrug-scraper
 **Docker Compose:** docker-compose.yml
 **Image:** scraper-vpn:latest (2.19GB)
-**Total Containers:** 8
+**Total Containers:** 8 (3 VPN + 5 workers)
 
 ### Architecture Overview
 
 The scraper system consists of two types of containers:
-1. **VPN Scrapers** - Scrape pharmacy websites with VPN rotation
-2. **Product Update Workers** - Call the API to update product data
+1. **VPN Scrapers (3)** - Scrape pharmacy websites with NordVPN rotation
+2. **Product Update Workers (5)** - Call the CheaperForDrug API to update product data
+
+**Connection Flow:**
+```
+VPN Scrapers → Scrape pharmacy websites → Store data locally
+                                               ↓
+Product Update Workers → Read local data → HTTP POST to api-scraper.localtest.me:4200
+                                               ↓
+                              Nginx (port 4200) → Load balance
+                                               ↓
+                    CheaperForDrug API (3 web containers: 3020, 3021, 3022)
+                                               ↓
+                         PostgreSQL + Elasticsearch
+```
+
+---
 
 ### VPN Scraper Containers (3 total)
 
+All VPN scrapers use **NordVPN** with automatic rotation.
+
 #### 1. Poland VPN Scraper
 ```
-Container: scraper-vpn-poland
+Container Name: scraper-vpn-poland
 Status: Running (healthy)
 Country: Poland
+VPN Provider: NordVPN
 VPN Rotation: Every 5 minutes
-Target: Polish pharmacy websites
+Timezone: Europe/Warsaw
+Resources: 2 CPU cores, 6GB RAM
+Health Check: nordvpn status (every 60s)
 ```
 
+**Startup Sequence:**
+1. Container starts (immediate)
+2. Connects to NordVPN Poland endpoint (~30s)
+3. Verifies VPN connection
+4. Begins scraping Polish pharmacies
+
 **Scraping Schedule:**
-- Runs continuously with 5-minute VPN rotation
+- **Continuous operation** with 5-minute VPN rotation
+- No cron schedule - runs persistently
 - Scrapes Polish pharmacies:
   - Gemini
   - DOZ
@@ -299,93 +350,200 @@ Target: Polish pharmacy websites
   - Melissa
 
 **Data Flow:**
-1. Connect to VPN (Poland endpoint)
-2. Scrape pharmacy websites
-3. Store raw data locally
-4. Rotate VPN connection after 5 minutes
-5. Repeat
+1. Connect to NordVPN (Poland endpoint)
+2. Scrape pharmacy websites via VPN
+3. Store raw scraped data in `/app/scraper/outputs/`
+4. Rotate VPN connection every 5 minutes
+5. Repeat continuously
 
 #### 2. Germany VPN Scraper
 ```
-Container: scraper-vpn-germany
+Container Name: scraper-vpn-germany
 Status: Running (healthy)
 Country: Germany
+VPN Provider: NordVPN
 VPN Rotation: Every 5 minutes
-Target: German pharmacy websites
+Timezone: Europe/Berlin
+Resources: 2 CPU cores, 6GB RAM
+Health Check: nordvpn status (every 60s)
 ```
+
+**Startup Sequence:**
+1. Container starts (immediate)
+2. Connects to NordVPN Germany endpoint (~30s)
+3. Verifies VPN connection
+4. Ready for German pharmacy scraping (when configured)
 
 **Scraping Schedule:**
-- Runs continuously with 5-minute VPN rotation
-- Scrapes German pharmacies (when configured)
+- **Continuous operation** with 5-minute VPN rotation
+- Currently standby (German pharmacies not yet configured)
 
-#### 3. Czech VPN Scraper
+#### 3. Czech Republic VPN Scraper
 ```
-Container: scraper-vpn-czech
+Container Name: scraper-vpn-czech
 Status: Running (healthy)
 Country: Czech Republic
+VPN Provider: NordVPN
 VPN Rotation: Every 5 minutes
-Target: Czech pharmacy websites
+Timezone: Europe/Prague
+Resources: 2 CPU cores, 6GB RAM
+Health Check: nordvpn status (every 60s)
 ```
 
+**Startup Sequence:**
+1. Container starts (immediate)
+2. Connects to NordVPN Czech endpoint (~30s)
+3. Verifies VPN connection
+4. Ready for Czech pharmacy scraping (when configured)
+
 **Scraping Schedule:**
-- Runs continuously with 5-minute VPN rotation
-- Scrapes Czech pharmacies (when configured)
+- **Continuous operation** with 5-minute VPN rotation
+- Currently standby (Czech pharmacies not yet configured)
+
+---
 
 ### Product Update Workers (5 total)
 
-These workers call the CheaperForDrug API to update product data.
+All workers connect to **Poland VPN** and call the CheaperForDrug API.
+
+**Common Configuration:**
+- **VPN Country:** Poland
+- **VPN Rotation:** Every 15 minutes (longer interval than scrapers)
+- **API Endpoint:** http://api-scraper.localtest.me:4200
+- **API Authentication:** Token-based (SCRAPER_AUTH_TOKEN)
+- **Timezone:** Europe/Warsaw
+- **Resources:** 2 CPU cores, 6GB RAM each
+- **Concurrency:** 20 concurrent scrapers per worker
+- **Poll Interval:** 1000ms (1 second)
+- **Batch Size:** 20 items per batch
+
+#### Startup Timing & Offset Schedule
+
+Workers start with **staggered delays** to prevent API overload:
 
 ```
-Container: product-update-worker-poland-1  [Running]
-Container: product-update-worker-poland-2  [Running]
-Container: product-update-worker-poland-3  [Running]
-Container: product-update-worker-poland-4  [Running]
-Container: product-update-worker-poland-5  [Running]
+Worker 1 (product-update-worker-poland-1):
+  ├─ VPN Connection Wait: 30 seconds
+  ├─ Additional Offset: 0ms
+  └─ Total Startup Time: 30.0 seconds
+
+Worker 2 (product-update-worker-poland-2):
+  ├─ VPN Connection Wait: 30 seconds
+  ├─ Additional Offset: 200ms
+  └─ Total Startup Time: 30.2 seconds
+
+Worker 3 (product-update-worker-poland-3):
+  ├─ VPN Connection Wait: 30 seconds
+  ├─ Additional Offset: 400ms
+  └─ Total Startup Time: 30.4 seconds
+
+Worker 4 (product-update-worker-poland-4):
+  ├─ VPN Connection Wait: 30 seconds
+  ├─ Additional Offset: 600ms
+  └─ Total Startup Time: 30.6 seconds
+
+Worker 5 (product-update-worker-poland-5):
+  ├─ VPN Connection Wait: 30 seconds
+  ├─ Additional Offset: 800ms
+  └─ Total Startup Time: 30.8 seconds
 ```
 
-**Worker Configuration:**
-- **API Endpoint:** https://api-internal.cheaperfordrug.com
-- **Authentication:** Internal API key
-- **Concurrency:** 5 workers running in parallel
-- **Job Queue:** Redis-backed queue
+**Startup Command Example (Worker 2):**
+```bash
+sh -c "
+  echo 'Waiting for VPN connection...'
+  sleep 30
+  echo 'Waiting 200ms offset...'
+  sleep 0.2
+  echo 'Starting Product Update Worker 2...'
+  cd /app/scraper
+  exec node workers/poland/product_update_worker.js
+"
+```
+
+**Worker Runtime Process:**
+```javascript
+// workers/poland/product_update_worker.js
+1. Connect to Poland VPN
+2. Poll API every 1 second for new jobs
+3. Fetch batch of 20 products to update
+4. Process each product (max 20 concurrent)
+5. POST updates to api-scraper.localtest.me:4200
+6. Repeat continuously
+```
 
 **Data Processing Flow:**
-1. VPN scrapers collect raw pharmacy data
-2. Data is queued for processing
-3. Product update workers pick up jobs from queue
-4. Workers call API endpoints to:
-   - Create/update drugs
-   - Update prices
-   - Link products to pharmacies
-   - Group drug variants
-5. API processes and stores in database
-6. Elasticsearch indexes updated
+1. VPN scrapers write data to `/app/scraper/outputs/`
+2. Product update workers read from shared volume
+3. Workers poll for pending updates (1-second interval)
+4. Batch processing (20 items at a time)
+5. HTTP POST to CheaperForDrug API (port 4200)
+6. API validates and stores in PostgreSQL
+7. Elasticsearch indexes updated
+8. Process repeats
 
-### Scraper Orchestration
+---
 
-**Startup Sequence:**
-1. VPN scrapers start first (connect to VPN)
-2. Wait for VPN connection to establish
-3. Product update workers start
-4. Workers wait for scraper data to be available
-5. Processing begins
+### Scraper Orchestration & Scheduling
+
+**No Cron Jobs - All containers run continuously**
+
+#### VPN Scraper Schedule
+- **Operation Mode:** Continuous/perpetual
+- **VPN Rotation:** Automatic every 5 minutes
+- **Restart Policy:** `unless-stopped`
+- **No scheduled tasks** - scrapers run 24/7
+
+#### Product Update Worker Schedule
+- **Operation Mode:** Continuous polling (1-second interval)
+- **VPN Rotation:** Automatic every 15 minutes
+- **Startup:** Staggered with 200ms offsets
+- **Restart Policy:** `unless-stopped`
+- **No scheduled tasks** - workers poll API continuously
 
 **Health Monitoring:**
-- All containers have health checks
-- VPN connection verified every 5 minutes
-- Worker queue depth monitored
-- API endpoint availability checked
+- **VPN Health Checks:** `nordvpn status` every 60 seconds
+- **Health Check Timeout:** 10 seconds
+- **Health Check Retries:** 3 attempts
+- **Startup Grace Period:** 60s (scrapers), 90s (workers)
+
+**Container Restart Behavior:**
+```
+If container fails → Docker automatically restarts
+If VPN disconnects → Health check fails → Container restarts
+If health check fails 3 times → Container marked unhealthy → Restart triggered
+```
 
 **Deployment Method:**
 ```bash
+# Restart all scraper containers
 cd ~/apps/cheaperfordrug-scraper
-docker-compose restart  # Restart all scraper containers
+docker-compose restart
+
+# Restart specific country scraper
+docker-compose restart scraper-vpn-poland
+
+# Restart specific worker
+docker-compose restart product-update-worker-poland-1
+
+# View logs
+docker-compose logs -f scraper-vpn-poland
+docker-compose logs -f product-update-worker-poland-1
 ```
 
-**Logs:**
-- Location: ~/apps/cheaperfordrug-scraper/logs/
-- VPN logs: Shows connection status and rotations
-- Worker logs: Shows API calls and processing results
+**Volume Mounts (Shared Data):**
+```
+./outputs:/app/scraper/outputs     # Scraped data
+./logs:/app/scraper/logs           # Application logs
+./state:/app/scraper/state         # Worker state/checkpoints
+.:/app/scraper:ro                  # Scraper code (read-only)
+```
+
+**Log Locations:**
+- **Docker logs:** `~/apps/cheaperfordrug-scraper/docker-logs/[container-name]/`
+- **Application logs:** `~/apps/cheaperfordrug-scraper/logs/`
+- **VPN connection logs:** Inside Docker logs (stdout)
+- **Worker processing logs:** `~/apps/cheaperfordrug-scraper/logs/workers/`
 
 ---
 
