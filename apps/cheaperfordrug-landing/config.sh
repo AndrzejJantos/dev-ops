@@ -64,7 +64,7 @@ export NGINX_UPSTREAM_NAME="${APP_NAME//-/_}_backend"
 
 # Docker configuration
 export DOCKER_IMAGE_NAME="${APP_NAME}"
-export DOCKER_NETWORK="bridge"
+export DOCKER_NETWORK="host"
 
 # Application-specific environment variables
 # These will be written to .env.production during setup
