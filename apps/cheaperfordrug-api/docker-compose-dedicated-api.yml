@@ -1,0 +1,180 @@
+# Dedicated API Containers for CheaperForDrug Scraper System
+# These containers provide specialized API endpoints for different scraper functions
+#
+# Architecture:
+# - api-product-read: Read-only product queries (polling endpoint for workers)
+# - api-product-write: Product updates with background processing
+# - api-normalizer: Drug name normalization
+# - api-scraper: Full scraping operations with background processing
+#
+# Network: host mode (same as main API deployment)
+# Database: PostgreSQL on localhost:5432
+# Redis: localhost:6379/2
+
+services:
+  # ===========================================================================
+  # API-PRODUCT-READ (Port 4201)
+  # ===========================================================================
+  # Handles high-frequency read operations for scraper workers
+  # Endpoints: GET /api/scraper/online_pharmacy_drugs/pending_updates
+  # No background worker needed
+  api-product-read:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-product-read
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      - PORT=4201
+      - CONTAINER_NAME=api-product-read
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4201/up"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # API-PRODUCT-WRITE (Port 4202)
+  # ===========================================================================
+  # Handles product update operations with background processing
+  # Endpoints: POST /api/scraper/online_pharmacy_drugs/batch_update
+  #            POST /api/scraper/online_pharmacy_drugs/release_lock
+  # Requires companion Sidekiq worker
+  api-product-write:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-product-write
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      - PORT=4202
+      - CONTAINER_NAME=api-product-write
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4202/up"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Background worker for api-product-write
+  api-product-write-sidekiq:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-product-write-sidekiq
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      - CONTAINER_NAME=api-product-write-sidekiq
+      - RAILS_ENV=production
+      - RACK_ENV=production
+      - SIDEKIQ_CONCURRENCY=${SIDEKIQ_CONCURRENCY:-10}
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    command: /bin/bash -c "cd /app && bundle exec sidekiq"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # API-NORMALIZER (Port 4203)
+  # ===========================================================================
+  # Handles drug name normalization operations
+  # Endpoints: POST /api/scraper/online_pharmacy_drugs/update_normalized_attributes
+  # No background worker needed
+  api-normalizer:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-normalizer
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      - PORT=4203
+      - CONTAINER_NAME=api-normalizer
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4203/up"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # API-SCRAPER (Port 4204)
+  # ===========================================================================
+  # Handles full scraping operations with background processing
+  # Endpoints: Full scraping API (create drugs, pharmacies, category scraping, etc.)
+  # Requires companion Sidekiq worker
+  api-scraper:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-scraper
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      - PORT=4204
+      - CONTAINER_NAME=api-scraper
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4204/up"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Background worker for api-scraper
+  api-scraper-sidekiq:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-scraper-sidekiq
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      - CONTAINER_NAME=api-scraper-sidekiq
+      - RAILS_ENV=production
+      - RACK_ENV=production
+      - SIDEKIQ_CONCURRENCY=${SIDEKIQ_CONCURRENCY:-10}
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    command: /bin/bash -c "cd /app && bundle exec sidekiq"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

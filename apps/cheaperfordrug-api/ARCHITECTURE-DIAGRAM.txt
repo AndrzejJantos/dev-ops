@@ -1,0 +1,203 @@
+CheaperForDrug API - Complete Architecture
+===========================================
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         EXISTING MAIN API DEPLOYMENT                        │
+│                         (Unchanged - Remains as is)                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Internet                                                                  │
+│      │                                                                       │
+│      ▼                                                                       │
+│   Nginx (443) ───┐                                                          │
+│   SSL/TLS        │                                                          │
+│   api-public.cheaperfordrug.com                                            │
+│   api-internal.cheaperfordrug.com                                          │
+│                  │                                                          │
+│                  ├──► Web Container 1 (localhost:3020)                     │
+│                  ├──► Web Container 2 (localhost:3021)                     │
+│                  └──► Web Container 3 (localhost:3022)                     │
+│                                                                             │
+│   Background Processing:                                                    │
+│   └──► Sidekiq Worker 1 (general background jobs)                         │
+│                                                                             │
+│   Management: ./deploy.sh deploy|restart|stop|status                       │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                      NEW DEDICATED API CONTAINERS                           │
+│                      (For Scraper System Only)                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Direct Access (No Nginx, localhost only)                                 │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────┐         │
+│   │  API-PRODUCT-READ (Port 4201)                               │         │
+│   │  ────────────────────────────────                           │         │
+│   │  Purpose: High-frequency read operations                     │         │
+│   │  Endpoints:                                                  │         │
+│   │    GET /api/scraper/online_pharmacy_drugs/pending_updates   │         │
+│   │  Worker: None                                                │         │
+│   │  Use: Workers poll for products needing updates             │         │
+│   └─────────────────────────────────────────────────────────────┘         │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────┐         │
+│   │  API-PRODUCT-WRITE (Port 4202)                              │         │
+│   │  ──────────────────────────────                             │         │
+│   │  Purpose: Product update operations                          │         │
+│   │  Endpoints:                                                  │         │
+│   │    POST /api/scraper/online_pharmacy_drugs/batch_update     │         │
+│   │    POST /api/scraper/online_pharmacy_drugs/release_lock     │         │
+│   │  Worker: api-product-write-sidekiq                          │         │
+│   │  Use: Workers send scraped data for processing              │         │
+│   └─────────────────────────────────────────────────────────────┘         │
+│                          │                                                  │
+│                          └──► Sidekiq Worker (product-write-sidekiq)       │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────┐         │
+│   │  API-NORMALIZER (Port 4203)                                 │         │
+│   │  ───────────────────────────                                │         │
+│   │  Purpose: Drug name normalization                            │         │
+│   │  Endpoints:                                                  │         │
+│   │    POST /api/.../update_normalized_attributes               │         │
+│   │  Worker: None                                                │         │
+│   │  Use: Normalize product names to standard format            │         │
+│   └─────────────────────────────────────────────────────────────┘         │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────┐         │
+│   │  API-SCRAPER (Port 4204)                                    │         │
+│   │  ────────────────────────                                   │         │
+│   │  Purpose: Full scraping operations                           │         │
+│   │  Endpoints:                                                  │         │
+│   │    Full scraping API (drugs, pharmacies, categories)        │         │
+│   │  Worker: api-scraper-sidekiq                                │         │
+│   │  Use: Category scraping, entity creation                    │         │
+│   └─────────────────────────────────────────────────────────────┘         │
+│                          │                                                  │
+│                          └──► Sidekiq Worker (scraper-sidekiq)             │
+│                                                                             │
+│   Management: ./deploy-dedicated-api.sh start|stop|restart|status|health   │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                          SHARED INFRASTRUCTURE                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Docker Image:                                                             │
+│   ├─ cheaperfordrug-api:latest (Rails 8, Ruby 3.4.5)                      │
+│   └─ Built by: ./deploy.sh deploy                                          │
+│                                                                             │
+│   Database:                                                                 │
+│   ├─ PostgreSQL on localhost:5432                                          │
+│   ├─ Database: cheaperfordrug_production                                   │
+│   └─ User: cheaperfordrug_user                                             │
+│                                                                             │
+│   Redis:                                                                    │
+│   ├─ localhost:6379/2                                                      │
+│   └─ Shared by all containers                                              │
+│                                                                             │
+│   Logs:                                                                     │
+│   └─ ${LOG_DIR}/logs (shared directory)                                    │
+│                                                                             │
+│   Network:                                                                  │
+│   └─ host mode (all containers)                                            │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         SCRAPER WORKER INTEGRATION                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Scraper Workers (Python/Docker) ──────────────────┐                      │
+│                                                      │                      │
+│   Worker Lifecycle:                                 │                      │
+│   1. Poll for work      ──► api-product-read:4201  │                      │
+│   2. Scrape pharmacy    ──► (external website)      │                      │
+│   3. Normalize data     ──► api-normalizer:4203    │                      │
+│   4. Send updates       ──► api-product-write:4202 │                      │
+│   5. Category scraping  ──► api-scraper:4204       │                      │
+│                                                      │                      │
+│   Configuration:                                     │                      │
+│   API_ENDPOINTS = {                                 │                      │
+│       'product_read': 'http://localhost:4201',      │                      │
+│       'product_write': 'http://localhost:4202',     │                      │
+│       'normalizer': 'http://localhost:4203',        │                      │
+│       'scraper': 'http://localhost:4204',           │                      │
+│   }                                                  │                      │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+DEPLOYMENT ENVIRONMENTS
+=======================
+
+Production (Hetzner Server):
+├─ Location: /home/andrzej/DevOps/apps/cheaperfordrug-api
+├─ Commands: ./deploy.sh, ./deploy-dedicated-api.sh
+└─ Access: localhost (containers) + public domains (nginx)
+
+Development (macOS):
+├─ Location: /Users/andrzej/Development/CheaperForDrug/DevOps/apps/cheaperfordrug-api
+├─ Commands: ./deploy.sh, ./deploy-dedicated-api.sh
+└─ Access: localhost only
+
+CONTAINER SUMMARY
+=================
+
+Main API (Existing):
+├─ 3 Web containers (ports 3020-3022)
+├─ 1 Sidekiq worker
+└─ Public access via nginx
+
+Dedicated API (New):
+├─ 4 Web containers (ports 4201-4204)
+├─ 2 Sidekiq workers
+└─ Internal access only
+
+Total: 7 web containers + 3 workers = 10 containers
+
+PORTS REFERENCE
+===============
+
+3020-3022 : Main API web containers (behind nginx)
+4201      : API-Product-Read (scraper read operations)
+4202      : API-Product-Write (scraper write operations)
+4203      : API-Normalizer (drug normalization)
+4204      : API-Scraper (full scraping operations)
+
+QUICK COMMANDS
+==============
+
+Deploy main API:
+  ./deploy.sh deploy
+
+Start dedicated containers:
+  ./deploy-dedicated-api.sh start
+
+Check status:
+  ./deploy.sh status                    # Main API
+  ./deploy-dedicated-api.sh status      # Dedicated APIs
+
+Health check:
+  ./deploy-dedicated-api.sh health
+
+View logs:
+  ./deploy.sh logs web_1                        # Main API
+  ./deploy-dedicated-api.sh logs product-read   # Dedicated API
+
+Update all:
+  ./deploy.sh deploy                    # Builds new image
+  ./deploy-dedicated-api.sh restart     # Uses new image
+
+FILES CREATED
+=============
+
+docker-compose-dedicated-api.yml    Docker Compose configuration
+deploy-dedicated-api.sh             Deployment management script
+verify-dedicated-api.sh             Prerequisites verification
+README-DEDICATED-API.md             Complete documentation
+QUICKSTART-DEDICATED-API.md         Quick reference guide
+DEPLOYMENT-SUMMARY.md               This deployment summary
+ARCHITECTURE-DIAGRAM.txt            This diagram
+.env.production.template (updated)  Added port documentation
