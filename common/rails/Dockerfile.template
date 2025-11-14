@@ -94,19 +94,22 @@ WORKDIR /app
 COPY --from=builder /usr/local/bundle /usr/local/bundle
 
 # Copy application code from builder (without .env file)
+# NOTE: Set ownership during COPY to avoid expensive chown -R later
 COPY --from=builder --chown=app:app /app ./
 
 # SECURITY: Explicitly remove .env file from final image
 # This ensures no environment secrets are baked into the image
 RUN rm -f .env .env.production .env.local .env.*.local
 
-# Copy precompiled assets from builder
+# Copy precompiled assets from builder (ownership already set in previous COPY)
 COPY --from=builder --chown=app:app /app/public/assets ./public/assets
 
-# Create necessary Rails directories including log directory for container-prefixed logging
+# Create necessary Rails directories with correct ownership from the start
+# PERFORMANCE: Create directories and set ownership explicitly (not recursive on /app)
+# This avoids the expensive chown -R operation on 25+ overlay layers
 RUN mkdir -p tmp/pids tmp/cache tmp/sockets log && \
-    chown -R app:app /app && \
-    chmod -R 755 /app && \
+    chown app:app tmp tmp/pids tmp/cache tmp/sockets log && \
+    chmod 755 tmp/pids tmp/cache tmp/sockets && \
     chmod 777 log
 
 # Switch to non-root user
