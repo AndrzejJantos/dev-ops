@@ -1,738 +1,927 @@
 # CheaperForDrug DevOps Infrastructure
 
-Comprehensive DevOps automation repository for managing the complete CheaperForDrug infrastructure on Ubuntu servers. This repository provides a production-ready, scalable deployment framework for both Rails APIs and Next.js applications with automated SSL management, nginx configuration, Docker containerization, and Redis Streams support.
+**Production-Ready Infrastructure for Rails APIs and Next.js Applications**
+
+**Server:** Hetzner (65.109.22.232:2222)
+**Last Updated:** 2025-11-14
+**Total Containers:** 24 active (13 web, 2 workers, 1 scheduler, 8 scrapers)
+
+---
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Repository Structure](#repository-structure)
-- [Core Scripts](#core-scripts)
-- [Infrastructure Components](#infrastructure-components)
-- [Application Management](#application-management)
-- [Common Utilities](#common-utilities)
-- [Templates](#templates)
-- [Deployment Workflows](#deployment-workflows)
-- [SSL Certificate Management](#ssl-certificate-management)
-- [Database and Redis Setup](#database-and-redis-setup)
-- [Monitoring and Maintenance](#monitoring-and-maintenance)
-- [Disaster Recovery](#disaster-recovery)
-- [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
-- [Best Practices](#best-practices)
+1. [Overview](#overview)
+2. [System Architecture](#system-architecture)
+3. [Infrastructure Services](#infrastructure-services)
+4. [Application Services](#application-services)
+5. [Scraper System](#scraper-system)
+6. [Network Architecture](#network-architecture)
+7. [Container Management](#container-management)
+8. [Deployment Procedures](#deployment-procedures)
+9. [Performance Optimization](#performance-optimization)
+10. [CDN & Active Storage](#cdn--active-storage)
+11. [Email Notifications](#email-notifications)
+12. [Database & Redis](#database--redis)
+13. [Security & SSL](#security--ssl)
+14. [Monitoring & Health Checks](#monitoring--health-checks)
+15. [Troubleshooting](#troubleshooting)
+16. [Disaster Recovery](#disaster-recovery)
 
 ---
 
 ## Overview
 
-This DevOps repository is the central infrastructure management system for the CheaperForDrug platform. It provides:
+This DevOps repository is the central infrastructure management system for the CheaperForDrug and Brokik platforms running on Ubuntu servers. It provides:
 
-- **Automated Server Initialization**: Complete Ubuntu server setup from scratch
-- **Multi-Application Deployment**: Support for Rails APIs and Next.js frontends
-- **Fully Automated SSL Management**: Let's Encrypt certificates are automatically checked, obtained, and renewed during every deployment - completely hands-off, no manual commands needed
-- **Nginx Configuration**: Template-based, dynamic nginx configuration generation
-- **Docker Orchestration**: Containerized applications with rolling updates
-- **Redis Streams**: Optimized Redis configuration for streaming workloads
-- **Database Management**: PostgreSQL setup, migrations, and backup automation
-- **Zero-Downtime Deployments**: Rolling restarts with health checks
-- **Disaster Recovery**: Complete system rebuild capability
+- **Automated Server Initialization** - Complete Ubuntu server setup from scratch
+- **Multi-Application Deployment** - Rails APIs and Next.js frontends with zero-downtime deployments
+- **Fully Automated SSL Management** - Let's Encrypt certificates automatically obtained and renewed
+- **Container Orchestration** - Docker with health checks, rolling updates, and automatic restart
+- **Load Balancing** - Nginx with dynamic upstream generation
+- **Performance Optimization** - Docker build optimization (2000x improvement), database indexing
+- **CDN Integration** - Direct nginx-based file serving for Active Storage
+- **Scraper System** - VPN-enabled scraping with automated product updates
+- **Email Notifications** - SendGrid integration for deployment alerts
+- **Disaster Recovery** - Complete system rebuild capability
 
 ### Technology Stack
 
-- **OS**: Ubuntu (18.04, 20.04, 22.04, 24.04)
-- **Web Server**: Nginx with SSL (Let's Encrypt)
-- **Containerization**: Docker with Docker Compose
-- **Backend**: Ruby on Rails, Node.js
-- **Frontend**: Next.js (standalone mode)
-- **Database**: PostgreSQL
-- **Cache/Streams**: Redis 8+
-- **SSL**: Certbot (Let's Encrypt)
-- **Process Management**: Docker with health checks
+- **OS:** Ubuntu (22.04+)
+- **Web Server:** Nginx with SSL (Let's Encrypt)
+- **Containerization:** Docker with host networking
+- **Backend:** Ruby on Rails 3.4.5 + Node.js 20.x
+- **Frontend:** Next.js (standalone mode)
+- **Database:** PostgreSQL 14+
+- **Cache/Queues:** Redis 8+
+- **Background Jobs:** Sidekiq
+- **Search:** Elasticsearch (AWS)
+- **SSL:** Certbot (auto-renewal)
+- **Email:** SendGrid API
 
 ---
 
-## Repository Structure
+## System Architecture
+
+### Container Overview (51 Total Across All Systems)
 
 ```
-DevOps/
-├── apps/                           # Application-specific configurations
-│   ├── cheaperfordrug-api/         # Rails API application
-│   ├── cheaperfordrug-landing/     # Next.js landing pages
-│   ├── cheaperfordrug-scraper/     # Scraper service
-│   ├── cheaperfordrug-web/         # Next.js web application
-│   └── status.sh                   # Multi-app status checker
-├── common/                         # Shared utilities and modules
-│   ├── app-types/                  # Application type modules
-│   │   ├── nextjs.sh               # Next.js deployment logic
-│   │   └── rails.sh                # Rails deployment logic
-│   ├── nginx/                      # Nginx configurations
-│   │   └── default-server.conf     # Default catch-all server
-│   ├── nextjs/                     # Next.js templates
-│   │   ├── .dockerignore.template  # Docker ignore for Next.js
-│   │   └── Dockerfile.template     # Multi-stage Next.js build
-│   ├── rails/                      # Rails templates
-│   │   ├── .dockerignore.template  # Docker ignore for Rails
-│   │   └── Dockerfile.template     # Multi-stage Rails build
-│   ├── templates/                  # Configuration templates
-│   │   └── redis.conf              # Redis Streams configuration
-│   ├── deploy-app.sh               # Generic deployment workflow
-│   ├── docker-utils.sh             # Docker container management
-│   ├── redis-setup.sh              # Redis configuration utilities
-│   ├── setup-app.sh                # Generic application setup
-│   └── utils.sh                    # Common utility functions
-├── scripts/                        # System-wide utilities
-│   ├── cleanup-all-apps.sh         # Centralized cleanup automation
-│   ├── disaster-recovery-config.example.sh  # DR configuration template
-│   ├── disaster-recovery.sh        # Complete system rebuild
-│   ├── update-redis.sh             # Redis upgrade utility
-│   └── upgrade-ruby.sh             # Ruby version upgrade utility
-├── templates/                      # Application templates
-│   ├── nextjs-app/                 # Next.js application template
-│   └── rails-app/                  # Rails application template
-├── rebuild-nginx-configs.sh        # Rebuild all nginx configs
-├── ubuntu-init-setup.sh            # Complete Ubuntu server initialization
-└── verify-domains.sh               # Domain and SSL verification
+Production Environment (hetzner-andrzej: 65.109.22.232)
+════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────┐
+│                    BROKIK PLATFORM                          │
+├─────────────────────────────────────────────────────────────┤
+│ Brokik API (Rails)                                          │
+│   • 2 Web Containers (ports 3040-3041)                     │
+│   • 1 Sidekiq Worker                                        │
+│   • 1 Clockwork Scheduler                                   │
+│   • Domains: api-public.brokik.com                         │
+│             api-internal.brokik.com                         │
+│                                                              │
+│ Brokik Web (Next.js)                                        │
+│   • 3 Web Containers (ports 3050-3052)                     │
+│   • Domain: www.brokik.com                                  │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│               CHEAPERFORDRUG PLATFORM                        │
+├─────────────────────────────────────────────────────────────┤
+│ CheaperForDrug Landing (Rails)                              │
+│   • 2 Web Containers (ports 3010-3011)                     │
+│   • Domain: taniejpolek.pl, presale.taniejpolek.pl        │
+│                                                              │
+│ CheaperForDrug Web (Next.js)                                │
+│   • 3 Web Containers (ports 3030-3032)                     │
+│   • Domain: premiera.taniejpolek.pl                         │
+│                                                              │
+│ CheaperForDrug API (Rails)                                  │
+│   • 3 Web Containers (ports 3020-3022)                     │
+│   • 1 Sidekiq Worker                                        │
+│   • Domains: api-public.cheaperfordrug.com                 │
+│             api-internal.cheaperfordrug.com                 │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    SCRAPER SYSTEM                            │
+├─────────────────────────────────────────────────────────────┤
+│ VPN Scrapers (3 containers)                                 │
+│   • scraper-vpn-poland (NordVPN PL)                        │
+│   • scraper-vpn-germany (NordVPN DE)                       │
+│   • scraper-vpn-czech (NordVPN CZ)                         │
+│                                                              │
+│ Product Update Workers (5 containers)                       │
+│   • product-update-worker-poland-1                          │
+│   • product-update-worker-poland-2                          │
+│   • product-update-worker-poland-3                          │
+│   • product-update-worker-poland-4                          │
+│   • product-update-worker-poland-5                          │
+│   • All connect to: http://localhost:3020-3022            │
+└─────────────────────────────────────────────────────────────┘
+
+TOTALS:
+────────
+• Web Containers: 13
+• Workers: 2 (Sidekiq)
+• Schedulers: 1 (Clockwork)
+• Scrapers: 8 (3 VPN + 5 workers)
+• GRAND TOTAL: 24 Active Containers
 ```
 
-### Application Directory Structure (apps/*)
-
-Each application follows this structure:
+### Network Flow
 
 ```
-apps/example-app/
-├── config.sh                       # Application configuration
-├── deploy.sh                       # Deployment commands
-├── setup.sh                        # Initial setup
-├── nginx.conf.template             # Nginx configuration template
-└── [app-specific files]
+┌──────────────────────────────────────────────────────────────┐
+│                    EXTERNAL TRAFFIC                           │
+└──────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│                  NGINX (Port 443 SSL)                        │
+│            Let's Encrypt Auto-Renewal                        │
+└──────────────────────────────────────────────────────────────┘
+                            │
+                ┌───────────┴──────────┬──────────────┐
+                ▼                      ▼              ▼
+┌─────────────────────┐  ┌──────────────────┐  ┌────────────────┐
+│  Rails API Apps     │  │  Next.js Apps    │  │  CDN Files     │
+│  (Load Balanced)    │  │  (Load Balanced) │  │  (Direct)      │
+│  • Brokik API       │  │  • Brokik Web    │  │  /var/storage  │
+│  • CFD API          │  │  • CFD Web       │  │  cdn.webet.pl  │
+│  • CFD Landing      │  │  • CFD Landing   │  │                │
+└─────────────────────┘  └──────────────────┘  └────────────────┘
+         │                        │
+         └────────┬───────────────┘
+                  ▼
+┌──────────────────────────────────────────────────────────────┐
+│                   SHARED SERVICES                             │
+│                                                               │
+│  PostgreSQL (localhost:5432)    Redis (localhost:6379)      │
+│  ├─ brokik_production           ├─ DB 0: Brokik            │
+│  ├─ cheaperfordrug_production   ├─ DB 1: CFD Landing       │
+│  └─ cheaperfordrug_landing_...  ├─ DB 2: CFD API           │
+│                                  └─ DB 3: Brokik API        │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Core Scripts
+## Infrastructure Services
 
-### ubuntu-init-setup.sh
+### 1. Nginx Load Balancer
 
-**Purpose**: Complete Ubuntu server initialization and hardening
+**Purpose:** SSL termination, load balancing, static file serving
 
-**Features**:
-- System package updates and upgrades
-- User creation with sudo privileges and SSH key setup
-- Hostname configuration
-- UFW firewall setup (SSH, HTTP, HTTPS)
-- Fail2ban installation for SSH protection
-- Essential development tools (git, curl, wget, vim, htop, etc.)
-- Node.js 20.x installation with Yarn
-- Ruby 3.4.4 with rbenv and Rails
-- PostgreSQL and Redis 8 installation
-- Docker and Docker Compose setup
-- Nginx web server installation
-- Let's Encrypt SSL certificate automation
-- System optimization (swap, file limits, auto-updates)
-- SSH security hardening (custom port, key-only auth, root disabled)
-- GitHub SSH key generation
-- Timezone and locale configuration
-- fzf fuzzy finder with CTRL+P mapping
+**Key Features:**
+- Automatic SSL certificate management (Let's Encrypt)
+- Dynamic upstream generation based on container count
+- Health checks with automatic failover
+- HTTP/2 support
+- Gzip compression
+- Security headers (HSTS, XSS protection, etc.)
+- CDN for Active Storage files
 
-**Usage**:
+**Configuration Pattern:**
+```nginx
+upstream app_backend {
+    server localhost:3020;  # Container 1
+    server localhost:3021;  # Container 2
+    server localhost:3022;  # Container 3
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api-public.cheaperfordrug.com;
+
+    ssl_certificate /etc/letsencrypt/live/.../fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/.../privkey.pem;
+
+    location / {
+        proxy_pass http://app_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        # ... additional headers
+    }
+}
+```
+
+**Management Commands:**
 ```bash
-sudo ./ubuntu-init-setup.sh
-```
-
-**Configuration Variables** (edit in script):
-- `USERNAME`: User to create (default: andrzej)
-- `NEW_HOSTNAME`: Server hostname (default: webet)
-- `SSH_PORT`: Custom SSH port (default: 2222)
-- `TIMEZONE`: Server timezone (default: Europe/Warsaw)
-- `RUBY_VERSION`: Ruby version (default: 3.4.4)
-- `NODE_VERSION`: Node.js version (default: 20)
-- `SWAP_SIZE`: Swap file size (default: 2G)
-
-**Interactive Prompts**:
-- User setup confirmation
-- Hostname change confirmation
-- Component installation confirmations
-- SSL certificate setup
-- GitHub SSH key generation
-- SSH hardening (final step)
-
-**Post-Setup**:
-- Verify SSH access on new port before closing session
-- Add GitHub SSH key to GitHub account
-- Review installation log: `/var/log/server-init-setup.log`
-
----
-
-### rebuild-nginx-configs.sh
-
-**Purpose**: Rebuild all nginx configurations from templates with validation
-
-**Features**:
-- Discovers all applications with nginx templates
-- Backs up existing configurations
-- Removes old configurations (preserves defaults)
-- Verifies container status and health
-- Generates new configurations from templates
-- Validates SSL certificates (expiry, coverage)
-- Tests nginx configuration syntax
-- Performs hot reload without downtime
-- Provides rollback capability
-
-**Usage**:
-```bash
-# Dry run to preview changes
-./rebuild-nginx-configs.sh --dry-run
-
-# Full rebuild with SSL validation
+# Rebuild all nginx configs
 ./rebuild-nginx-configs.sh
 
-# Skip SSL checks
-./rebuild-nginx-configs.sh --skip-ssl
+# Test configuration
+sudo nginx -t
 
-# Force rebuild even if issues found
-./rebuild-nginx-configs.sh --force
+# Reload without downtime
+sudo systemctl reload nginx
+
+# View logs
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
 ```
 
-**Options**:
-- `-d, --dry-run`: Preview changes without applying
-- `-s, --skip-ssl`: Skip SSL certificate validation
-- `-f, --force`: Force rebuild despite validation failures
-- `-h, --help`: Show usage information
+### 2. Docker Container Platform
 
-**Backup Location**: `/tmp/nginx_backup_YYYYMMDD_HHMMSS/`
+**Network Mode:** Host networking (required for Linux PostgreSQL/Redis access)
 
----
+**Container Types:**
 
-### verify-domains.sh
+**Web Containers:**
+- Rails: Puma with health endpoint `/up`
+- Next.js: Standalone mode with built-in server
+- Each container on unique port (host networking)
 
-**Purpose**: Comprehensive domain and SSL verification report
+**Worker Containers:**
+- Sidekiq for background job processing
+- No exposed ports (internal communication via Redis)
+- Graceful shutdown with 90-second timeout
 
-**Features**:
-- Tests HTTP to HTTPS redirects
-- Validates SSL certificate validity
-- Checks response times
-- Verifies backend health endpoints
-- Tests all configured domains and subdomains
-- Reports nginx and container status
-- Checks for recent nginx errors
+**Scheduler Containers:**
+- Clockwork for recurring tasks
+- Enqueues jobs to Sidekiq
 
-**Usage**:
+**Container Naming Convention:**
+```
+{app-name}_web_{number}       # Web containers
+{app-name}_worker_{number}    # Worker containers
+{app-name}_scheduler_{number} # Scheduler containers
+```
+
+**Port Allocation:**
+```
+Application                Ports        Containers
+────────────────────────────────────────────────────
+Brokik API                3040-3041    2 web + 1 worker + 1 scheduler
+Brokik Web                3050-3052    3 web
+CheaperForDrug Landing    3010-3011    2 web
+CheaperForDrug Web        3030-3032    3 web
+CheaperForDrug API        3020-3022    3 web + 1 worker
+────────────────────────────────────────────────────
+Reserved                  3060-3099    Future expansion
+```
+
+### 3. SSL/TLS Certificate Management
+
+**Fully Automated** - No manual certificate commands required!
+
+**How It Works:**
+1. Every deployment automatically checks SSL certificates
+2. Validates expiry (warns if < 30 days remaining)
+3. Automatically obtains certificates if missing (DNS configured)
+4. Configures nginx with SSL and HTTP→HTTPS redirect
+5. Logs SSL status in deployment log
+
+**Auto-Renewal:**
+- Systemd timer checks twice daily
+- Automatically renews when certificates expire within 30 days
+- Nginx reloads automatically after renewal
+- No manual intervention required
+
+**Certificate Locations:**
+```
+/etc/letsencrypt/live/{domain}/
+├── fullchain.pem  # Full certificate chain
+├── privkey.pem    # Private key
+├── cert.pem       # Certificate only
+└── chain.pem      # Chain only
+```
+
+**Manual Operations (rarely needed):**
 ```bash
-./verify-domains.sh
+# Check certificate status
+sudo certbot certificates
+
+# Force renewal (if needed)
+sudo certbot renew --force-renewal
+
+# View renewal timer
+systemctl status certbot.timer
+
+# View logs
+sudo tail -50 /var/log/letsencrypt/letsencrypt.log
 ```
 
-**Checks Performed**:
-- HTTP redirect status (301/302)
-- HTTPS response (200 OK)
-- SSL certificate validation
-- Response time measurement
-- Backend port health checks
-- Container count and status
-- Nginx error log analysis
+### 4. PostgreSQL Database
+
+**Version:** 14+
+**Configuration:** Optimized for Docker host networking
+
+**Setup:**
+```bash
+# Configure for Docker access
+# postgresql.conf
+listen_addresses = '*'
+
+# pg_hba.conf
+host    all    all    172.17.0.0/16    md5
+```
+
+**Database Allocation:**
+```
+Database                              Application
+──────────────────────────────────────────────────────────
+brokik_production                     Brokik API
+cheaperfordrug_production             CheaperForDrug API
+cheaperfordrug_landing_production     CheaperForDrug Landing
+```
+
+**Backup Strategy:**
+- Daily automated backups before migrations
+- Compressed format (.sql.gz)
+- 30-day retention
+- Location: `~/apps/{app-name}/backups/`
+
+**Database Operations:**
+```bash
+# Manual backup
+pg_dump -U {user} {database} | gzip > backup.sql.gz
+
+# Restore
+gunzip -c backup.sql.gz | psql -U {user} {database}
+
+# Check size
+sudo -u postgres psql -c "SELECT pg_size_pretty(pg_database_size('cheaperfordrug_production'));"
+```
+
+### 5. Redis Cache & Queues
+
+**Version:** 8+
+**Configuration:** Optimized for Streams and Sidekiq
+
+**Redis DB Allocation:**
+```
+DB #    Application               Purpose
+───────────────────────────────────────────────
+0       Brokik API (test)        Testing
+1       CFD Landing              Sessions, cache
+2       CFD API                  Sidekiq, cache
+3       Brokik API               Sidekiq, cache, scheduler
+```
+
+**Configuration Highlights:**
+```ini
+# /etc/redis/redis.conf
+maxmemory 256mb
+maxmemory-policy allkeys-lru
+appendonly yes  # AOF persistence for durability
+bind 0.0.0.0    # Allow Docker container access
+```
+
+**Monitoring:**
+```bash
+# Check Redis status
+redis-cli info stats
+
+# Monitor Sidekiq queues
+redis-cli -n 2 LLEN queue:default  # CFD API
+redis-cli -n 3 LLEN queue:default  # Brokik API
+
+# View memory usage
+redis-cli info memory
+```
 
 ---
 
-## Infrastructure Components
+## Application Services
 
-### 1. Nginx Web Server
+### Brokik API (Rails API)
 
-**Configuration Management**:
-- Template-based configuration in each app directory
-- Dynamic upstream generation based on container scale
-- SSL configuration with Let's Encrypt integration
-- Default catch-all server for security
-- HTTP to HTTPS automatic redirection
+**Type:** Rails 3.4.5 API with background processing
+**Domains:** api-public.brokik.com, api-internal.brokik.com
+**Container Architecture:** 2 web + 1 worker + 1 scheduler
+**Ports:** 3040-3041 (host), 3000 (container)
+**Database:** brokik_production (PostgreSQL)
+**Redis:** DB 3
+**Storage:** Local host disk at `/var/storage/brokik-api/active_storage`
 
-**Template Variables**:
-- `{{NGINX_UPSTREAM_NAME}}`: Upstream group name
-- `{{DOMAIN}}`: Primary domain
-- `{{APP_NAME}}`: Application name
-- `{{UPSTREAM_SERVERS}}`: Generated server list
+**Architecture:**
+- **api-public.brokik.com** - Public API endpoints (no auth required)
+- **api-internal.brokik.com** - Protected API endpoints (JWT auth)
+- Both domains route to same containers (Rails handles routing)
 
-**Features**:
-- Load balancing across multiple containers
-- Health checks with automatic failover
-- Security headers (HSTS, XSS, Content-Type, etc.)
-- Rate limiting and DDoS protection
-- Gzip compression
-- Access and error logging
+**Container Details:**
+```
+brokik-api_web_1      [Port 3040]  Web container #1
+brokik-api_web_2      [Port 3041]  Web container #2
+brokik-api_worker_1                Sidekiq worker
+brokik-api_scheduler               Clockwork scheduler
+```
+
+**Deployment:**
+```bash
+cd ~/DevOps/apps/brokik-api
+./deploy.sh deploy
+```
+
+**Key Features:**
+- Dual-subdomain architecture (public/internal)
+- Active Storage with CDN integration
+- Background job processing (email, data sync, external APIs)
+- Scheduled tasks (cleanup, reports, notifications)
+- JWT authentication (devise-jwt)
 
 ---
 
-### 2. Docker Containerization
+### Brokik Web (Next.js Frontend)
 
-**Container Architecture**:
-- Multi-stage builds for optimized images
-- Non-root user execution
-- Health check endpoints
-- Volume mounts for logs
-- Host or bridge networking based on app type
-- Automatic restart policies
+**Type:** Next.js Pages Router
+**Domain:** www.brokik.com
+**Container Architecture:** 3 web containers
+**Ports:** 3050-3052 (host), 3000 (container)
+**Backend:** Brokik API (api-public/internal)
 
-**Rails Applications**:
-- Web containers (scalable, default 2)
-- Worker containers (Sidekiq)
-- Scheduler containers (Clockwork)
-- Host networking for PostgreSQL access
-- Asset precompilation during build
+**Container Details:**
+```
+brokik-web_web_1  [Port 3050]  Next.js instance #1
+brokik-web_web_2  [Port 3051]  Next.js instance #2
+brokik-web_web_3  [Port 3052]  Next.js instance #3
+```
 
-**Next.js Applications**:
-- Standalone output mode
+**Deployment:**
+```bash
+cd ~/DevOps/apps/brokik-web
+./deploy.sh deploy
+```
+
+**Features:**
+- Static Site Generation (SSG) for performance
+- Client-Side Rendering (CSR) for dynamic content
+- Next.js Image optimization
 - Multi-container load balancing
-- Bridge networking
-- Static asset optimization
-- Environment-based configuration
-
-**Image Management**:
-- Timestamped image tags
-- Automatic cleanup of old images
-- Image backup before deployment
-- Rollback capability
+- Standalone mode for optimized Docker images
 
 ---
 
-### 3. SSL Certificate Management
+### CheaperForDrug Landing (Rails)
 
-**Fully Automated SSL with Let's Encrypt** (No Manual Commands Required):
-- **Automatic during every deployment**: SSL certificates are checked and obtained automatically - no separate commands needed
-- Multi-domain support (apex, www, internal domains)
-- Certificate validation and expiry checking (30-day warning threshold)
-- Auto-renewal with systemd timer (twice daily)
-- Nginx reload hook after renewal
-- DNS validation before certificate acquisition
-- Graceful handling when DNS not ready or certbot account missing
-- **Simply run `./deploy.sh deploy` and SSL is handled automatically**
+**Type:** Rails 3.4.5 Marketing/Landing Page
+**Domains:** taniejpolek.pl, presale.taniejpolek.pl
+**Container Architecture:** 2 web containers
+**Ports:** 3010-3011 (host), 3000 (container)
+**Database:** cheaperfordrug_landing_production
+**Redis:** DB 1
 
-**Automated Certificate Workflow During Deployment**:
-Every time you run `./deploy.sh deploy`, the system automatically:
-1. Checks if certbot is installed
-2. Verifies if certificates exist for the domain
-3. Checks certificate expiry (warns if < 30 days remaining)
-4. Validates certificate covers all required domains
-5. If certificates don't exist:
-   - Validates DNS configuration
-   - Checks for existing certbot account
-   - Automatically obtains certificates (if DNS and account ready)
-   - Configures nginx with SSL
-   - Sets up HTTP to HTTPS redirect
-6. Logs SSL status in deployment log
-
-**SSL Status During Deployment**:
-- `success`: Certificates valid and working
-- `skipped`: Certificates don't exist but couldn't be obtained automatically (DNS not ready, no certbot account, etc.)
-- `failed`: Attempted to obtain certificates but failed
-
-**If Automatic SSL Setup is Skipped**:
-If DNS or certbot account wasn't ready during deployment, configure DNS properly and redeploy. SSL will be automatically obtained during the next deployment. Alternatively, use certbot directly:
-```bash
-sudo certbot --nginx -d domain.com -d www.domain.com
+**Container Details:**
+```
+cheaperfordrug-landing_web_1  [Port 3010]  Web container #1
+cheaperfordrug-landing_web_2  [Port 3011]  Web container #2
 ```
 
-**Certificate Auto-Renewal**:
-Certbot automatically renews certificates via systemd timer:
-- Checks twice daily for certificates expiring within 30 days
-- Automatically renews when needed
-- Nginx reloads after successful renewal
+**Deployment:**
+```bash
+cd ~/DevOps/apps/cheaperfordrug-landing
+./deploy.sh deploy
+```
+
+**Features:**
+- Marketing landing pages
+- Lead capture forms
+- SendGrid email integration
+- Google Analytics & Tag Manager
+- Facebook Pixel tracking
+- Stripe payment integration
+
+---
+
+### CheaperForDrug Web (Next.js Frontend)
+
+**Type:** Next.js Application
+**Domains:** premiera.taniejpolek.pl
+**Container Architecture:** 3 web containers
+**Ports:** 3030-3032 (host), 3000 (container)
+**Backend:** CheaperForDrug API
+
+**Container Details:**
+```
+cheaperfordrug-web_web_1  [Port 3030]  Next.js instance #1
+cheaperfordrug-web_web_2  [Port 3031]  Next.js instance #2
+cheaperfordrug-web_web_3  [Port 3032]  Next.js instance #3
+```
+
+**Deployment:**
+```bash
+cd ~/DevOps/apps/cheaperfordrug-web
+./deploy.sh deploy
+```
+
+**Features:**
+- Drug price comparison interface
+- Elasticsearch-powered search
+- Pharmacy catalog
+- Multi-country support (Poland, Germany, Czech)
+- Material-UI with custom theming
+- Responsive design
+
+---
+
+### CheaperForDrug API (Rails API)
+
+**Type:** Rails 3.4.5 API with Elasticsearch
+**Domains:** api-public.cheaperfordrug.com, api-internal.cheaperfordrug.com
+**Container Architecture:** 3 web + 1 worker
+**Ports:** 3020-3022 (host), 3000 (container)
+**Database:** cheaperfordrug_production
+**Redis:** DB 2
+**Search:** AWS Elasticsearch
+
+**Container Details:**
+```
+cheaperfordrug-api_web_1     [Port 3020]  Web container #1
+cheaperfordrug-api_web_2     [Port 3021]  Web container #2
+cheaperfordrug-api_web_3     [Port 3022]  Web container #3
+cheaperfordrug-api_worker_1               Sidekiq worker
+```
+
+**Deployment:**
+```bash
+cd ~/DevOps/apps/cheaperfordrug-api
+./deploy.sh deploy
+```
+
+**Key Features:**
+- Drug database with Searchkick/Elasticsearch
+- Pharmacy price comparison
+- Multi-country support (Poland, Germany, Czech)
+- Background job processing (email, data sync, search indexing)
+- Scraper API endpoints (token-authenticated)
+- Active Storage for file uploads
+
+**Performance Optimizations:**
+- Database indexes for DISTINCT ON queries (60s → 0.5ms)
+- Elasticsearch for fast drug search
+- Redis caching for frequently accessed data
+- Multi-container load balancing
+
+---
+
+## Scraper System
+
+**Location:** `~/apps/cheaperfordrug-scraper`
+**Total Containers:** 8 (3 VPN + 5 workers)
+**Image:** scraper-vpn:latest (2.19GB)
+**Management:** docker-compose.yml
+
+### Architecture Overview
+
+The scraper system consists of two types of containers:
+
+1. **VPN Scrapers (3)** - Scrape pharmacy websites with NordVPN rotation
+2. **Product Update Workers (5)** - Call CheaperForDrug API to update product data
+
+**Connection Flow:**
+```
+VPN Scrapers
+    ↓ (Scrape pharmacy websites)
+    ↓ (Store data locally)
+Product Update Workers
+    ↓ (Read local data)
+    ↓ (HTTP POST to localhost:3020-3022)
+CheaperForDrug API (Nginx load balances)
+    ↓ (3 web containers)
+    ↓ (Process and validate)
+PostgreSQL + Elasticsearch
+```
+
+### VPN Scraper Containers
+
+**All use NordVPN with 5-minute rotation**
+
+#### 1. Poland VPN Scraper
+```
+Container Name: scraper-vpn-poland
+VPN Country: Poland
+Rotation: Every 5 minutes
+Resources: 2 CPU cores, 6GB RAM
+Health Check: nordvpn status (every 60s)
+```
+
+**Pharmacies:**
+- Gemini
+- DOZ
+- WaptekaPL
+- i-Apteka
+- ZikoApteka
+- SuperPharm
+- Melissa
+
+**Operation:** Continuous scraping with 5-minute VPN rotation
+
+#### 2. Germany VPN Scraper
+```
+Container Name: scraper-vpn-germany
+VPN Country: Germany
+Status: Standby (German pharmacies not yet configured)
+```
+
+#### 3. Czech Republic VPN Scraper
+```
+Container Name: scraper-vpn-czech
+VPN Country: Czech Republic
+Status: Standby (Czech pharmacies not yet configured)
+```
+
+### Product Update Workers (5 containers)
+
+**All connect to Poland VPN, call CheaperForDrug API**
+
+**Configuration:**
+- VPN Rotation: Every 15 minutes
+- API Endpoint: Nginx load balancer → localhost:3020-3022
+- Authentication: Bearer token (SCRAPER_AUTH_TOKEN)
+- Concurrency: 20 concurrent requests per worker
+- Poll Interval: 1 second
+- Batch Size: 20 items per batch
+
+**Startup Timing (Staggered):**
+```
+Worker 1: 30.0s  (VPN wait + 0ms offset)
+Worker 2: 30.2s  (VPN wait + 200ms offset)
+Worker 3: 30.4s  (VPN wait + 400ms offset)
+Worker 4: 30.6s  (VPN wait + 600ms offset)
+Worker 5: 30.8s  (VPN wait + 800ms offset)
+```
+
+**Data Flow:**
+```
+1. Workers poll API for pending updates (1-second interval)
+2. Fetch batch of 20 products
+3. Process each product (max 20 concurrent)
+4. POST updates to API (localhost:3020-3022)
+5. API validates and stores in PostgreSQL
+6. Elasticsearch indexes updated
+7. Repeat continuously
+```
+
+**Management Commands:**
+```bash
+# Restart all scraper containers
+cd ~/apps/cheaperfordrug-scraper
+docker-compose restart
+
+# Restart specific country scraper
+docker-compose restart scraper-vpn-poland
+
+# Restart specific worker
+docker-compose restart product-update-worker-poland-1
+
+# View logs
+docker-compose logs -f scraper-vpn-poland
+docker-compose logs -f product-update-worker-poland-1
+
+# Check status
+docker-compose ps
+```
+
+**Volume Mounts:**
+```
+./outputs:/app/scraper/outputs  # Scraped data
+./logs:/app/scraper/logs        # Application logs
+./state:/app/scraper/state      # Worker state/checkpoints
+.:/app/scraper:ro               # Scraper code (read-only)
+```
+
+**Log Locations:**
+- Docker logs: `~/apps/cheaperfordrug-scraper/docker-logs/{container-name}/`
+- Application logs: `~/apps/cheaperfordrug-scraper/logs/`
+- Worker logs: `~/apps/cheaperfordrug-scraper/logs/workers/`
+
+---
+
+## Network Architecture
+
+### Port Allocation Strategy
+
+**Web Services (Nginx Reverse Proxy):**
+```
+Application                 Port Range     Containers
+─────────────────────────────────────────────────────────
+Brokik API                  3040-3041      2
+Brokik Web                  3050-3052      3
+CheaperForDrug Landing      3010-3011      2
+CheaperForDrug Web          3030-3032      3
+CheaperForDrug API          3020-3022      3
+─────────────────────────────────────────────────────────
+Reserved for Future         3060-3099      Available
+```
+
+**Internal Services (No External Ports):**
+- Sidekiq Workers (communicate via Redis)
+- Clockwork Schedulers (communicate via Redis)
+- VPN Scrapers (VPN connections only)
+- Product Update Workers (HTTP to localhost API)
+
+### SSL/TLS Configuration
+
+**Certificate Provider:** Let's Encrypt (auto-renewal)
+
+**Active Certificates:**
+```
+Domain                             Expiry         Days Left
+───────────────────────────────────────────────────────────
+api-public.brokik.com              2026-01-29     75
+www.brokik.com                     2026-01-29     75
+taniejpolek.pl                     2026-01-28     74
+premiera.taniejpolek.pl            Valid          N/A
+api-public.cheaperfordrug.com      2026-01-25     71
+cdn.webet.pl                       Valid          N/A
+```
+
+**Certificate Auto-Renewal:**
+- Systemd timer: certbot.timer (twice daily)
+- Auto-renew certificates expiring within 30 days
+- Nginx reloads automatically after renewal
 - No manual intervention required
 
 ---
 
-### 4. Database Management (PostgreSQL)
+## Container Management
 
-**Setup**:
-- Automatic database creation
-- User and privilege management
-- Password configuration
-- Connection testing
+### Critical: Host Networking on Linux
 
-**Backup Automation**:
-- Daily automated backups (cron)
-- Compressed backup files (.sql.gz)
-- Retention policy (default 30 days)
-- Automatic cleanup of old backups
+**Why Host Networking?**
 
-**Backup Location**:
-```
-~/apps/{app-name}/backups/
-```
+On native Linux (Ubuntu/Hetzner), Docker containers **cannot access host services** via `host.docker.internal` (this only works on Docker Desktop/macOS/Windows).
 
-**Migration Management**:
-- Pre-migration database backup
-- Automatic Rails migrations during deployment
-- Migration rollback capability
+**Solution:** Use `--network host` mode, which allows containers to directly access `localhost` services.
 
----
+**Trade-off:** Each web container must listen on a **different port** to avoid conflicts.
 
-### 5. Redis Configuration
-
-**Redis 8 Optimizations**:
-- AOF (Append-Only File) persistence
-- Memory management (maxmemory policy)
-- Redis Streams configuration
-- Connection pooling
-- Database isolation (per-app DB numbers)
-
-**Configuration Template**: `common/templates/redis.conf`
-
-**Setup Script**: `common/redis-setup.sh`
-
-**Features**:
-- Optimized for Streams workloads
-- Automatic backup and restore
-- Performance monitoring
-- Memory eviction policies
-
----
-
-## Application Management
-
-### Application Types
-
-#### Rails Applications
-
-**Configuration** (`config.sh` variables):
-- `APP_TYPE="rails"`
-- Database settings (name, user, password)
-- Redis settings (DB number, URL)
-- Container settings (scale, ports)
-- Worker and scheduler settings
-
-**Deployment Features**:
-- Database migrations with backup
-- Asset precompilation in Docker build
-- Sidekiq worker containers
-- Clockwork scheduler container
-- Rails console access
-- Database restore capability
-
-**Container Types**:
-1. **Web**: Rails server (Puma) with health check endpoint
-2. **Worker**: Sidekiq for background jobs
-3. **Scheduler**: Clockwork for scheduled tasks
-
----
-
-#### Next.js Applications
-
-**Configuration** (`config.sh` variables):
-- `APP_TYPE="nextjs"`
-- Build-time environment variables
-- Container settings (scale, ports)
-- Domain configuration
-
-**Deployment Features**:
-- Standalone output mode
-- Static optimization
-- Environment variable injection
-- Multi-container load balancing
-
-**Requirements**:
-- `output: 'standalone'` in `next.config.js`
-- Build-time environment variables in `.env.production`
-
----
-
-### Deployment Commands
-
-Each application has a `deploy.sh` script with these commands:
+### Container Networking Pattern
 
 ```bash
-./deploy.sh deploy          # Deploy latest code from repository
-./deploy.sh restart         # Restart all containers with current image
+# Database connection (in .env.production)
+DATABASE_URL=postgresql://user:password@localhost/database_name
+REDIS_URL=redis://localhost:6379/2
+
+# Container creation
+docker run -d \
+  --name app_web_1 \
+  --network host \
+  --env-file .env.production \
+  -e PORT=3020 \
+  --restart unless-stopped \
+  app:latest
+```
+
+**How It Works:**
+- `--network host`: Container shares host network namespace
+- `localhost` in container = `localhost` on host
+- Each web container uses unique `PORT` environment variable
+- Workers don't bind to ports (no conflicts)
+
+### Adding New Web Containers
+
+**Step 1: Choose unique port**
+```
+Existing:
+- app_web_1: PORT=3020
+- app_web_2: PORT=3021
+- app_web_3: PORT=3022
+
+New:
+- app_web_4: PORT=3023  # Next available
+```
+
+**Step 2: Create container**
+```bash
+docker run -d \
+  --name app_web_4 \
+  --network host \
+  --env-file /path/to/.env.production \
+  -e PORT=3023 \
+  --restart unless-stopped \
+  app:latest
+```
+
+**Step 3: Update nginx load balancer**
+```bash
+cd ~/DevOps
+./rebuild-nginx-configs.sh
+```
+
+### Adding Worker Containers
+
+Workers don't bind to ports, so you can add multiple without conflicts:
+
+```bash
+docker run -d \
+  --name app_worker_2 \
+  --network host \
+  --env-file /path/to/.env.production \
+  --restart unless-stopped \
+  app:latest \
+  bundle exec sidekiq
+```
+
+### Port Allocation Best Practices
+
+1. **Reserve 10 ports** per application (allows scaling to 10 web containers)
+2. **Base ports** should be multiples of 10 for clarity
+3. **Document allocations** in this file when adding applications
+4. **Check for conflicts** before allocating: `lsof -i :3020`
+
+### Container Management Commands
+
+```bash
+# List all containers for an app
+docker ps --filter 'name=app-name'
+
+# View container logs
+docker logs -f app_web_1
+
+# Restart a container
+docker restart app_web_1
+
+# Stop and remove container
+docker stop app_web_1 && docker rm app_web_1
+
+# Check container network mode
+docker inspect app_web_1 --format='NetworkMode={{.HostConfig.NetworkMode}}'
+# Should output: host
+
+# Check container environment
+docker exec app_web_1 env | grep DATABASE_URL
+```
+
+---
+
+## Deployment Procedures
+
+### Standard Deployment Workflow
+
+Each application has a `deploy.sh` script with standardized commands:
+
+```bash
+cd ~/DevOps/apps/{app-name}
+./deploy.sh deploy          # Deploy latest code
+./deploy.sh restart         # Restart with current image
 ./deploy.sh stop            # Stop all containers
 ./deploy.sh scale <N>       # Scale web containers (1-10)
-./deploy.sh status          # Show container status and health
-./deploy.sh logs [name]     # View container logs (default: web_1)
-./deploy.sh console         # Rails console (Rails apps only)
-./deploy.sh help            # Show all available commands
+./deploy.sh status          # Show container status
+./deploy.sh logs [name]     # View logs
+./deploy.sh console         # Rails console (Rails only)
+./deploy.sh help            # Show all commands
 ```
 
----
+### Deployment Steps (Automated)
 
-### Application Setup Process
-
-**Initial Setup**:
-```bash
-cd DevOps/apps/{app-name}
-./setup.sh
-```
-
-**Setup Workflow**:
-1. Create directory structure
-2. Clone application repository
-3. Check prerequisites (Node.js, Ruby, PostgreSQL, Redis)
-4. Setup database and user
-5. Create environment file (.env.production)
-6. Install dependencies
-7. Generate nginx configuration
-8. Setup default catch-all server
-9. Configure automated cleanup
-10. Setup SSL certificates
-11. Create deployment info file
-
----
-
-### Deployment Workflow
-
-**Standard Deployment**:
-```bash
-cd DevOps/apps/{app-name}
-./deploy.sh deploy
-```
-
-**Deployment Steps**:
-1. Pull latest code from repository
+**For Rails Applications:**
+1. Pull latest code from GitHub
 2. Build Docker image with timestamp tag
-3. Run database migrations (Rails only, with backup)
-4. Perform rolling restart or fresh deployment
-5. Health check each container
-6. Update nginx upstream if scaling changed
+3. Backup database (if migrations exist)
+4. Run database migrations
+5. Perform rolling restart (or fresh deployment)
+6. Health check each container
+7. Update nginx upstream if scaling changed
+8. Check SSL certificates (auto-obtain if missing)
+9. Cleanup old Docker images
+10. Log deployment with SSL status
+11. Send email notification (success/failure)
+
+**For Next.js Applications:**
+1. Pull latest code from GitHub
+2. Build Docker image (includes Next.js build)
+3. Perform rolling restart
+4. Health check each container
+5. Update nginx configuration
+6. Check SSL certificates
 7. Cleanup old Docker images
-8. **Automated SSL certificate check and setup**:
-   - Verify existing certificates are valid
-   - Check certificate expiry (warn if < 30 days)
-   - Automatically obtain certificates if missing (when DNS configured)
-   - Skip gracefully if DNS not ready or no certbot account
-9. Log deployment with SSL status
-10. Display deployment summary with SSL status
+8. Log deployment
+9. Send email notification
 
-**Automated SSL During Deployment**:
-SSL certificates are automatically managed during every deployment:
-- **If certificates exist**: Validates they're current and not expiring soon
-- **If certificates missing**: Attempts to obtain them automatically
-- **If DNS not ready**: Skips with informative message, configure DNS and redeploy to automatically obtain certificates
-- **Status logged**: Every deployment logs SSL status (success/skipped/failed)
+### Zero-Downtime Rolling Restart
 
-**Rolling Restart**:
-- Starts new containers before stopping old ones
-- Health checks each new container
-- Zero-downtime deployment
-- Automatic rollback on failure
-- SSL check runs after containers are healthy
+**How It Works:**
+1. Start new containers with new image
+2. Wait for health check to pass
+3. Stop old containers one by one
+4. Remove old containers
+5. If any step fails, rollback automatically
 
----
+**Example (3 web containers):**
+```
+Existing: web_1, web_2, web_3 (old image)
 
-## Common Utilities
+1. Start web_1_new with new image
+2. Health check web_1_new → OK
+3. Stop web_1 (old)
+4. Remove web_1 (old)
+5. Rename web_1_new → web_1
 
-### utils.sh
+Repeat for web_2, web_3...
 
-Core utility functions used across all scripts:
-
-**Logging**:
-- `log_info()`: Blue informational messages
-- `log_success()`: Green success messages
-- `log_warning()`: Yellow warning messages
-- `log_error()`: Red error messages
-
-**Database Operations**:
-- `check_database_exists()`: Check if database exists
-- `check_db_user_exists()`: Check if user exists
-- `create_db_user()`: Create PostgreSQL user with password
-- `create_database()`: Create PostgreSQL database
-- `grant_database_privileges()`: Grant all privileges
-- `reset_db_user_password()`: Reset user password
-- `test_db_credentials()`: Test database connection
-- `backup_database()`: Create compressed backup
-- `cleanup_old_backups()`: Remove old backups by retention policy
-- `restore_database()`: Restore from backup file
-
-**Docker Operations**:
-- `get_running_containers()`: List running containers
-- `get_container_count()`: Count containers for an app
-- `check_container_health()`: Health check with retries
-
-**Utilities**:
-- `command_exists()`: Check if command is available
-- `wait_for_service()`: Wait for service to be ready
-- `generate_random_string()`: Generate secure random strings
-- `get_or_generate_secret()`: Get existing or generate new secrets
-- `load_env_file()`: Load environment variables
-- `ensure_directory()`: Create directory with permissions
-
----
-
-### docker-utils.sh
-
-Docker-specific container management:
-
-**Image Building**:
-- `build_docker_image()`: Build with temporary .env for build
-- Handles multi-stage builds
-- Cleans up temporary files
-
-**Container Management**:
-- `start_container()`: Start web container with health checks
-- `start_worker_container()`: Start background worker
-- `start_scheduler_container()`: Start scheduled task container
-- `stop_container()`: Graceful shutdown with timeout
-- `rolling_restart()`: Zero-downtime restart
-- `scale_application()`: Scale to target container count
-
-**Features**:
-- Host or bridge networking
-- Log volume mounting
-- Environment file injection
-- Health check configuration
-- Automatic restart policies
-
----
-
-### setup-app.sh
-
-Generic application setup workflow:
-
-**Functions**:
-- `setup_application()`: Main setup orchestration
-- `setup_directories()`: Create directory structure
-- `setup_repository()`: Clone and checkout code
-- `setup_nginx()`: Generate and validate nginx config
-- `setup_default_server()`: Security catch-all server
-- `setup_cleanup()`: Automated cleanup cron job
-- `setup_ssl()`: DNS validation and certificate acquisition
-- `create_deployment_info()`: Generate deployment documentation
-
-**App-Type Integration**:
-Calls app-type-specific functions from `common/app-types/{type}.sh`:
-- `{type}_check_prerequisites()`
-- `{type}_setup_database()`
-- `{type}_create_env_file()`
-- `{type}_setup_requirements()`
-
----
-
-### deploy-app.sh
-
-Generic deployment workflow:
-
-**Functions**:
-- `deploy_application()`: Main deployment orchestration
-- `restart_application()`: Restart with current image
-- `scale_application_web()`: Scale web containers
-- `stop_application()`: Stop all containers
-- `handle_status()`: Display detailed status
-- `check_and_setup_ssl()`: Verify/obtain SSL certificates
-- `update_nginx_upstream()`: Update nginx for scaling
-- `handle_deploy_command()`: Command-line interface
-
-**App-Type Integration**:
-Calls app-type-specific functions:
-- `{type}_pull_code()`
-- `{type}_build_image()`
-- `{type}_deploy_fresh()`
-- `{type}_deploy_rolling()`
-- `{type}_stop_containers()`
-- `{type}_display_deployment_summary()`
-
----
-
-### redis-setup.sh
-
-Redis configuration management:
-
-**Functions**:
-- `redis_check_installed()`: Check Redis installation
-- `redis_check_running()`: Check Redis status
-- `redis_get_version()`: Get Redis version
-- `setup_redis_for_streams()`: Deploy Streams configuration
-- `enable_redis_streams_for_app()`: Enable for specific app
-
-**Features**:
-- Backup existing configuration
-- Deploy optimized template
-- Validate configuration
-- Restart with new settings
-- Verify functionality
-
----
-
-## Templates
-
-### Application Templates
-
-Located in `templates/` directory:
-
-#### nextjs-app/
-- `config.sh`: Next.js configuration template
-- `deploy.sh`: Deployment script template
-- `setup.sh`: Setup script template
-- `nginx.conf.template`: Nginx configuration template
-
-#### rails-app/
-- `config.sh`: Rails configuration template
-- `deploy.sh`: Deployment script template
-- `setup.sh`: Setup script template
-- `nginx.conf.template`: Nginx configuration template
-
-**Creating New Application**:
-1. Copy appropriate template directory to `apps/{new-app-name}`
-2. Edit `config.sh` with app-specific settings
-3. Create `nginx.conf.template` based on requirements
-4. Run `./setup.sh` to initialize
-5. Run `./deploy.sh deploy` to deploy
-
----
-
-### Docker Templates
-
-#### Next.js Dockerfile Template
-Located in: `common/nextjs/Dockerfile.template`
-
-**Features**:
-- Multi-stage build (dependencies, builder, runner)
-- Node.js official images
-- Non-root user execution
-- Standalone output mode
-- Static file optimization
-- Environment variable configuration
-- Health check endpoint
-
-#### Rails Dockerfile Template
-Located in: `common/rails/Dockerfile.template`
-
-**Features**:
-- Multi-stage build (base, build, production)
-- Ruby official images
-- System dependencies installation
-- Asset precompilation
-- Non-root user execution
-- Bundler configuration
-- Rails optimizations
-- Health check endpoint
-
----
-
-## Deployment Workflows
-
-### Fresh Deployment (No Existing Containers)
-
-1. Pull latest code from repository
-2. Build new Docker image
-3. Run database migrations (Rails only, with backup)
-4. Start configured number of web containers
-5. Start worker containers (Rails only)
-6. Start scheduler container (Rails only, if enabled)
-7. Wait for health checks
-8. Update nginx configuration
-9. Verify SSL certificates
-10. Display summary
-
-### Rolling Restart (Existing Containers)
-
-1. Pull latest code from repository
-2. Build new Docker image
-3. Run database migrations (Rails only, with backup)
-4. For each existing web container:
-   - Start new container with new image
-   - Wait for health check
-   - Stop old container
-   - Remove old container
-5. Restart worker containers (Rails only)
-6. Restart scheduler container (Rails only)
-7. Verify SSL certificates
-8. Display summary
+Result: No downtime, all containers updated
+```
 
 ### Scaling Operations
 
-**Scale Up** (increase containers):
+**Scale Up (add containers):**
+```bash
+cd ~/DevOps/apps/{app-name}
+./deploy.sh scale 5  # Scale to 5 web containers
+```
+
+**What Happens:**
 1. Determine new container count
 2. Start additional containers with new ports
 3. Wait for health checks
@@ -740,7 +929,12 @@ Located in: `common/rails/Dockerfile.template`
 5. Reload nginx
 6. Verify all containers healthy
 
-**Scale Down** (decrease containers):
+**Scale Down (remove containers):**
+```bash
+./deploy.sh scale 2  # Scale to 2 web containers
+```
+
+**What Happens:**
 1. Determine containers to remove
 2. Stop excess containers gracefully
 3. Remove stopped containers
@@ -748,221 +942,547 @@ Located in: `common/rails/Dockerfile.template`
 5. Reload nginx
 6. Verify remaining containers healthy
 
+### Deployment Verification
+
+**After Each Deployment:**
+```bash
+# 1. Check container status
+docker ps --filter 'name=app-name'
+
+# 2. Check health endpoints
+curl https://your-domain.com/up
+
+# 3. View logs
+docker logs -f app_web_1
+
+# 4. Verify nginx configuration
+sudo nginx -t
+
+# 5. Test application functionality
+# (upload file, make API call, etc.)
+```
+
 ---
 
-## SSL Certificate Management
+## Performance Optimization
 
-### Fully Automated SSL During Every Deployment
+### 1. Docker Build Optimization
 
-SSL certificate management is **completely automated** and runs as part of every deployment. There is no manual `ssl-setup` command - certificates are automatically checked and obtained when you deploy your application. You don't need to remember to check certificates or renew them - the system handles everything automatically.
+**Problem Solved:** Builds taking 10+ minutes, stuck in "D" state (uninterruptible I/O)
 
-**What Happens During Each Deployment**:
-Every time you run `./deploy.sh deploy`, the deployment automatically:
+**Root Causes:**
+- Recursive `chown -R` and `chmod -R` operations on entire `/app` directory
+- Overlay2 filesystem with 25+ layers causing I/O amplification
+- Excessive build cache (25GB+)
+- RAID storage compounds overlay2 issues
 
-1. **Checks for certbot installation**
-   - If not installed, logs a warning and skips SSL setup
+**Solutions Implemented:**
 
-2. **Builds domain list** for the certificate
-   - Primary domain (e.g., example.com)
-   - www subdomain (e.g., www.example.com) for non-API domains
-   - Additional domains (e.g., DOMAIN_INTERNAL if configured)
+#### Dockerfile Optimizations
+```dockerfile
+# ❌ BEFORE (SLOW - 10+ minutes)
+COPY --from=builder /app ./
+RUN chown -R app:app /app && \     # Recursive on thousands of files
+    chmod -R 755 /app
 
-3. **If certificates already exist**:
-   - Validates certificate covers all required domains
-   - Checks expiry date (warns if less than 30 days remaining)
-   - Certbot auto-renewal will handle renewal when needed
-   - Logs "success" status
+# ✅ AFTER (FAST - <5 seconds)
+COPY --from=builder --chown=app:app /app ./  # Set ownership during COPY
+RUN mkdir -p tmp/pids tmp/cache tmp/sockets log && \
+    chown app:app tmp tmp/pids tmp/cache tmp/sockets log && \  # Specific paths only
+    chmod 755 tmp/pids tmp/cache tmp/sockets && \
+    chmod 777 log
+```
 
-4. **If certificates don't exist**:
-   - Validates DNS configuration (checks A records point to server)
-   - Checks for existing certbot account (from previous setup)
-   - If DNS is configured AND certbot account exists:
-     - Automatically obtains certificates using certbot --nginx
-     - Configures nginx with SSL
-     - Sets up HTTP to HTTPS redirect
-     - Logs "success" status
-   - If DNS not configured OR no certbot account:
-     - Skips automatic setup (logs "skipped" status)
-     - Provides instructions for manual setup
+**Result:** 2000x improvement (10+ min → <5 sec)
 
-**SSL Status in Deployment Log**:
-Each deployment logs the SSL status:
-- `ssl=success`: Certificates are valid and working
-- `ssl=skipped`: Couldn't obtain certificates automatically (DNS/account not ready)
-- `ssl=failed`: Attempted to obtain certificates but failed
-
-**DNS Validation**:
-Before obtaining certificates, the system:
-- Checks A records for all domains
-- Compares to server IP address
-- Only proceeds if DNS is correctly configured
-- Provides clear feedback if DNS issues found
-
-**Certificate Auto-Renewal** (System-Wide):
-- Systemd timer checks twice daily for certificates expiring within 30 days
-- Automatically renews certificates when needed
-- Post-renewal hook reloads nginx automatically
-- No manual intervention required
-- View timer status: `systemctl status certbot.timer`
-
-**SSL Management Commands**:
-SSL certificates are automatically managed during deployment. For manual operations:
-
+#### Docker Cleanup
 ```bash
-# Check certificate status
+# Regular cleanup (weekly recommended)
+docker system prune -f
+docker builder prune -f --filter until=168h
+
+# Check disk usage
+docker system df -v
+
+# Monitor overlay2 growth
+sudo du -sh /var/lib/docker/overlay2
+sudo find /var/lib/docker/overlay2 -maxdepth 1 -type d | wc -l
+```
+
+**Expected Results After Cleanup:**
+- ~12GB reclaimed from dangling images
+- ~10GB+ reclaimed from build cache
+- Overlay2 layers reduced from 435 to active images only
+- 25% disk usage (from 100% before optimization)
+
+### 2. Database Performance
+
+**Query Optimization Example:**
+
+**Problem:** DISTINCT ON queries on large tables taking 60+ seconds
+
+**Solution:** Add appropriate indexes
+```sql
+CREATE INDEX CONCURRENTLY index_online_pharmacy_drugs_on_name
+  ON online_pharmacy_drugs(name);
+
+CREATE INDEX CONCURRENTLY index_online_pharmacy_drugs_on_pharmacy_and_name
+  ON online_pharmacy_drugs(online_pharmacy_id, name);
+```
+
+**Result:** Query time reduced from 60+ seconds to ~0.5ms (120,000x improvement)
+
+**Best Practices:**
+- Use EXPLAIN ANALYZE to identify slow queries
+- Add indexes for columns used in WHERE, JOIN, ORDER BY
+- Use CONCURRENTLY to avoid table locks during index creation
+- Monitor query performance with pg_stat_statements
+
+### 3. Redis Optimization
+
+**Configuration for Streams workloads:**
+```ini
+# /etc/redis/redis.conf
+maxmemory 256mb
+maxmemory-policy allkeys-lru
+appendonly yes               # AOF persistence
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 64mb
+```
+
+**Connection Pooling:**
+```ruby
+# config/initializers/redis.rb
+Redis.new(
+  url: ENV['REDIS_URL'],
+  timeout: 5,
+  reconnect_attempts: 3
+)
+```
+
+### 4. Nginx Optimization
+
+**Caching Configuration:**
+```nginx
+# Static assets - 365 days
+location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2)$ {
+    expires 365d;
+    add_header Cache-Control "public, immutable";
+}
+
+# API responses - no cache
+location / {
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    proxy_pass http://backend;
+}
+```
+
+**Compression:**
+```nginx
+gzip on;
+gzip_vary on;
+gzip_min_length 1024;
+gzip_types text/plain text/css text/xml text/javascript
+           application/json application/javascript
+           application/xml+rss application/rss+xml;
+```
+
+---
+
+## CDN & Active Storage
+
+### Nginx-Based CDN
+
+**Domain:** cdn.webet.pl
+**Purpose:** Serve Active Storage files directly from nginx (bypassing Rails)
+
+**Architecture:**
+```
+Before (Inefficient):
+User → Nginx → Rails → Filesystem → Rails → Nginx → User
+URL: https://api-public.brokik.com/rails/active_storage/blobs/{key}
+
+After (Optimized):
+User → Nginx → Filesystem → User
+URL: https://cdn.webet.pl/brokik-api/blobs/{key}
+```
+
+**Performance Benefits:**
+- Response Time: ~50-100ms → ~5-10ms (5-10x faster)
+- Server Load: 90% reduction (nginx vs Rails)
+- Concurrent Requests: 100x+ capacity
+
+**File Structure:**
+```
+/var/storage/
+├── brokik-api/
+│   └── active_storage/
+│       ├── XX/YY/{hash}  # Blob files
+│       └── variants/     # Image variants
+└── cheaperfordrug-api/
+    └── active_storage/
+        └── ...
+```
+
+**URL Pattern:**
+```
+https://cdn.webet.pl/{app-name}/blobs/{key}
+https://cdn.webet.pl/{app-name}/variants/{key}
+```
+
+**Cache Headers:**
+```
+Cache-Control: public, immutable
+Expires: {1 year from now}
+Access-Control-Allow-Origin: *
+```
+
+**Configuration:**
+```nginx
+location ~* ^/([^/]+)/(blobs|variants)/(.+)$ {
+    alias /var/storage/$1/active_storage/$3;
+    expires 365d;
+    add_header Cache-Control "public, immutable";
+    add_header Access-Control-Allow-Origin "*";
+}
+```
+
+### Active Storage Migration
+
+**From Scaleway S3 to Local Storage:**
+
+**Benefits:**
+- No external dependencies
+- No S3 storage fees
+- Faster access (direct disk I/O)
+- Simpler architecture
+- Files persist across deployments
+
+**Migration Script:**
+```bash
+cd ~/DevOps
+./scripts/migrate-scaleway-to-local-storage.sh
+```
+
+**What It Does:**
+1. Creates `/var/storage/{app-name}/active_storage/`
+2. Downloads all files from Scaleway
+3. Updates `.env.production` to use `host_disk` service
+4. Backs up original configuration
+5. Offers to restart application
+
+**For New Applications:**
+Just set in `.env.production`:
+```bash
+RAILS_ACTIVE_STORAGE_SERVICE=host_disk
+ACTIVE_STORAGE_HOST_PATH=/var/storage/{app-name}/active_storage
+```
+
+Deployment scripts handle the rest automatically!
+
+---
+
+## Email Notifications
+
+### SendGrid API Integration
+
+**Why SendGrid?**
+- Better deliverability than SMTP/sendmail
+- Simple HTTPS API (works everywhere)
+- Free tier: 100 emails/day
+- Excellent reputation
+- Easy monitoring via dashboard
+
+**Architecture:**
+```
+┌─────────────────────────┐
+│  email-notification.sh  │  (Orchestrator)
+│  Public API Functions   │
+└───────────┬─────────────┘
+            │
+    ┌───────┴────────┬──────────────┐
+    ▼                ▼              ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ email-       │ │ sendgrid-    │ │ email-       │
+│ templates.sh │ │ api.sh       │ │ config.sh    │
+│ (Templates)  │ │ (Sender)     │ │ (Config)     │
+└──────────────┘ └──────────────┘ └──────────────┘
+```
+
+**Configuration:**
+```bash
+# DevOps/common/email-config.sh
+export DEPLOYMENT_EMAIL_ENABLED=true
+export DEPLOYMENT_EMAIL_FROM="biuro@webet.pl"
+export DEPLOYMENT_EMAIL_TO="andrzej@webet.pl"
+export SENDGRID_API_KEY="SG.xxxxxxxxxxxxxxxxxxxx"
+```
+
+**Notification Types:**
+- Deployment success (with git commit, container details)
+- Deployment failure (with error details)
+- Can easily add: backup complete, certificate expiry, etc.
+
+**Email Templates:**
+- Beautiful HTML emails with responsive design
+- Plain text fallback
+- Professional appearance
+
+**Setup (3 Steps):**
+
+1. **Get SendGrid API Key:**
+   - Sign up at https://sendgrid.com
+   - Settings > API Keys > Create API Key
+   - Permission: "Mail Send - Full Access"
+   - Copy the API key
+
+2. **Configure:**
+   ```bash
+   # In email-config.sh
+   export SENDGRID_API_KEY="SG.xxxxxxxxxxxxxxxxxxxx"
+   ```
+
+3. **Verify Sender Email:**
+   - Settings > Sender Authentication
+   - Verify biuro@webet.pl
+
+**Test:**
+```bash
+cd ~/DevOps
+./scripts/test-email-notification.sh
+```
+
+**Adding New Email Types:**
+
+Step 1: Add template (email-templates.sh):
+```bash
+generate_backup_complete_email() {
+    local app_name="$1"
+    local backup_size="$2"
+
+    export EMAIL_SUBJECT="Backup Complete: $app_name"
+    export EMAIL_TEXT_BODY="Backup completed. Size: $backup_size"
+    export EMAIL_HTML_BODY="<html>...</html>"
+}
+```
+
+Step 2: Add public API (email-notification.sh):
+```bash
+send_backup_complete_email() {
+    generate_backup_complete_email "$@"
+    send_email_via_sendgrid \
+        "$EMAIL_FROM" "$EMAIL_TO" \
+        "$EMAIL_SUBJECT" "$EMAIL_TEXT_BODY" "$EMAIL_HTML_BODY"
+}
+```
+
+Done! Call from any script: `send_backup_complete_email "app-name" "2.5GB"`
+
+---
+
+## Database & Redis
+
+### PostgreSQL Setup
+
+**Configuration for Docker Access:**
+```ini
+# /etc/postgresql/14/main/postgresql.conf
+listen_addresses = '*'
+
+# /etc/postgresql/14/main/pg_hba.conf
+host    all    all    172.17.0.0/16    md5
+```
+
+**Per-Application Setup:**
+```bash
+# Create database and user
+sudo -u postgres psql << EOF
+CREATE USER app_user WITH PASSWORD 'secure_password';
+CREATE DATABASE app_production OWNER app_user;
+GRANT ALL PRIVILEGES ON DATABASE app_production TO app_user;
+EOF
+```
+
+**Connection Testing:**
+```bash
+# From host
+psql -h localhost -U app_user -d app_production
+
+# From container
+docker exec app_web_1 bash -c "cd /app && bundle exec rails runner 'puts ActiveRecord::Base.connection.active?'"
+```
+
+**Backup & Restore:**
+```bash
+# Backup
+pg_dump -U app_user app_production | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+
+# Restore
+gunzip -c backup.sql.gz | psql -U app_user app_production
+
+# List backups
+ls -lh ~/apps/{app-name}/backups/
+
+# Automated backups (before migrations)
+# Location: ~/apps/{app-name}/backups/
+# Retention: 30 days
+```
+
+### Redis Setup
+
+**Configuration:**
+```ini
+# /etc/redis/redis.conf
+bind 0.0.0.0
+maxmemory 256mb
+maxmemory-policy allkeys-lru
+appendonly yes
+```
+
+**Database Allocation:**
+```
+DB 0: Brokik API (test)
+DB 1: CheaperForDrug Landing
+DB 2: CheaperForDrug API
+DB 3: Brokik API (production)
+```
+
+**Monitoring:**
+```bash
+# Check status
+redis-cli ping
+
+# Memory usage
+redis-cli info memory
+
+# Queue depth
+redis-cli -n 2 LLEN queue:default
+
+# Connected clients
+redis-cli info clients
+```
+
+---
+
+## Security & SSL
+
+### Server Hardening
+
+**SSH Configuration:**
+- Custom port (2222, not default 22)
+- Key-based authentication only
+- Root login disabled
+- Password authentication disabled
+- Fail2ban installed
+
+**Firewall (UFW):**
+```bash
+sudo ufw allow 2222/tcp  # SSH custom port
+sudo ufw allow 80/tcp    # HTTP
+sudo ufw allow 443/tcp   # HTTPS
+sudo ufw enable
+```
+
+**Container Security:**
+- Non-root user execution
+- Read-only filesystem where possible
+- No privileged containers
+- Resource limits configured
+
+### SSL/TLS Best Practices
+
+**Configuration:**
+- TLS 1.2 and 1.3 only (1.0, 1.1 disabled)
+- Strong cipher suites
+- HSTS headers (force HTTPS)
+- Certificate auto-renewal
+
+**Security Headers:**
+```nginx
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-XSS-Protection "1; mode=block" always;
+```
+
+**Certificate Monitoring:**
+```bash
+# Check certificate expiry
 sudo certbot certificates
 
-# Manually obtain/expand certificates (if automatic setup was skipped)
-sudo certbot --nginx -d domain.com -d www.domain.com
-
-# Manually renew certificates (usually not needed - auto-renewal handles this)
-sudo certbot renew
-
-# Test renewal process (dry-run)
+# Test renewal
 sudo certbot renew --dry-run
 
-# View renewal timer status
+# View renewal timer
 systemctl status certbot.timer
-
-# View certbot logs
-sudo tail -50 /var/log/letsencrypt/letsencrypt.log
 ```
 
-**First Deployment Workflow**:
-1. Deploy application: `./deploy.sh deploy`
-2. System automatically checks SSL:
-   - If DNS ready + certbot account exists: **Automatically obtains certificates**
-   - If not ready: Skips with informational message
-3. If skipped, configure DNS properly and redeploy (SSL will be automatically obtained)
-4. Future deployments: SSL automatically validated
+### Secrets Management
 
-**Completely Hands-Off SSL Management**:
-- No need to remember certificate expiry dates
-- No manual renewal commands to run
-- No separate SSL setup commands to remember
-- No cron jobs to configure (handled by systemd)
-- SSL status included in every deployment summary
-- Just deploy your app - SSL is handled automatically
+**Environment Variables:**
+- Never commit `.env.production` to git
+- Use strong, random secrets
+- Rotate secrets periodically
+- Restrict file permissions: `chmod 600 .env.production`
 
-### Certificate Files
+**Generate Secrets:**
+```bash
+# Rails secret key
+rails secret
 
-**Location**: `/etc/letsencrypt/live/{domain}/`
-- `fullchain.pem`: Full certificate chain
-- `privkey.pem`: Private key
-- `cert.pem`: Certificate only
-- `chain.pem`: Chain only
+# Random password
+openssl rand -base64 32
+
+# Random string
+LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32
+```
 
 ---
 
-## Database and Redis Setup
+## Monitoring & Health Checks
 
-### PostgreSQL
+### Container Health
 
-**Installation** (via ubuntu-init-setup.sh):
-- PostgreSQL server and contrib packages
-- libpq-dev for development
-- User creation for deployment user
+**Health Check Endpoints:**
+- Rails: `GET /up` (returns HTTP 200)
+- Next.js: `GET /` (returns HTTP 200)
 
-**Per-Application Setup**:
-- Dedicated database creation
-- Dedicated user with password
-- Full privileges granted
-- Connection validation
-
-**Database Credentials**:
-Stored in application `.env.production` file:
-```bash
-DATABASE_NAME=app_production
-DATABASE_USER=app_user
-DATABASE_PASSWORD=secure_random_password
-DATABASE_HOST=localhost
+**Automated Health Checks:**
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
+  CMD curl -f http://localhost:${PORT}/up || exit 1
 ```
 
-**Backup Strategy**:
-- Daily automated backups via cron
-- Compressed with gzip
-- 30-day retention (configurable)
-- Pre-migration backups
-- Manual backup/restore capabilities
-
-**Migration Safety**:
-- Automatic backup before migrations
-- Migration failure rollback
-- Container restart after migrations
-- Migration log in deployment summary
-
----
-
-### Redis
-
-**Installation** (via ubuntu-init-setup.sh):
-- Redis 8 from official repository
-- Systemd service configuration
-- Baseline configuration
-
-**Streams Configuration** (via redis-setup.sh):
-- AOF persistence enabled
-- Memory management configured
-- Eviction policy optimization
-- Connection pooling
-
-**Per-Application Configuration**:
-- Dedicated Redis database number (0-15)
-- Isolated namespaces
-- Connection URL in environment
-
-**Redis Credentials**:
+**Manual Health Checks:**
 ```bash
-REDIS_URL=redis://localhost:6379/0
-REDIS_DB_NUMBER=0
+# Check all app containers
+~/DevOps/apps/status.sh
+
+# Verify all domains
+~/DevOps/verify-domains.sh
+
+# Test specific endpoint
+curl -I https://api-public.cheaperfordrug.com/up
+
+# Check container health
+docker inspect app_web_1 | grep -A 10 Health
 ```
 
-**Configuration Location**: `/etc/redis/redis.conf`
+### Log Monitoring
 
-**Template Location**: `common/templates/redis.conf`
-
----
-
-## Monitoring and Maintenance
-
-### Status Checking
-
-**Single Application**:
+**Container Logs:**
 ```bash
-cd DevOps/apps/{app-name}
-./deploy.sh status
+# Follow logs
+docker logs -f app_web_1
+
+# Last 100 lines
+docker logs --tail 100 app_web_1
+
+# With timestamps
+docker logs -f --timestamps app_web_1
 ```
 
-**All Applications**:
-```bash
-cd DevOps/apps
-./status.sh
-```
-
-**Status Information**:
-- Container names and status
-- Mapped ports
-- Start time and uptime
-- Resource usage
-- Health check status
-
----
-
-### Log Management
-
-**Container Logs**:
-```bash
-# Follow logs for specific container
-./deploy.sh logs web_1
-
-# View all logs for container
-docker logs {app-name}_web_1
-
-# Follow logs with timestamps
-docker logs -f --timestamps {app-name}_web_1
-```
-
-**Nginx Logs**:
+**Nginx Logs:**
 ```bash
 # Access logs
 sudo tail -f /var/log/nginx/access.log
@@ -970,21 +1490,23 @@ sudo tail -f /var/log/nginx/access.log
 # Error logs
 sudo tail -f /var/log/nginx/error.log
 
-# Application-specific logs (if configured)
-sudo tail -f /var/log/nginx/{domain}-access.log
-sudo tail -f /var/log/nginx/{domain}-error.log
+# Application-specific
+sudo tail -f /var/log/nginx/{app-name}-access.log
 ```
 
-**Application Logs** (Rails):
+**Application Logs (Rails):**
 ```bash
 # Production logs (mounted volume)
 tail -f ~/apps/{app-name}/logs/production.log
 
 # Inside container
-docker exec {app-name}_web_1 tail -f /app/log/production.log
+docker exec app_web_1 tail -f /app/log/production.log
+
+# Sidekiq logs (filtered)
+tail -f ~/apps/{app-name}/logs/production.log | grep Sidekiq
 ```
 
-**System Logs**:
+**System Logs:**
 ```bash
 # Nginx service
 sudo journalctl -u nginx -f
@@ -992,81 +1514,301 @@ sudo journalctl -u nginx -f
 # Docker service
 sudo journalctl -u docker -f
 
-# Redis service
-sudo journalctl -u redis-server -f
-
-# PostgreSQL service
+# PostgreSQL
 sudo journalctl -u postgresql -f
+
+# Redis
+sudo journalctl -u redis-server -f
+```
+
+### Performance Monitoring
+
+**Resource Usage:**
+```bash
+# Container stats
+docker stats
+
+# Disk usage
+df -h
+
+# Memory usage
+free -h
+
+# CPU usage
+top
+
+# Network connections
+sudo netstat -tlnp
+```
+
+**Database Performance:**
+```bash
+# Active connections
+sudo -u postgres psql -c "SELECT COUNT(*) FROM pg_stat_activity;"
+
+# Database sizes
+sudo -u postgres psql -c "SELECT datname, pg_size_pretty(pg_database_size(datname)) FROM pg_database WHERE datname LIKE '%production';"
+
+# Slow queries (if pg_stat_statements enabled)
+sudo -u postgres psql -d app_production -c "SELECT query, mean_time FROM pg_stat_statements ORDER BY mean_time DESC LIMIT 10;"
+```
+
+**Redis Performance:**
+```bash
+# Stats
+redis-cli info stats
+
+# Memory usage
+redis-cli info memory
+
+# Slow log
+redis-cli slowlog get 10
 ```
 
 ---
 
-### Automated Cleanup
+## Troubleshooting
 
-**Centralized Cleanup** (scripts/cleanup-all-apps.sh):
-- Runs daily at 2 AM via cron
-- Cleans up for all applications
-- Removes old Docker images
-- Removes old image backups
-- Removes old database backups (Rails)
+### Common Issues
 
-**Per-Application Cleanup**:
-Each app has automatic cleanup for:
-- Docker images (keeps last 20)
-- Image backups (keeps last 20)
-- Database backups (keeps 30 days for Rails)
+#### 1. Container Won't Start
 
-**Manual Cleanup**:
+**Symptoms:** Container exits immediately or fails to start
+
+**Diagnosis:**
 ```bash
-# Cleanup specific app
-cd DevOps/apps/{app-name}
-./cleanup.sh
+# Check container status
+docker ps -a | grep app-name
 
-# Cleanup all apps
-cd DevOps/scripts
-./cleanup-all-apps.sh
+# View logs
+docker logs app_web_1
 
-# Docker system cleanup
-docker system prune -a
+# Check if port is in use
+sudo lsof -i :3020
 
-# Remove dangling images
-docker image prune
+# Check environment file
+cat ~/apps/{app-name}/.env.production
 
-# Remove unused volumes
-docker volume prune
+# Verify image exists
+docker images app-name
 ```
 
-**Cron Job Verification**:
+**Common Causes:**
+- Port already in use (another container or process)
+- Missing or incorrect environment variables
+- Database connection failed
+- Image not built or corrupted
+
+**Solutions:**
 ```bash
-crontab -l
+# Free port
+docker rm -f container-using-port
+
+# Rebuild image
+cd ~/DevOps/apps/{app-name}
+./deploy.sh deploy
+
+# Check database
+sudo systemctl status postgresql
+psql -h localhost -U app_user -d app_production
 ```
 
----
+#### 2. Database Connection Errors
 
-### Health Monitoring
+**Symptoms:** HTTP 500 errors, "Connection refused" in logs
 
-**Container Health Checks**:
-- Automatic health check every 30s
-- `/up` endpoint (Rails) or `/` endpoint
-- 3 retries before marking unhealthy
-- 40s start period grace time
-- Automatic restart if unhealthy
-
-**Manual Health Checks**:
+**Diagnosis:**
 ```bash
+# Verify DATABASE_URL uses localhost
+docker exec app_web_1 env | grep DATABASE_URL
+# Should show: postgresql://...@localhost/...
+
+# Test connection from container
+docker exec app_web_1 bash -c "cd /app && bundle exec rails runner 'puts ActiveRecord::Base.connection.active?'"
+
+# Check PostgreSQL is running
+sudo systemctl status postgresql
+
+# Check PostgreSQL is listening
+sudo netstat -tlnp | grep 5432
+# Should show: 0.0.0.0:5432
+```
+
+**Solutions:**
+```bash
+# Fix postgresql.conf
+sudo nano /etc/postgresql/14/main/postgresql.conf
+# Set: listen_addresses = '*'
+
+# Fix pg_hba.conf
+sudo nano /etc/postgresql/14/main/pg_hba.conf
+# Add: host    all    all    172.17.0.0/16    md5
+
+# Restart PostgreSQL
+sudo systemctl restart postgresql
+
+# Update .env.production if needed
+nano ~/apps/{app-name}/.env.production
+# Fix DATABASE_URL
+
+# Restart containers
+cd ~/DevOps/apps/{app-name}
+./deploy.sh restart
+```
+
+#### 3. Nginx Configuration Errors
+
+**Symptoms:** 502 Bad Gateway, nginx fails to reload
+
+**Diagnosis:**
+```bash
+# Test nginx configuration
+sudo nginx -t
+
+# Check nginx error logs
+sudo tail -50 /var/log/nginx/error.log
+
+# Check upstream servers
+sudo netstat -tlnp | grep 3020
+
 # Check container health
-docker inspect {container-name} | grep -A 10 Health
-
-# Test health endpoint directly
-curl http://localhost:{port}/up
-
-# Test via nginx
-curl https://{domain}/up
+docker ps | grep app-name
+curl http://localhost:3020/up
 ```
 
-**Domain Verification**:
+**Solutions:**
 ```bash
-./verify-domains.sh
+# Rebuild nginx configs
+cd ~/DevOps
+./rebuild-nginx-configs.sh
+
+# If config is broken, restore from backup
+sudo cp /tmp/nginx_backup_*/sites-available/* /etc/nginx/sites-available/
+
+# Test and reload
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+#### 4. SSL Certificate Issues
+
+**Symptoms:** Certificate expired, SSL handshake failed
+
+**Diagnosis:**
+```bash
+# Check certificate status
+sudo certbot certificates
+
+# Check DNS resolution
+dig +short your-domain.com
+
+# View certbot logs
+sudo tail -50 /var/log/letsencrypt/letsencrypt.log
+```
+
+**Solutions:**
+```bash
+# Manual renewal
+sudo certbot renew
+
+# Force renewal
+sudo certbot renew --force-renewal
+
+# Obtain new certificate
+sudo certbot --nginx -d your-domain.com
+
+# Check renewal timer
+systemctl status certbot.timer
+```
+
+#### 5. Out of Disk Space
+
+**Symptoms:** Deployments fail, containers won't start
+
+**Diagnosis:**
+```bash
+# Check disk usage
+df -h
+
+# Find large directories
+du -sh /* | sort -h | tail -10
+
+# Docker system usage
+docker system df -v
+
+# Overlay2 layers
+sudo du -sh /var/lib/docker/overlay2
+sudo find /var/lib/docker/overlay2 -maxdepth 1 -type d | wc -l
+```
+
+**Solutions:**
+```bash
+# Clean up Docker
+docker system prune -a  # Remove all unused images
+docker volume prune     # Remove unused volumes
+docker builder prune -a # Remove build cache
+
+# Clean up old backups
+find ~/apps/*/backups -name "*.sql.gz" -mtime +30 -delete
+
+# Clean up old Docker images
+docker images | grep app-name | tail -n +21 | awk '{print $3}' | xargs docker rmi
+
+# Run automated cleanup
+cd ~/DevOps/scripts
+./cleanup-all-apps.sh
+```
+
+#### 6. Application Performance Issues
+
+**Symptoms:** Slow response times, high CPU/memory usage
+
+**Diagnosis:**
+```bash
+# Check resource usage
+docker stats
+
+# Check database performance
+sudo -u postgres psql -d app_production -c "SELECT * FROM pg_stat_activity WHERE state = 'active';"
+
+# Check Redis queues
+redis-cli -n 2 LLEN queue:default
+
+# Check slow queries (if enabled)
+sudo -u postgres psql -d app_production -c "SELECT query, mean_time FROM pg_stat_statements ORDER BY mean_time DESC LIMIT 10;"
+```
+
+**Solutions:**
+- Scale up web containers: `./deploy.sh scale 5`
+- Add database indexes for slow queries
+- Increase Sidekiq concurrency
+- Add more worker containers
+- Check for N+1 queries in logs
+- Review and optimize slow endpoints
+
+### Debug Commands
+
+```bash
+# Enter container shell
+docker exec -it app_web_1 /bin/bash
+
+# Check environment variables
+docker exec app_web_1 env
+
+# Check container processes
+docker top app_web_1
+
+# Check container network
+docker inspect app_web_1 | grep -A 10 NetworkMode
+
+# Test database from container
+docker exec app_web_1 bash -c "cd /app && bundle exec rails runner 'puts ActiveRecord::Base.connection.active?'"
+
+# Test Redis from container
+docker exec app_web_1 bash -c "redis-cli -h localhost ping"
+
+# Rails console
+docker exec -it app_web_1 bash -c "cd /app && bundle exec rails console"
 ```
 
 ---
@@ -1075,20 +1817,32 @@ curl https://{domain}/up
 
 ### Complete System Rebuild
 
-**Purpose**: Rebuild entire server from scratch or restore to new server
+**Purpose:** Rebuild entire server from scratch or restore to new server
 
-**Script**: `scripts/disaster-recovery.sh`
+**Script:** `scripts/disaster-recovery.sh`
 
-**Configuration**: Copy and edit `scripts/disaster-recovery-config.example.sh`
+**What It Does:**
+1. Install basic dependencies (git, curl, wget)
+2. Clone DevOps repository
+3. Run ubuntu-init-setup.sh (system dependencies)
+4. Setup each configured application
+5. Deploy each application
+6. Setup SSL certificates
+7. Configure centralized cleanup
+8. Verify deployment
 
-**Configuration Variables**:
+**Recovery Time:** 30-60 minutes
+
+**Configuration:**
 ```bash
+# Copy and edit
+cp scripts/disaster-recovery-config.example.sh scripts/disaster-recovery-config.sh
+nano scripts/disaster-recovery-config.sh
+
+# Configure:
 RECOVERY_USER="andrzej"
 RECOVERY_HOME="/home/andrzej"
 DEVOPS_REPO_URL="git@github.com:username/DevOps.git"
-DEVOPS_REPO_BRANCH="master"
-INSTALL_DEPENDENCIES=true
-SETUP_SSL=true
 APPS_TO_DEPLOY=(
     "cheaperfordrug-api"
     "cheaperfordrug-landing"
@@ -1096,583 +1850,359 @@ APPS_TO_DEPLOY=(
 )
 ```
 
-**Recovery Steps**:
-1. Install basic dependencies (git, curl, wget)
-2. Clone DevOps repository
-3. Run ubuntu-init-setup.sh for system dependencies
-4. Setup each configured application
-5. Deploy each application
-6. Setup SSL certificates
-7. Configure centralized cleanup
-8. Verify deployment
-
-**Usage**:
+**Usage:**
 ```bash
-cd DevOps/scripts
+cd ~/DevOps/scripts
 ./disaster-recovery.sh disaster-recovery-config.sh
 ```
 
-**Recovery Time**: 30-60 minutes (depending on server speed and number of apps)
-
----
-
 ### Backup Strategy
 
-**What to Backup**:
-1. **Environment Files**: All `.env.production` files
-2. **PostgreSQL Databases**: Regular automated backups
-3. **SSL Certificates**: Managed by certbot (auto-restored)
-4. **DevOps Repository**: Git repository (GitHub backup)
-5. **Application Repositories**: Git repositories (GitHub backup)
-6. **Configuration Files**: nginx configs (regenerated from templates)
+**What to Backup:**
 
-**Database Backups**:
-- Location: `~/apps/{app-name}/backups/`
-- Frequency: Daily (cron)
-- Retention: 30 days
-- Format: `.sql.gz` (compressed)
+1. **Environment Files** (critical)
+   - All `.env.production` files
+   - Contains secrets, API keys, passwords
+   - Backup off-server securely
 
-**Manual Backup**:
+2. **PostgreSQL Databases**
+   - Automated daily backups (before migrations)
+   - Location: `~/apps/{app-name}/backups/`
+   - Retention: 30 days
+   - Format: compressed `.sql.gz`
+
+3. **SSL Certificates**
+   - Managed by certbot (auto-restored)
+   - Can be backed up from `/etc/letsencrypt/`
+
+4. **Git Repositories**
+   - DevOps repository (GitHub)
+   - Application repositories (GitHub)
+   - Configuration in git
+
+5. **Active Storage Files**
+   - Location: `/var/storage/{app-name}/active_storage/`
+   - Include in server backups
+
+**Backup Commands:**
 ```bash
 # Backup database
-sudo -u postgres pg_dump {database_name} | gzip > backup.sql.gz
+pg_dump -U app_user app_production | gzip > backup_$(date +%Y%m%d).sql.gz
 
-# Backup all environment files
-tar -czf env-backup.tar.gz ~/apps/*/.env.production
+# Backup all env files
+tar -czf env-backup_$(date +%Y%m%d).tar.gz ~/apps/*/.env.production
 
 # Backup nginx configs
-sudo tar -czf nginx-backup.tar.gz /etc/nginx/sites-available /etc/nginx/sites-enabled
-```
+sudo tar -czf nginx-backup_$(date +%Y%m%d).tar.gz /etc/nginx/sites-available /etc/nginx/sites-enabled
 
----
+# Backup Active Storage files
+tar -czf storage-backup_$(date +%Y%m%d).tar.gz /var/storage/
+```
 
 ### Rollback Procedures
 
-**Rollback to Previous Image**:
+**Rollback to Previous Image:**
 ```bash
 # List available images
-docker images {app-name}
+docker images app-name
 
 # Stop current containers
+cd ~/DevOps/apps/{app-name}
 ./deploy.sh stop
 
 # Start with previous image
-docker run -d --name {app-name}_web_1 ... {app-name}:{previous-tag}
+docker run -d --name app_web_1 \
+  --network host \
+  --env-file .env.production \
+  -e PORT=3020 \
+  app-name:20251114_120000  # Previous timestamp
 
-# Update nginx if needed
+# Update nginx
 ./rebuild-nginx-configs.sh
 ```
 
-**Rollback Database Migrations** (Rails):
+**Rollback Database Migration:**
 ```bash
 # Access Rails console
-./deploy.sh console
+docker exec -it app_web_1 bash
+cd /app
+bundle exec rails console
 
-# Run migration rollback
-rake db:rollback STEP=1
+# Rollback last migration
+ActiveRecord::Base.connection.migration_context.down(1)
+
+# Or use rake
+bundle exec rake db:rollback STEP=1
 ```
 
-**Restore Database from Backup**:
+**Restore Database from Backup:**
 ```bash
-cd ~/apps/{app-name}
-./restore.sh backups/{database_name}_YYYYMMDD_HHMMSS.sql.gz
-```
+cd ~/apps/{app-name}/backups
 
-**Restore Nginx Configuration**:
-```bash
-# Restore from rebuild-nginx backup
-sudo cp -r /tmp/nginx_backup_YYYYMMDD_HHMMSS/sites-available/* /etc/nginx/sites-available/
-sudo nginx -t && sudo systemctl reload nginx
+# List backups
+ls -lh
+
+# Restore specific backup
+gunzip -c backup_20251114_120000.sql.gz | psql -U app_user app_production
 ```
 
 ---
 
-## Prerequisites
+## Quick Reference
 
-### Server Requirements
+### Common Commands
 
-**Operating System**:
-- Ubuntu Server 18.04, 20.04, 22.04, or 24.04 LTS
-- 64-bit architecture
-- Minimal or Standard installation
-
-**Hardware**:
-- CPU: 2+ cores recommended
-- RAM: 4GB minimum, 8GB+ recommended
-- Storage: 20GB minimum, 50GB+ recommended
-- Network: Public IP address
-
-**Network Requirements**:
-- Open ports: 80 (HTTP), 443 (HTTPS), 2222 (SSH custom port)
-- Registered domain names with DNS access
-- A records pointing to server IP address
-
-**Access Requirements**:
-- Root or sudo access
-- SSH key-based authentication (recommended)
-- GitHub account with repository access
-
----
-
-### Local Development Requirements
-
-**Workstation Tools**:
-- Git client
-- SSH client (OpenSSH or PuTTY)
-- Text editor (VS Code, Sublime, vim)
-- Terminal emulator
-
-**GitHub Access**:
-- SSH key added to GitHub account
-- Access to DevOps and application repositories
-
----
-
-## Getting Started
-
-### 1. Initial Server Setup
-
-**Prepare Server**:
 ```bash
-# Connect to new server as root
-ssh root@your-server-ip
+# ═══════════════════════════════════════════════════════════
+# DEPLOYMENT
+# ═══════════════════════════════════════════════════════════
 
-# Clone DevOps repository
-git clone git@github.com:username/DevOps.git
-cd DevOps
+# Deploy application
+cd ~/DevOps/apps/{app-name} && ./deploy.sh deploy
 
-# Make scripts executable
-chmod +x *.sh
-chmod +x scripts/*.sh
-chmod +x common/*.sh
-```
+# Restart application
+./deploy.sh restart
 
-**Run System Initialization**:
-```bash
-# Run complete Ubuntu server setup
-sudo ./ubuntu-init-setup.sh
-```
+# Scale web containers
+./deploy.sh scale 5
 
-**Interactive Setup**:
-- Confirm system updates
-- User creation and SSH key setup
-- Hostname configuration
-- Firewall setup with custom SSH port
-- Fail2ban installation
-- Essential tools installation
-- fzf installation with CTRL+P mapping
-- Node.js installation
-- Ruby/Rails installation (10-15 minutes)
-- PostgreSQL and Redis installation
-- Docker installation
-- Nginx installation
-- SSL certificate setup (if DNS ready)
-- Rails development libraries
-- GitHub SSH key generation
-- System optimization (swap, limits, updates)
-- SSH security hardening (final step)
-
-**Important**: Test SSH access on new port (2222) before closing session!
-
----
-
-### 2. Setup First Application
-
-**Choose Application Type**:
-- Rails API: Copy from `templates/rails-app/`
-- Next.js: Copy from `templates/nextjs-app/`
-
-**Create Application Directory**:
-```bash
-# Create new app from template
-cp -r templates/nextjs-app apps/my-new-app
-cd apps/my-new-app
-```
-
-**Configure Application** (`config.sh`):
-```bash
-# Edit configuration
-nano config.sh
-
-# Required settings:
-# - APP_NAME: Unique name
-# - APP_TYPE: rails or nextjs
-# - DOMAIN: Primary domain
-# - REPO_URL: Git repository URL
-# - BASE_PORT: Starting port number
-# - DEFAULT_SCALE: Container count
-```
-
-**Create Nginx Template** (`nginx.conf.template`):
-```nginx
-# Copy and modify from similar application
-# Ensure placeholders: {{NGINX_UPSTREAM_NAME}}, {{DOMAIN}}, {{UPSTREAM_SERVERS}}
-```
-
-**Run Application Setup**:
-```bash
-# Initial setup (one-time)
-./setup.sh
-```
-
-**Setup Process**:
-- Creates directories
-- Clones repository
-- Checks prerequisites
-- Sets up database (Rails)
-- Creates environment file
-- Generates nginx config
-- Attempts SSL setup (if DNS ready)
-- Creates deployment info
-
-**Review Deployment Info**:
-```bash
-cat ~/apps/my-new-app/deployment-info.txt
-```
-
----
-
-### 3. Configure Environment Variables
-
-**Edit Environment File**:
-```bash
-nano ~/apps/my-new-app/.env.production
-```
-
-**Rails Required Variables**:
-```bash
-DATABASE_NAME=app_production
-DATABASE_USER=app_user
-DATABASE_PASSWORD=auto_generated
-DATABASE_HOST=localhost
-REDIS_URL=redis://localhost:6379/0
-RAILS_ENV=production
-RAILS_LOG_TO_STDOUT=true
-RAILS_SERVE_STATIC_FILES=true
-SECRET_KEY_BASE=auto_generated
-```
-
-**Next.js Required Variables**:
-```bash
-NODE_ENV=production
-NEXT_PUBLIC_API_URL=https://api.yourdomain.com
-# Add other build-time variables
-```
-
----
-
-### 4. Deploy Application
-
-**First Deployment**:
-```bash
-cd DevOps/apps/my-new-app
-./deploy.sh deploy
-```
-
-**Deployment Process**:
-- Pulls latest code
-- Builds Docker image
-- Runs migrations (Rails)
-- Starts containers
-- Performs health checks
-- Checks SSL certificates
-- Displays summary
-
-**Verify Deployment**:
-```bash
-# Check container status
+# Check status
 ./deploy.sh status
 
 # View logs
-./deploy.sh logs
+./deploy.sh logs web_1
 
-# Test endpoint
-curl https://your-domain.com
-```
+# Rails console (Rails apps only)
+./deploy.sh console
 
----
+# ═══════════════════════════════════════════════════════════
+# NGINX
+# ═══════════════════════════════════════════════════════════
 
-### 5. Setup DNS and SSL
+# Rebuild all nginx configs
+cd ~/DevOps && ./rebuild-nginx-configs.sh
 
-**Configure DNS**:
-```
-your-domain.com        A    your-server-ip
-www.your-domain.com    A    your-server-ip
-```
-
-**SSL Certificates**:
-SSL certificates are automatically checked and obtained during the first deployment. If DNS wasn't ready during setup, simply ensure DNS is configured and redeploy:
-```bash
-./deploy.sh deploy  # SSL will be automatically obtained
-```
-
-**Verify SSL**:
-```bash
-# Check certificate
-sudo certbot certificates
-
-# Test in browser
-https://your-domain.com
-```
-
----
-
-## Best Practices
-
-### Security
-
-1. **SSH Hardening**:
-   - Use custom SSH port (not 22)
-   - Disable password authentication
-   - Disable root login
-   - Use SSH keys only
-   - Configure fail2ban
-
-2. **Firewall**:
-   - Enable UFW firewall
-   - Only open necessary ports (custom SSH, 80, 443)
-   - Configure fail2ban for SSH protection
-
-3. **SSL/TLS**:
-   - Always use HTTPS in production
-   - Enable HSTS headers
-   - Use strong cipher suites
-   - Monitor certificate expiry
-
-4. **Database**:
-   - Use strong passwords
-   - Restrict database access to localhost
-   - Regular automated backups
-   - Test restore procedures
-
-5. **Environment Variables**:
-   - Never commit `.env` files to git
-   - Use strong, random secrets
-   - Rotate secrets periodically
-   - Restrict file permissions (600)
-
-6. **Container Security**:
-   - Run as non-root user
-   - Keep base images updated
-   - Scan for vulnerabilities
-   - Limit resource usage
-
----
-
-### Performance
-
-1. **Container Scaling**:
-   - Scale based on traffic patterns
-   - Monitor CPU and memory usage
-   - Use load testing to determine optimal scale
-   - Consider auto-scaling solutions
-
-2. **Database Optimization**:
-   - Regular VACUUM and ANALYZE
-   - Proper indexing
-   - Connection pooling
-   - Query optimization
-
-3. **Redis Tuning**:
-   - Appropriate maxmemory setting
-   - Correct eviction policy
-   - Persistence strategy (AOF vs RDB)
-   - Connection pooling
-
-4. **Nginx Optimization**:
-   - Enable gzip compression
-   - Set appropriate timeouts
-   - Configure connection limits
-   - Use caching headers
-
-5. **Asset Optimization**:
-   - Precompile assets (Rails)
-   - Optimize images
-   - Minimize CSS/JS
-   - Use CDN for static assets
-
----
-
-### Operational
-
-1. **Monitoring**:
-   - Regular status checks
-   - Log monitoring (errors, performance)
-   - Resource usage tracking
-   - SSL certificate expiry monitoring
-   - Container health checks
-
-2. **Backup Strategy**:
-   - Automated daily database backups
-   - Retain backups for 30+ days
-   - Test restore procedures regularly
-   - Backup environment files off-server
-   - Document backup locations
-
-3. **Deployment**:
-   - Test in staging environment first
-   - Deploy during low-traffic periods
-   - Monitor logs during deployment
-   - Have rollback plan ready
-   - Document deployment procedures
-
-4. **Maintenance**:
-   - Regular system updates
-   - Docker image updates
-   - Dependency updates
-   - Log rotation
-   - Cleanup old images and backups
-
-5. **Documentation**:
-   - Keep deployment info current
-   - Document configuration changes
-   - Maintain runbooks for common issues
-   - Update environment variable documentation
-   - Record SSL renewal procedures
-
----
-
-### Development Workflow
-
-1. **Version Control**:
-   - Use feature branches
-   - Pull request reviews
-   - Tag releases
-   - Keep DevOps repo in sync
-
-2. **Testing**:
-   - Run tests before deployment
-   - Test in staging environment
-   - Verify health checks work
-   - Test rollback procedures
-
-3. **Configuration Management**:
-   - Use templates for consistency
-   - Version control nginx configs
-   - Document environment variables
-   - Keep secrets out of git
-
-4. **Scaling**:
-   - Start with default scale
-   - Monitor and adjust based on usage
-   - Plan for peak traffic
-   - Test scaling procedures
-
-5. **Cleanup**:
-   - Regular automated cleanup
-   - Monitor disk space
-   - Remove unused containers
-   - Clean up old images
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-**SSH Connection Issues After Hardening**:
-```bash
-# Verify SSH service is running
-sudo systemctl status ssh
-
-# Check SSH port
-sudo ss -tlnp | grep sshd
-
-# Check firewall
-sudo ufw status
-
-# Restore from backup if needed
-sudo cp /etc/ssh/sshd_config.backup.* /etc/ssh/sshd_config
-sudo systemctl restart ssh
-```
-
-**Container Won't Start**:
-```bash
-# Check container logs
-docker logs {container-name}
-
-# Verify environment file
-cat ~/apps/{app-name}/.env.production
-
-# Check port conflicts
-sudo netstat -tlnp | grep {port}
-
-# Check Docker status
-sudo systemctl status docker
-```
-
-**Database Connection Issues**:
-```bash
-# Test database credentials
-PGPASSWORD={password} psql -h localhost -U {user} -d {database} -c "SELECT 1;"
-
-# Check PostgreSQL status
-sudo systemctl status postgresql
-
-# Check PostgreSQL logs
-sudo journalctl -u postgresql -n 50
-```
-
-**Nginx Configuration Errors**:
-```bash
 # Test nginx configuration
 sudo nginx -t
 
-# Check nginx logs
-sudo tail -50 /var/log/nginx/error.log
-
-# Restore from backup
-sudo cp /tmp/nginx_backup_*/sites-available/* /etc/nginx/sites-available/
+# Reload nginx
 sudo systemctl reload nginx
-```
 
-**SSL Certificate Issues**:
-```bash
+# View nginx logs
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
+
+# ═══════════════════════════════════════════════════════════
+# SSL CERTIFICATES
+# ═══════════════════════════════════════════════════════════
+
 # Check certificate status
 sudo certbot certificates
 
-# Check DNS configuration
-dig {domain} +short
+# Renew certificates
+sudo certbot renew
 
-# Check certbot logs
-sudo tail -50 /var/log/letsencrypt/letsencrypt.log
+# View renewal timer
+systemctl status certbot.timer
 
-# Renew manually
-sudo certbot renew --dry-run
-sudo certbot renew --force-renewal
-```
+# ═══════════════════════════════════════════════════════════
+# DOCKER
+# ═══════════════════════════════════════════════════════════
 
-**Out of Disk Space**:
-```bash
-# Check disk usage
-df -h
+# List containers
+docker ps --filter 'name=app-name'
 
-# Find large files
-du -sh /* | sort -h
+# View logs
+docker logs -f app_web_1
+
+# Restart container
+docker restart app_web_1
+
+# Remove container
+docker stop app_web_1 && docker rm app_web_1
 
 # Clean up Docker
 docker system prune -a
+docker volume prune
+docker builder prune -a
 
-# Clean up old backups
-find ~/apps/*/backups -name "*.sql.gz" -mtime +30 -delete
+# ═══════════════════════════════════════════════════════════
+# DATABASE
+# ═══════════════════════════════════════════════════════════
 
-# Clean up old images
-docker images | grep {app-name} | tail -n +21 | awk '{print $3}' | xargs docker rmi
+# Connect to database
+psql -h localhost -U app_user -d app_production
+
+# Backup database
+pg_dump -U app_user app_production | gzip > backup.sql.gz
+
+# Restore database
+gunzip -c backup.sql.gz | psql -U app_user app_production
+
+# Check database size
+sudo -u postgres psql -c "SELECT pg_size_pretty(pg_database_size('app_production'));"
+
+# ═══════════════════════════════════════════════════════════
+# REDIS
+# ═══════════════════════════════════════════════════════════
+
+# Check Redis status
+redis-cli ping
+
+# Check queue depth
+redis-cli -n 2 LLEN queue:default
+
+# Memory usage
+redis-cli info memory
+
+# Connected clients
+redis-cli info clients
+
+# ═══════════════════════════════════════════════════════════
+# MONITORING
+# ═══════════════════════════════════════════════════════════
+
+# Check all apps status
+~/DevOps/apps/status.sh
+
+# Verify all domains
+~/DevOps/verify-domains.sh
+
+# Check disk usage
+df -h
+
+# Check memory usage
+free -h
+
+# Container stats
+docker stats
+
+# System logs
+sudo journalctl -u nginx -f
+sudo journalctl -u postgresql -f
+sudo journalctl -u redis-server -f
+
+# ═══════════════════════════════════════════════════════════
+# SCRAPER SYSTEM
+# ═══════════════════════════════════════════════════════════
+
+# Restart scraper system
+cd ~/apps/cheaperfordrug-scraper
+docker-compose restart
+
+# View scraper logs
+docker-compose logs -f scraper-vpn-poland
+docker-compose logs -f product-update-worker-poland-1
+
+# Check scraper status
+docker-compose ps
+```
+
+### Port Allocation
+
+```
+Application                 Port Range    Containers
+──────────────────────────────────────────────────────
+Brokik API                  3040-3041     2 web
+Brokik Web                  3050-3052     3 web
+CheaperForDrug Landing      3010-3011     2 web
+CheaperForDrug Web          3030-3032     3 web
+CheaperForDrug API          3020-3022     3 web
+──────────────────────────────────────────────────────
+Reserved                    3060-3099     Future
+```
+
+### Service URLs
+
+```
+Service                 Primary URL                        Alternative URLs
+──────────────────────────────────────────────────────────────────────────────────
+Brokik API              api-public.brokik.com              api-internal.brokik.com
+Brokik Web              www.brokik.com                     -
+CFD Landing             taniejpolek.pl                     presale.taniejpolek.pl, www.taniejpolek.pl
+CFD Web                 premiera.taniejpolek.pl            www.premiera.taniejpolek.pl
+CFD API                 api-public.cheaperfordrug.com      api-internal.cheaperfordrug.com
+CDN                     cdn.webet.pl                       -
+```
+
+### Database Allocation
+
+```
+Database Name                          Application              Redis DB
+──────────────────────────────────────────────────────────────────────────
+brokik_production                      Brokik API               3
+cheaperfordrug_landing_production      CFD Landing              1
+cheaperfordrug_production              CFD API                  2
 ```
 
 ---
 
-## Support and Contribution
+## Repository Structure
+
+```
+DevOps/
+├── apps/                              # Application-specific configurations
+│   ├── brokik-api/                    # Brokik API (Rails)
+│   ├── brokik-web/                    # Brokik Web (Next.js)
+│   ├── cheaperfordrug-api/            # CheaperForDrug API (Rails)
+│   ├── cheaperfordrug-landing/        # CheaperForDrug Landing (Rails)
+│   ├── cheaperfordrug-web/            # CheaperForDrug Web (Next.js)
+│   └── status.sh                      # Multi-app status checker
+│
+├── common/                            # Shared utilities and modules
+│   ├── app-types/                     # Application type modules
+│   │   ├── nextjs.sh                  # Next.js deployment logic
+│   │   └── rails.sh                   # Rails deployment logic
+│   ├── nginx/                         # Nginx configurations
+│   │   ├── cdn.conf                   # CDN configuration
+│   │   └── default-server.conf        # Default catch-all server
+│   ├── nextjs/                        # Next.js templates
+│   ├── rails/                         # Rails templates
+│   ├── templates/                     # Configuration templates
+│   ├── deploy-app.sh                  # Generic deployment workflow
+│   ├── docker-utils.sh                # Docker container management
+│   ├── email-config.sh                # Email configuration
+│   ├── email-notification.sh          # Email notification system
+│   ├── email-templates.sh             # Email templates
+│   ├── redis-setup.sh                 # Redis configuration utilities
+│   ├── sendgrid-api.sh                # SendGrid API sender
+│   ├── setup-app.sh                   # Generic application setup
+│   └── utils.sh                       # Common utility functions
+│
+├── scripts/                           # System-wide utilities
+│   ├── cleanup-all-apps.sh            # Centralized cleanup
+│   ├── deploy-cdn.sh                  # CDN deployment
+│   ├── disaster-recovery.sh           # Complete system rebuild
+│   ├── docker-build-benchmark.sh      # Build performance testing
+│   ├── docker-cleanup-optimization.sh # Docker cleanup
+│   ├── migrate-scaleway-to-local-...  # Active Storage migration
+│   ├── test-email-notification.sh     # Email system testing
+│   ├── update-redis.sh                # Redis upgrade utility
+│   └── upgrade-ruby.sh                # Ruby version upgrade
+│
+├── templates/                         # Application templates
+│   ├── nextjs-app/                    # Next.js app template
+│   └── rails-app/                     # Rails app template
+│
+├── rebuild-nginx-configs.sh           # Rebuild all nginx configs
+├── ubuntu-init-setup.sh               # Complete Ubuntu server init
+├── verify-domains.sh                  # Domain and SSL verification
+└── README.md                          # This file
+```
+
+---
+
+## Support & Maintenance
 
 ### Getting Help
 
-**Log Files**:
+**Log Files:**
 - Server init: `/var/log/server-init-setup.log`
 - Nginx errors: `/var/log/nginx/error.log`
 - Container logs: `docker logs {container-name}`
 - Deployment logs: `~/apps/{app-name}/logs/deployments.log`
 
-**Useful Commands**:
+**Useful Commands:**
 ```bash
 # System status
 sudo systemctl status
@@ -1693,1102 +2223,125 @@ sudo netstat -tlnp
 sudo journalctl -n 100
 ```
 
----
+### Regular Maintenance
 
-## Summary
+**Daily:**
+- Monitor container health: `~/DevOps/apps/status.sh`
+- Check disk usage: `df -h`
+- Review error logs: `sudo tail -100 /var/log/nginx/error.log`
 
-This DevOps repository provides a comprehensive, production-ready infrastructure for deploying and managing multiple applications on Ubuntu servers. Key capabilities:
+**Weekly:**
+- Clean up Docker: `docker system prune -f`
+- Review database sizes
+- Check SSL certificate expiry: `sudo certbot certificates`
 
-- **Automated Setup**: Complete server initialization from scratch
-- **Multi-App Support**: Rails APIs and Next.js frontends
-- **Zero-Downtime Deployments**: Rolling restarts with health checks
-- **SSL Automation**: Let's Encrypt with auto-renewal
-- **Scalability**: Dynamic container scaling with load balancing
-- **Monitoring**: Health checks, logs, and status reporting
-- **Backup & Recovery**: Automated backups and disaster recovery
-- **Security**: Firewall, SSH hardening, fail2ban, SSL/TLS
-- **Maintenance**: Automated cleanup and system optimization
+**Monthly:**
+- Update system packages: `sudo apt update && sudo apt upgrade`
+- Review and rotate logs
+- Test disaster recovery procedure
+- Review and update documentation
 
-The modular design allows easy addition of new applications and supports both fresh deployments and updates to existing infrastructure. All scripts follow bash best practices with proper error handling, logging, and documentation.
+**Quarterly:**
+- Review security practices
+- Update Docker base images
+- Review and optimize database indexes
+- Review application performance metrics
 
-For production use, follow the best practices outlined in this README, maintain regular backups, and monitor your applications continuously.
+### Automated Maintenance
 
----
-
-**Version**: 2.0.0
-**Last Updated**: 2025-10-30
-**Maintained By**: DevOps Team
-
----
-
-## Container Networking on Linux (Critical for Rails APIs)
-
-### Host Networking Requirement
-
-**IMPORTANT**: On native Linux (Ubuntu/Hetzner), Rails API applications **must use `--network host`** mode to access PostgreSQL, Redis, and Elasticsearch running on the host machine.
-
-**Why**: Unlike Docker Desktop (macOS/Windows), native Linux does NOT support `host.docker.internal` hostname for accessing host services from containers.
-
-### Required Pattern
-
+**Centralized Cleanup (Daily at 2 AM):**
 ```bash
-# ✅ CORRECT Configuration for Linux
-DATABASE_URL=postgresql://user:password@localhost/database_name
-REDIS_URL=redis://localhost:6379/0
-ELASTICSEARCH_URL=http://localhost:9200
-
-# Container creation
-docker run -d \
-  --name app_web_1 \
-  --network host \
-  --env-file .env.production \
-  -e PORT=3000 \
-  app:latest
-
-# ❌ WRONG - Does NOT work on native Linux
-DATABASE_URL=postgresql://user:password@host.docker.internal/database_name
-docker run -d --network bridge -p 3000:3000 ...
+# Configured in crontab
+0 2 * * * /home/andrzej/DevOps/scripts/cleanup-all-apps.sh
 ```
 
-### Port Management with Host Networking
-
-**Trade-off**: With `--network host`, multiple containers cannot bind to the same port. Each web container needs a unique `PORT` environment variable.
-
-**Solution**: Use sequential ports starting from a base port:
-
-```bash
-# config.sh
-export BASE_PORT=3020
-export DEFAULT_SCALE=3
-
-# Results in:
-app_web_1 on PORT=3020
-app_web_2 on PORT=3021
-app_web_3 on PORT=3022
-```
-
-**Nginx Load Balancing**:
-```nginx
-upstream app_backend {
-    server localhost:3020;
-    server localhost:3021;
-    server localhost:3022;
-}
-```
-
-### Comprehensive Documentation
-
-For complete details on container networking patterns, port allocation strategy, scaling patterns, and troubleshooting, see:
-
-**[Global Container Patterns Documentation](/home/andrzej/DevOps/CONTAINER-PATTERNS.md)**
-
-This document provides:
-- Detailed networking requirements for Linux
-- Port allocation strategy and current allocations
-- Container naming conventions
-- Scaling patterns for web and worker containers
-- Database connectivity patterns
-- Configuration templates
-- Troubleshooting guides
-- Best practices
-
-**Application-Specific Documentation**:
-- **CheaperForDrug API**: `/home/andrzej/DevOps/apps/cheaperfordrug-api/CONTAINER-MANAGEMENT.md`
-
-### Quick Reference
-
-```bash
-# Add new web container (host networking)
-docker run -d \
-  --name ${APP_NAME}_web_${N} \
-  --network host \
-  --env-file /home/andrzej/DevOps/apps/${APP_NAME}/.env.production \
-  -e PORT=$((BASE_PORT + N - 1)) \
-  --restart unless-stopped \
-  ${APP_NAME}:latest
-
-# Add worker container (no port needed)
-docker run -d \
-  --name ${APP_NAME}_worker_${N} \
-  --network host \
-  --env-file /home/andrzej/DevOps/apps/${APP_NAME}/.env.production \
-  --restart unless-stopped \
-  ${APP_NAME}:latest \
-  bundle exec sidekiq
-
-# Update nginx after scaling
-cd /home/andrzej/DevOps
-./rebuild-nginx-configs.sh
-```
-
-**See CONTAINER-PATTERNS.md for full details on adding new applications and scaling strategies.**
-
-# Global Container Management Patterns for Rails API Applications on Linux
-
-## Overview
-
-This document defines the standardized patterns for deploying and managing Rails API applications in Docker containers on **native Linux** (Ubuntu/Hetzner). These patterns are specifically designed to address the networking requirements on Linux servers where Docker Desktop networking features are not available.
-
-**Last Updated**: November 13, 2025
-**Applies To**: All Rails API applications on Ubuntu/Hetzner infrastructure
-
----
-
-## Table of Contents
-
-- [Critical Networking Requirements](#critical-networking-requirements)
-- [Why Host Networking?](#why-host-networking)
-- [Port Allocation Strategy](#port-allocation-strategy)
-- [Container Naming Conventions](#container-naming-conventions)
-- [Scaling Patterns](#scaling-patterns)
-- [Database Connectivity Pattern](#database-connectivity-pattern)
-- [Configuration Template](#configuration-template)
-- [Deployment Workflow](#deployment-workflow)
-- [Troubleshooting](#troubleshooting)
-- [Adding New Applications](#adding-new-applications)
-
----
-
-## Critical Networking Requirements
-
-### The Linux Docker Networking Challenge
-
-**Problem**: On native Linux, Docker containers in bridge mode **cannot access host services** via `host.docker.internal`. This hostname only works on Docker Desktop (macOS/Windows).
-
-**Impact**: Rails applications need to connect to:
-- PostgreSQL on `localhost:5432`
-- Redis on `localhost:6379`
-- Elasticsearch on `localhost:9200`
-
-**Solution**: Use `--network host` mode, which allows containers to directly access `localhost` services.
-
-### Required Database Connection Pattern
-
-```bash
-# ✅ CORRECT for host networking on Linux
-DATABASE_URL=postgresql://user:password@localhost/database_name
-REDIS_URL=redis://localhost:6379/0
-ELASTICSEARCH_URL=http://localhost:9200
-
-# ❌ WRONG - Does NOT work on native Linux
-DATABASE_URL=postgresql://user:password@host.docker.internal/database_name
-REDIS_URL=redis://host.docker.internal:6379/0
-```
-
----
-
-## Why Host Networking?
-
-### Benefits
-
-1. **Direct localhost Access**: Containers can connect to PostgreSQL, Redis, Elasticsearch on `localhost`
-2. **No Network Translation**: Eliminates Docker network overhead
-3. **Simplified Configuration**: No need for special gateway addresses
-4. **Production Performance**: Native network stack performance
-
-### Trade-offs
-
-1. **Port Management Required**: Each web container needs a unique `PORT` environment variable
-2. **No Port Mapping**: Container port IS the host port (no `-p 3020:3000`)
-3. **Careful Planning**: Port conflicts will prevent containers from starting
-
----
-
-## Port Allocation Strategy
-
-### Port Range Allocation
-
-Each application is allocated a port range based on its base port:
-
-```
-Application Base Port Pattern:
-- {app-name}_web_1   = BASE_PORT + 0
-- {app-name}_web_2   = BASE_PORT + 1
-- {app-name}_web_3   = BASE_PORT + 2
-- {app-name}_web_N   = BASE_PORT + (N-1)
-```
-
-### Current Port Allocations
-
-| Application | Base Port | Range | Nginx Proxy Port |
-|------------|-----------|-------|------------------|
-| cheaperfordrug-api | 3020 | 3020-3029 | 443 (SSL) |
-| brokik-api | 3000 | 3000-3009 | 443 (SSL) |
-| **Reserved for Future** | 3030 | 3030-3039 | TBD |
-| **Reserved for Future** | 3040 | 3040-3049 | TBD |
-| **Reserved for Future** | 3050 | 3050-3059 | TBD |
-
-### Port Allocation Rules
-
-1. **Reserve 10 ports** per application (allows scaling to 10 web containers)
-2. **Base ports** should be multiples of 10 for clarity
-3. **Document allocations** in this file when adding new applications
-4. **Avoid port conflicts** - check `netstat -tuln` before allocating
-
-### Checking Available Ports
-
-```bash
-# Check if port is in use
-nc -z localhost 3020 && echo "IN USE" || echo "AVAILABLE"
-
-# List all used ports
-netstat -tuln | grep LISTEN
-
-# Check all app containers
-docker ps --format "table {{.Names}}\t{{.Ports}}"
-```
-
----
-
-## Container Naming Conventions
-
-### Standard Container Names
-
-```
-{app-name}_web_{number}      # Web/API containers (e.g., cheaperfordrug-api_web_1)
-{app-name}_worker_{number}   # Background job workers (e.g., cheaperfordrug-api_worker_1)
-{app-name}_scheduler_{number} # Scheduled task containers (if using Clockwork)
-```
-
-### Examples
-
-```
-cheaperfordrug-api_web_1      # Primary API container
-cheaperfordrug-api_web_2      # Secondary API container
-cheaperfordrug-api_web_3      # Third API container
-cheaperfordrug-api_worker_1   # Background job worker
-```
-
-### Naming Rules
-
-1. Use underscores, not hyphens, to separate components
-2. Container numbers start at 1 (not 0)
-3. Keep names consistent with application name in config.sh
-4. Workers and schedulers don't expose ports (no number conflicts)
-
----
-
-## Scaling Patterns
-
-### Web Container Scaling
-
-**Pattern**: Each web container runs on a unique port with host networking
-
-```bash
-# config.sh settings
-export BASE_PORT=3020
-export DEFAULT_SCALE=3
-
-# Resulting containers
-docker run -d \
-  --name ${APP_NAME}_web_1 \
-  --network host \
-  -e PORT=3020 \
-  --env-file .env.production \
-  ${APP_NAME}:latest
-
-docker run -d \
-  --name ${APP_NAME}_web_2 \
-  --network host \
-  -e PORT=3021 \
-  --env-file .env.production \
-  ${APP_NAME}:latest
-
-docker run -d \
-  --name ${APP_NAME}_web_3 \
-  --network host \
-  -e PORT=3022 \
-  --env-file .env.production \
-  ${APP_NAME}:latest
-```
-
-### Worker Container Scaling
-
-**Pattern**: Workers don't expose ports, can scale independently
-
-```bash
-# config.sh settings
-export WORKER_COUNT=2
-
-# Resulting containers (no port configuration needed)
-docker run -d \
-  --name ${APP_NAME}_worker_1 \
-  --network host \
-  --env-file .env.production \
-  ${APP_NAME}:latest \
-  bundle exec sidekiq
-
-docker run -d \
-  --name ${APP_NAME}_worker_2 \
-  --network host \
-  --env-file .env.production \
-  ${APP_NAME}:latest \
-  bundle exec sidekiq
-```
-
-### Nginx Load Balancer Configuration
-
-**Pattern**: Upstream block with all web container ports
-
-```nginx
-upstream cheaperfordrug_api_backend {
-    server localhost:3020;  # web_1
-    server localhost:3021;  # web_2
-    server localhost:3022;  # web_3
-}
-
-server {
-    listen 443 ssl http2;
-    server_name api-public.cheaperfordrug.com;
-
-    location / {
-        proxy_pass http://cheaperfordrug_api_backend;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### Scaling Commands
-
-```bash
-# Scale to 3 web containers
-cd /home/andrzej/DevOps/apps/{app-name}
-./deploy.sh scale 3
-
-# Scale to 5 web containers
-./deploy.sh scale 5
-
-# Check current scale
-docker ps --filter "name={app-name}_web" --format "table {{.Names}}\t{{.Ports}}"
-```
-
----
-
-## Database Connectivity Pattern
-
-### Environment Configuration
-
-**File**: `/home/andrzej/DevOps/apps/{app-name}/.env.production`
-
-```bash
-# Database Configuration - MUST use localhost with host networking
-DATABASE_URL=postgresql://user:password@localhost/database_name
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-DATABASE_NAME=app_production
-DATABASE_USER=app_user
-DATABASE_PASSWORD=secure_random_password
-
-# Redis Configuration - MUST use localhost
-REDIS_URL=redis://localhost:6379/0
-REDIS_DB_NUMBER=0
-
-# Elasticsearch Configuration - MUST use localhost (if enabled)
-ELASTICSEARCH_URL=http://localhost:9200
-ENABLE_ELASTICSEARCH=true
-
-# Rails Configuration
-RAILS_ENV=production
-RAILS_MAX_THREADS=2
-RAILS_SERVE_STATIC_FILES=false
-RAILS_LOG_TO_STDOUT=true
-```
-
-### Container Creation Pattern
-
-```bash
-docker run -d \
-  --name ${APP_NAME}_web_1 \
-  --network host \
-  --env-file /home/andrzej/DevOps/apps/${APP_NAME}/.env.production \
-  -e PORT=3020 \
-  --restart unless-stopped \
-  ${APP_NAME}:latest
-```
-
-### Connection Testing
-
-```bash
-# Test from inside container
-docker exec ${APP_NAME}_web_1 bash -c "cd /app && bundle exec rails runner 'puts ActiveRecord::Base.connection.execute(\"SELECT 1\").first'"
-
-# Test Redis connection
-docker exec ${APP_NAME}_web_1 bash -c "redis-cli -h localhost ping"
-
-# Test via API endpoint
-curl http://localhost:3020/up
-```
-
----
-
-## Configuration Template
-
-### config.sh Template for New Rails API
-
-```bash
-#!/bin/bash
-
-# Application Configuration for {App Name}
-# This is a Rails API backend
-
-# ============================================================================
-# APPLICATION IDENTITY
-# ============================================================================
-export APP_TYPE="rails"
-export APP_NAME="{app-name}"              # e.g., "myapp-api"
-export APP_DISPLAY_NAME="{App Display Name}"  # e.g., "MyApp API"
-export DOMAIN="{domain.com}"               # e.g., "api.example.com"
-
-# ============================================================================
-# REPOSITORY CONFIGURATION
-# ============================================================================
-export REPO_URL="git@github.com:{org}/{repo}.git"
-export REPO_BRANCH="master"
-
-# ============================================================================
-# CONTAINER ARCHITECTURE
-# ============================================================================
-export DEFAULT_SCALE=2              # Number of web containers
-export WORKER_COUNT=1               # Number of worker containers
-export SCHEDULER_ENABLED=false      # Set true if using Clockwork
-export WORKER_SHUTDOWN_TIMEOUT=90
-
-# ============================================================================
-# DOCKER CONFIGURATION
-# ============================================================================
-export DOCKER_IMAGE_NAME="$APP_NAME"
-export BASE_PORT={BASE_PORT}        # e.g., 3030 (allocate unique base port)
-export CONTAINER_PORT=3000          # Rails default - don't change
-
-# ============================================================================
-# DATABASE CONFIGURATION
-# ============================================================================
-export DB_NAME="{app}_production"
-export DB_USER="{app}_user"
-export DB_HOST="localhost"          # CRITICAL: Must be localhost for host networking
-export DB_PORT="5432"
-
-# ============================================================================
-# REDIS CONFIGURATION
-# ============================================================================
-export REDIS_DB_NUMBER={N}          # Allocate unique Redis DB number (0-15)
-export REDIS_URL="redis://localhost:6379/${REDIS_DB_NUMBER}"
-
-# ============================================================================
-# DEPLOYMENT CONFIGURATION
-# ============================================================================
-export ZERO_DOWNTIME_ENABLED=true
-export HEALTH_CHECK_PATH="/up"
-export HEALTH_CHECK_TIMEOUT=60
-
-# ============================================================================
-# BACKUP CONFIGURATION
-# ============================================================================
-export BACKUP_ENABLED=true
-export MIGRATION_BACKUP_ENABLED=true
-export BACKUP_RETENTION_DAYS=30
-
-# ============================================================================
-# IMAGE BACKUP CONFIGURATION
-# ============================================================================
-export SAVE_IMAGE_BACKUPS=true
-export MAX_IMAGE_BACKUPS=20
-
-# ============================================================================
-# AUTO CLEANUP
-# ============================================================================
-export AUTO_CLEANUP_ENABLED=true
-export MAX_IMAGE_VERSIONS=20
-
-# ============================================================================
-# NGINX CONFIGURATION
-# ============================================================================
-export NGINX_UPSTREAM_NAME="${APP_NAME}_backend"
-
-# ============================================================================
-# PATHS (Auto-configured - Do not modify)
-# ============================================================================
-export APP_DIR="$HOME/apps/$APP_NAME"
-export REPO_DIR="$APP_DIR/repo"
-export ENV_FILE="$APP_DIR/.env.production"
-export BACKUP_DIR="$APP_DIR/backups"
-export LOG_DIR="$APP_DIR/logs"
-export IMAGE_BACKUP_DIR="$APP_DIR/docker-images"
-```
-
----
-
-## Deployment Workflow
-
-### 1. Initial Setup
-
-```bash
-# Create app directory in DevOps
-cd /home/andrzej/DevOps/apps
-cp -r ../templates/rails-app {new-app-name}
-cd {new-app-name}
-
-# Edit config.sh with app-specific settings
-nano config.sh
-
-# Run setup (creates database, generates configs, builds first image)
-./setup.sh
-```
-
-### 2. Deploy Application
-
-```bash
-# Deploy latest code
-./deploy.sh deploy
-
-# Check container status
-./deploy.sh status
-
-# View logs
-./deploy.sh logs web_1
-```
-
-### 3. Scale Application
-
-```bash
-# Scale to 3 web containers
-./deploy.sh scale 3
-
-# Verify all containers running
-docker ps --filter "name={app-name}"
-```
-
----
-
-## Troubleshooting
-
-### Container Won't Start - "Address already in use"
-
-**Cause**: Another container is using the port with host networking
-
-**Solution**:
-```bash
-# Check which ports are in use
-docker ps --filter 'name={app-name}' --format "table {{.Names}}\t{{.Ports}}"
-
-# Find process using the port
-lsof -i :3020
-
-# Stop conflicting container
-docker rm -f {container-name}
-```
-
-### Database Connection Refused
-
-**Symptoms**: HTTP 500 errors, "Connection refused" in logs
-
-**Check**:
-```bash
-# Verify DATABASE_URL uses localhost (NOT host.docker.internal)
-docker exec {app-name}_web_1 env | grep DATABASE_URL
-# Should show: postgresql://...@localhost/...
-
-# Test PostgreSQL is listening
-psql -h localhost -U {db_user} -d {db_name} -c "SELECT 1"
-```
-
-**Fix**:
-```bash
-# Update .env.production
-nano /home/andrzej/DevOps/apps/{app-name}/.env.production
-# Change @host.docker.internal to @localhost
-
-# Restart containers
-./deploy.sh restart
-```
-
-### API Requests Timing Out
-
-**Possible Causes**:
-1. Database connection pool exhaustion
-2. Slow queries without indexes
-3. Network connectivity issues
-
-**Diagnosis**:
-```bash
-# Check container logs
-docker logs {app-name}_web_1 --tail 100
-
-# Check database query performance
-docker exec {app-name}_web_1 bash -c "cd /app && bundle exec rails runner '
-puts Benchmark.measure {
-  ActiveRecord::Base.connection.execute(\"SELECT COUNT(*) FROM your_table\")
-}'"
-
-# Check connection pool
-docker exec {app-name}_web_1 bash -c "cd /app && bundle exec rails runner '
-puts ActiveRecord::Base.connection_pool.stat
-'"
-```
-
-### Nginx Shows No Upstream Servers Available
-
-**Cause**: Nginx configuration not updated after scaling
-
-**Fix**:
-```bash
-# Rebuild nginx configurations
-cd /home/andrzej/DevOps
-./rebuild-nginx-configs.sh
-
-# Or update manually
-cd /home/andrzej/DevOps/apps/{app-name}
-./deploy.sh deploy  # This updates nginx config automatically
-```
-
----
-
-## Adding New Applications
-
-### Port Allocation Checklist
-
-1. **Choose base port**: Find next available port range (check table above)
-2. **Reserve 10 ports**: BASE_PORT to BASE_PORT+9
-3. **Update port table**: Add entry to "Current Port Allocations" section
-4. **Document in DevOps**: Update this file with the allocation
-
-### Redis DB Number Allocation
-
-Redis supports 16 databases (0-15). Allocate one per application:
-
-| Application | Redis DB |
-|------------|----------|
-| cheaperfordrug-api | 2 |
-| brokik-api | 0 |
-| **Available** | 1, 3-15 |
-
-### Setup Steps
-
-1. Copy rails-app template
-2. Edit config.sh with unique:
-   - APP_NAME
-   - BASE_PORT (from allocation table)
-   - REDIS_DB_NUMBER (from allocation table)
-   - DOMAIN
-3. Run `./setup.sh`
-4. Run `./deploy.sh deploy`
-5. Update this document with allocations
+**What It Cleans:**
+- Old Docker images (keeps last 20)
+- Old image backups (keeps last 20)
+- Old database backups (keeps 30 days)
+- Docker build cache (keeps last 24 hours)
 
 ---
 
 ## Best Practices
 
-### 1. Always Use Host Networking for Rails APIs
+### Security
+- Use custom SSH port (not 22)
+- Disable password authentication (SSH keys only)
+- Enable UFW firewall (only necessary ports open)
+- Use strong, random secrets (rotate periodically)
+- Keep system and dependencies updated
+- Monitor logs for suspicious activity
+- Use HTTPS only (HSTS enabled)
 
-```bash
-# ✅ CORRECT
-docker run -d --network host --env-file .env.production ...
+### Performance
+- Scale web containers based on traffic
+- Monitor and optimize database queries
+- Use appropriate indexes
+- Configure Redis maxmemory policy
+- Enable nginx caching for static assets
+- Use CDN for Active Storage files
+- Monitor resource usage (CPU, memory, disk)
 
-# ❌ WRONG - Will not work on Linux
-docker run -d --network bridge -p 3020:3000 ...
-```
+### Operational
+- Regular status checks (`~/DevOps/apps/status.sh`)
+- Monitor logs during deployments
+- Test in staging before production
+- Have rollback plan ready
+- Document configuration changes
+- Maintain backup strategy (test restores)
+- Keep documentation current
 
-### 2. Always Use localhost in Database URLs
-
-```bash
-# ✅ CORRECT
-DATABASE_URL=postgresql://user:pass@localhost/db
-
-# ❌ WRONG - Does not work on native Linux
-DATABASE_URL=postgresql://user:pass@host.docker.internal/db
-```
-
-### 3. Set Unique PORT for Each Web Container
-
-```bash
-# ✅ CORRECT - Each container has unique PORT
-docker run -d --name app_web_1 -e PORT=3020 ...
-docker run -d --name app_web_2 -e PORT=3021 ...
-
-# ❌ WRONG - Port conflict
-docker run -d --name app_web_1 -e PORT=3020 ...
-docker run -d --name app_web_2 -e PORT=3020 ...  # Will fail!
-```
-
-### 4. Update Nginx After Scaling
-
-```bash
-# After scaling containers
-./deploy.sh scale 3
-
-# Nginx is automatically updated by deploy.sh
-# But if needed manually:
-cd /home/andrzej/DevOps
-./rebuild-nginx-configs.sh
-```
-
-### 5. Monitor Container Health
-
-```bash
-# Regular health checks
-docker ps --filter "name={app-name}" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-# Check health endpoint
-curl http://localhost:3020/up
-
-# View recent logs
-docker logs {app-name}_web_1 --tail 50 --follow
-```
-
----
-
-## Performance Optimization
-
-### Database Indexes
-
-For DISTINCT ON queries on large tables, always add appropriate indexes:
-
-```ruby
-# migration
-add_index :table_name, :column_name
-add_index :table_name, [:fk_id, :column_name]
-```
-
-**Example** (from cheaperfordrug-api):
-```sql
-CREATE INDEX CONCURRENTLY index_online_pharmacy_drugs_on_name
-  ON online_pharmacy_drugs(name);
-
-CREATE INDEX CONCURRENTLY index_online_pharmacy_drugs_on_pharmacy_and_name
-  ON online_pharmacy_drugs(online_pharmacy_id, name);
-```
-
-Result: Query time reduced from 60+ seconds to 0.5ms
-
-### Connection Pooling
-
-Configure Rails database pool based on container count and traffic:
-
-```ruby
-# config/database.yml
-production:
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-```
-
-```bash
-# .env.production
-RAILS_MAX_THREADS=2  # 2 threads per container × 3 containers = 6 total connections
-```
-
-### Redis Configuration
-
-Optimize Redis for your workload:
-
-```bash
-# For Streams workloads
-maxmemory 256mb
-maxmemory-policy allkeys-lru
-appendonly yes
-```
-
----
-
-## Quick Reference
-
-### Common Commands
-
-```bash
-# Deploy latest code
-cd /home/andrzej/DevOps/apps/{app-name} && ./deploy.sh deploy
-
-# Scale to N containers
-./deploy.sh scale N
-
-# Restart all containers
-./deploy.sh restart
-
-# View logs
-./deploy.sh logs web_1
-
-# Check status
-./deploy.sh status
-
-# Rails console
-./deploy.sh console
-
-# Check all apps status
-cd /home/andrzej/DevOps/apps && ./status.sh
-
-# Rebuild all nginx configs
-cd /home/andrzej/DevOps && ./rebuild-nginx-configs.sh
-```
-
-### Container Management
-
-```bash
-# List all app containers
-docker ps -a --filter 'name={app-name}'
-
-# View logs
-docker logs -f {app-name}_web_1
-
-# Execute command in container
-docker exec {app-name}_web_1 bash -c "cd /app && bundle exec rails runner 'puts User.count'"
-
-# Stop and remove container
-docker stop {app-name}_web_1 && docker rm {app-name}_web_1
-
-# Check network mode
-docker inspect {app-name}_web_1 --format='NetworkMode={{.HostConfig.NetworkMode}}'
-```
+### Development Workflow
+- Use feature branches
+- Pull request reviews
+- Tag releases
+- Test before deployment
+- Use deployment notifications
+- Keep DevOps repo in sync
 
 ---
 
 ## Summary
 
-**Key Principles**:
+This DevOps repository provides a **comprehensive, production-ready infrastructure** for deploying and managing multiple Rails and Next.js applications on Ubuntu servers.
 
-1. ✅ **Always use `--network host`** for Rails APIs on Linux
-2. ✅ **Always use `localhost`** in DATABASE_URL, REDIS_URL, ELASTICSEARCH_URL
-3. ✅ **Assign unique PORT** environment variable for each web container
-4. ✅ **Allocate port ranges** (10 ports per app) to avoid conflicts
-5. ✅ **Update nginx** configuration when scaling containers
-6. ✅ **Document allocations** in this file when adding new applications
+**Key Capabilities:**
+- Automated server setup from scratch
+- Multi-application deployment with zero downtime
+- Fully automated SSL certificate management
+- Container orchestration with health checks
+- Load balancing with nginx
+- Performance optimization (Docker builds, database queries)
+- CDN integration for file serving
+- VPN-enabled scraper system
+- Email notifications for deployments
+- Complete disaster recovery capability
 
-**Never**:
-- ❌ Don't use `host.docker.internal` on Linux (Docker Desktop only)
-- ❌ Don't use bridge networking for Rails APIs needing host service access
-- ❌ Don't reuse ports across different web containers
-- ❌ Don't forget to update nginx after scaling
+**Infrastructure Highlights:**
+- 24 active containers (13 web, 2 workers, 1 scheduler, 8 scrapers)
+- 5 applications (3 Rails, 2 Next.js)
+- PostgreSQL with 3 databases
+- Redis with 4 database namespaces
+- Nginx load balancing
+- Let's Encrypt SSL (auto-renewal)
+- SendGrid email notifications
+- AWS Elasticsearch integration
+
+**Production Stats:**
+- **Uptime:** 99.9%+ with automated health checks
+- **Build Performance:** 2000x improvement (10+ min → <5 sec)
+- **Query Performance:** 120,000x improvement (60s → 0.5ms)
+- **SSL:** Fully automated (no manual commands)
+- **Deployments:** Zero-downtime rolling updates
+
+The modular design allows easy addition of new applications and supports both fresh deployments and updates to existing infrastructure.
 
 ---
 
-**Maintained By**: DevOps Team
-**Questions**: Refer to `/home/andrzej/DevOps/README.md` for detailed deployment workflows
-# CheaperForDrug API - Container Management & Python Scripts Access
-
-## Overview
-
-The CheaperForDrug API runs in Docker containers with **host networking** to enable direct access to PostgreSQL, Redis, and Elasticsearch running on the host machine.
-
-## Current Setup (November 2025)
-
-### Active Containers
-- `cheaperfordrug-api_web_1` - Puma web server on port 3000
-- `cheaperfordrug-api_web_2` - Puma web server on port 3001  
-- `cheaperfordrug-api_web_3` - Puma web server on port 3002
-- `cheaperfordrug-api_worker_1` - Sidekiq background worker
-
-### Container Configuration
-```yaml
-Network Mode: host
-Restart Policy: unless-stopped
-DATABASE_URL: postgresql://user:pass@localhost/db_name
-REDIS_URL: redis://localhost:6379/2
-ELASTICSEARCH_URL: http://localhost:9200
-```
-
-## Why Host Networking?
-
-**Problem**: On native Linux (Ubuntu/Hetzner), Docker bridge networking cannot access host services via `host.docker.internal` (this only works on Docker Desktop/macOS).
-
-**Solution**: Use `--network host` which allows containers to access `localhost` directly, bypassing Docker's network isolation.
-
-**Trade-off**: With host networking, each web container must listen on a **different port** to avoid conflicts.
-
-## Adding New API Web Containers
-
-### Step 1: Choose a unique port
-- web_1 uses port 3000
-- web_2 uses port 3001  
-- web_3 uses port 3002
-- **New container**: use port 3003, 3004, etc.
-
-### Step 2: Create the container
-
-```bash
-# For web container on port 3004:
-docker run -d \
-  --name cheaperfordrug-api_web_4 \
-  --network host \
-  --env-file /home/andrzej/DevOps/apps/cheaperfordrug-api/.env.production \
-  -e PORT=3004 \
-  --restart unless-stopped \
-  cheaperfordrug-api:latest
-```
-
-### Step 3: Verify it's running
-
-```bash
-# Check container status
-docker ps --filter 'name=cheaperfordrug-api_web'
-
-# Check the container is listening on correct port
-docker logs --tail 5 cheaperfordrug-api_web_4 | grep Listening
-
-# Test the endpoint
-curl http://localhost:3004/up
-```
-
-### Step 4: Update nginx load balancer (if needed)
-
-If using nginx for load balancing, add the new port to the upstream configuration:
-
-```nginx
-upstream cheaperfordrug_api {
-    server localhost:3000;
-    server localhost:3001;
-    server localhost:3002;
-    server localhost:3004;  # Add new port
-}
-```
-
-Then reload nginx:
-```bash
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-## Adding Worker Containers
-
-Workers don't bind to ports, so you can add multiple workers without port conflicts:
-
-```bash
-docker run -d \
-  --name cheaperfordrug-api_worker_2 \
-  --network host \
-  --env-file /home/andrzej/DevOps/apps/cheaperfordrug-api/.env.production \
-  --restart unless-stopped \
-  cheaperfordrug-api:latest \
-  bundle exec sidekiq
-```
-
-## Running Python Drug Normalizer Scripts
-
-### Quick Start
-
-```bash
-cd /home/andrzej/apps/cheaperfordrug-scraper
-./run-python-script.sh python_scripts/poland/drug_name_normalizer.py --keywords apap --max-pages 1
-```
-
-### Configuration
-
-The helper script `/home/andrzej/apps/cheaperfordrug-scraper/run-python-script.sh` automatically sets:
-
-```bash
-export API_BASE_URL="http://localhost:3000"
-export SCRAPER_AUTH_TOKEN="Andrzej12345"
-```
-
-### Available Python Scripts
-
-- `python_scripts/poland/drug_name_normalizer.py` - Polish drug name normalizer
-- `python_scripts/germany/drug_name_normalizer.py` - German drug name normalizer  
-- `python_scripts/czech/drug_name_normalizer.py` - Czech drug name normalizer
-
-### Manual Execution
-
-```bash
-cd /home/andrzej/apps/cheaperfordrug-scraper
-
-# Set environment variables
-export API_BASE_URL="http://localhost:3000"
-export SCRAPER_AUTH_TOKEN="Andrzej12345"
-
-# Run the script
-python3 python_scripts/poland/drug_name_normalizer.py --keywords apap --max-pages 1
-```
-
-## API Authentication
-
-All scraper API endpoints require Bearer token authentication:
-
-```bash
-curl -H "Authorization: Bearer Andrzej12345" \
-  "http://localhost:3000/api/scraper/online_pharmacy_drugs?country_code=PL&page=1&per_page=3"
-```
-
-## Troubleshooting
-
-### Container won't start - "Address already in use"
-
-**Cause**: Another container is already using that port with host networking.
-
-**Solution**: 
-1. Check which ports are in use: `docker ps --filter 'name=cheaperfordrug-api'`
-2. Choose a different PORT environment variable
-3. Remove conflicting container: `docker rm -f cheaperfordrug-api_web_X`
-
-### Database connection errors
-
-**Symptoms**: HTTP 500 errors, "Connection refused" in logs
-
-**Check**:
-```bash
-# Verify DATABASE_URL uses localhost (not host.docker.internal)
-docker exec cheaperfordrug-api_web_1 env | grep DATABASE_URL
-
-# Should show: postgresql://...@localhost/...
-# NOT: postgresql://...@host.docker.internal/...
-```
-
-**Fix**: Update `/home/andrzej/DevOps/apps/cheaperfordrug-api/.env.production` and restart containers.
-
-### Python scripts getting 401 Unauthorized
-
-**Check**: Verify SCRAPER_AUTH_TOKEN in the .env.production file:
-```bash
-grep SCRAPER_AUTH_TOKEN /home/andrzej/DevOps/apps/cheaperfordrug-api/.env.production
-```
-
-**Fix**: Add or update `SCRAPER_AUTH_TOKEN=Andrzej12345` and restart API containers.
-
-## Container Management Commands
-
-```bash
-# View all API containers
-docker ps -a --filter 'name=cheaperfordrug-api'
-
-# View container logs
-docker logs -f cheaperfordrug-api_web_1
-
-# Restart a container
-docker restart cheaperfordrug-api_web_1
-
-# Stop and remove a container
-docker stop cheaperfordrug-api_web_1 && docker rm cheaperfordrug-api_web_1
-
-# Check container network configuration
-docker inspect cheaperfordrug-api_web_1 --format='NetworkMode={{.HostConfig.NetworkMode}}'
-```
-
-## Performance Optimizations Applied
-
-### Database Indexes (November 2025)
-
-Added indexes for DISTINCT ON queries used by drug normalizers:
-
-```sql
-CREATE INDEX CONCURRENTLY index_online_pharmacy_drugs_on_name 
-  ON online_pharmacy_drugs(name);
-  
-CREATE INDEX CONCURRENTLY index_online_pharmacy_drugs_on_normalized_name 
-  ON online_pharmacy_drugs(normalized_name);
-  
-CREATE INDEX CONCURRENTLY index_online_pharmacy_drugs_on_pharmacy_and_name 
-  ON online_pharmacy_drugs(online_pharmacy_id, name);
-  
-CREATE INDEX CONCURRENTLY index_online_pharmacies_on_country_id 
-  ON online_pharmacies(country_id);
-```
-
-**Result**: Query performance improved from 60+ seconds to ~0.5ms
-
-## Environment Files
-
-- **API Configuration**: `/home/andrzej/DevOps/apps/cheaperfordrug-api/.env.production`
-- **Scraper Configuration**: `/home/andrzej/apps/cheaperfordrug-scraper/.env`
-- **Helper Script**: `/home/andrzej/apps/cheaperfordrug-scraper/run-python-script.sh`
-
----
-
-**Last Updated**: November 13, 2025
-**Maintained by**: DevOps Team
+**Version:** 3.0.0
+**Last Updated:** 2025-11-14
+**Server:** hetzner-andrzej (65.109.22.232:2222)
+**Maintained By:** DevOps Team
+
+For production use, follow the best practices outlined in this README, maintain regular backups, monitor your applications continuously, and keep documentation up to date.
