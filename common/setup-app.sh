@@ -343,12 +343,19 @@ setup_ssl() {
         log_info "Additional domain detected: ${DOMAIN_INTERNAL}"
     fi
 
+    # Check if admin domain is defined
+    if [ -n "${DOMAIN_ADMIN:-}" ]; then
+        cert_domains="$cert_domains -d $DOMAIN_ADMIN"
+        all_domains="$all_domains, $DOMAIN_ADMIN"
+        log_info "Admin domain detected: ${DOMAIN_ADMIN}"
+    fi
+
     # Check DNS configuration for all domains
     log_info "Checking DNS configuration..."
     server_ipv4=$(curl -4 -s ifconfig.me 2>/dev/null || curl -s api.ipify.org)
 
     local dns_ok=true
-    for domain in $DOMAIN ${DOMAIN_INTERNAL:-}; do
+    for domain in $DOMAIN ${DOMAIN_INTERNAL:-} ${DOMAIN_ADMIN:-}; do
         domain_ip=$(dig +short "$domain" A | tail -1)
         echo "  ${domain}: ${domain_ip:-NOT CONFIGURED}"
 
@@ -366,7 +373,7 @@ setup_ssl() {
     if [ "$dns_ok" = false ]; then
         echo ""
         log_error "DNS not configured correctly. Please configure:"
-        for domain in $DOMAIN ${DOMAIN_INTERNAL:-}; do
+        for domain in $DOMAIN ${DOMAIN_INTERNAL:-} ${DOMAIN_ADMIN:-}; do
             echo "  ${domain}     A    ${server_ipv4}"
         done
         echo ""

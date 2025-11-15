@@ -10,11 +10,12 @@ export APP_TYPE="rails"
 export APP_NAME="cheaperfordrug-api"
 export APP_DISPLAY_NAME="CheaperForDrug API"
 
-# API uses two subdomains (both point to same backend containers)
+# API uses three subdomains (all point to same backend containers)
 export DOMAIN_PUBLIC="api-public.cheaperfordrug.com"
 export DOMAIN_INTERNAL="api-internal.cheaperfordrug.com"
+export DOMAIN_ADMIN="admin.cheaperfordrug.com"
 
-# Primary domain for SSL setup (will include both subdomains)
+# Primary domain for SSL setup (will include all subdomains)
 export DOMAIN="api-public.cheaperfordrug.com"
 
 # ============================================================================

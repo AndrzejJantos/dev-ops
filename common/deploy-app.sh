@@ -810,6 +810,13 @@ check_and_setup_ssl() {
         all_domains_array+=("$DOMAIN_INTERNAL")
     fi
 
+    # Check if admin domain is defined
+    if [ -n "${DOMAIN_ADMIN:-}" ]; then
+        cert_domains="$cert_domains -d $DOMAIN_ADMIN"
+        all_domains="$all_domains, $DOMAIN_ADMIN"
+        all_domains_array+=("$DOMAIN_ADMIN")
+    fi
+
     # Check if certificate already exists
     if sudo certbot certificates 2>/dev/null | grep -q "Certificate Name: ${DOMAIN}"; then
         log_success "SSL certificate exists for ${DOMAIN}"
