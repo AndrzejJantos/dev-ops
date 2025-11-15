@@ -23,7 +23,7 @@ services:
     # container_name removed to support scaling
     network_mode: host
     restart: unless-stopped
-    env_file: ~/apps/cheaperfordrug-api/.env.production
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=4201
       - CONTAINER_NAME=api-product-read
@@ -55,7 +55,7 @@ services:
     # container_name removed to support scaling
     network_mode: host
     restart: unless-stopped
-    env_file: ~/apps/cheaperfordrug-api/.env.production
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=4202
       - CONTAINER_NAME=api-product-write
@@ -107,7 +107,7 @@ services:
     # container_name removed to support scaling
     network_mode: host
     restart: unless-stopped
-    env_file: ~/apps/cheaperfordrug-api/.env.production
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=4203
       - CONTAINER_NAME=api-normalizer
@@ -138,7 +138,7 @@ services:
     # container_name removed to support scaling
     network_mode: host
     restart: unless-stopped
-    env_file: ~/apps/cheaperfordrug-api/.env.production
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=4204
       - CONTAINER_NAME=api-scraper
