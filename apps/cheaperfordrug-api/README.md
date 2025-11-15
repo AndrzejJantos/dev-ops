@@ -16,15 +16,15 @@
 The CheaperForDrug API infrastructure consists of two main deployment types:
 
 1. **Main API Deployment** (Internet-facing)
-   - 3 API containers serving public and internal APIs
+   - 1 API container serving public and internal APIs
    - Nginx reverse proxy with SSL/TLS
-   - Ports: 3020-3022
+   - Port: 3020
 
 2. **Scraper API Deployment** (Internal traffic only)
-   - **31 API containers** load-balanced by Nginx
+   - **1 API container** load-balanced by Nginx
    - Localhost-only access for scraper containers
    - Port: 4200 (nginx entry point)
-   - Backend ports: 3020-3050
+   - Backend port: 3020
 
 ---
 
@@ -35,8 +35,8 @@ The CheaperForDrug API infrastructure consists of two main deployment types:
 **Purpose:** Serve public API, internal API, and admin panel
 
 **Configuration:**
-- **Containers:** 3 web containers
-- **Ports:** 3020-3022 (host network mode)
+- **Containers:** 1 web container
+- **Port:** 3020 (host network mode)
 - **Domains:**
   - api-public.cheaperfordrug.com
   - api-internal.cheaperfordrug.com
@@ -50,8 +50,6 @@ The CheaperForDrug API infrastructure consists of two main deployment types:
 upstream cheaperfordrug_api_backend {
     least_conn;
     server 127.0.0.1:3020;
-    server 127.0.0.1:3021;
-    server 127.0.0.1:3022;
 }
 ```
 
@@ -59,12 +57,12 @@ upstream cheaperfordrug_api_backend {
 
 **Purpose:** Handle scraper requests with high concurrency
 
-**ACTUAL DEPLOYMENT (as of 2025-11-14):**
-- **Containers:** 31 web containers
-- **Backend Ports:** 3020-3050 (host network mode)
+**ACTUAL DEPLOYMENT (as of 2025-11-15):**
+- **Containers:** 1 web container
+- **Backend Port:** 3020 (host network mode)
 - **Entry Point:** http://localhost:4200 (nginx)
 - **Access:** Internal only - no internet exposure
-- **Load Balancing:** Nginx with 30 upstream servers using `least_conn`
+- **Load Balancing:** Nginx with 1 upstream server using `least_conn`
 - **Traffic Source:** Scraper containers on same host
 
 **Nginx Configuration (Port 4200):**
@@ -72,10 +70,6 @@ upstream cheaperfordrug_api_backend {
 upstream api_scraper_local_backend {
     least_conn;
     server 127.0.0.1:3020;
-    server 127.0.0.1:3021;
-    server 127.0.0.1:3022;
-    ...
-    server 127.0.0.1:3049;  # 30 backends total
 }
 
 server {
@@ -99,7 +93,7 @@ server {
 }
 ```
 
-**IMPORTANT:** The `ARCHITECTURE-DIAGRAM.txt` documents a design with 4 dedicated containers on ports 4201-4204, but the **actual production deployment** uses 31 containers load-balanced through nginx on port 4200.
+**IMPORTANT:** The `ARCHITECTURE-DIAGRAM.txt` documents a design with 4 dedicated containers on ports 4201-4204, but the **actual production deployment** uses 1 container load-balanced through nginx on port 4200.
 
 ---
 
@@ -153,14 +147,14 @@ const CONFIG = {
 │  Nginx Load Balancer             │
 │  - Port: 4200                    │
 │  - Algorithm: least_conn         │
-│  - Upstreams: 30 servers         │
+│  - Upstream: 1 server            │
 └────────────┬─────────────────────┘
              │
-             │ Proxy to 127.0.0.1:30XX
+             │ Proxy to 127.0.0.1:3020
              ▼
 ┌──────────────────────────────────┐
-│  31 API Containers               │
-│  - Ports: 3020-3050              │
+│  1 API Container                 │
+│  - Port: 3020                    │
 │  - Network: host mode            │
 │  - Rails/Puma application        │
 └────────────┬─────────────────────┘
@@ -200,14 +194,14 @@ const CONFIG = {
 
 | Port Range | Service | Container Count | Purpose |
 |------------|---------|-----------------|---------|
-| 3020-3022 | Main API | 3 | Internet traffic (public/internal/admin) |
-| 3020-3050 | Scraper API | 31 | Internal scraper traffic |
+| 3020 | Main API | 1 | Internet traffic (public/internal/admin) |
+| 3020 | Scraper API | 1 | Internal scraper traffic |
 | 4200 | Nginx | 1 | Scraper entry point (load balancer) |
 | 5432 | PostgreSQL | 1 | Database |
 | 6379 | Redis | 1 | Cache & background jobs |
 | 9200 | Elasticsearch | 1 | Search engine |
 
-**Note:** Ports 3020-3022 serve BOTH internet traffic (via SSL nginx) AND scraper traffic (via port 4200 nginx).
+**Note:** Port 3020 serves BOTH internet traffic (via SSL nginx) AND scraper traffic (via port 4200 nginx).
 
 ---
 
@@ -221,19 +215,13 @@ const CONFIG = {
 - Ideal for long-running scraper requests
 - Prevents overloading single containers
 
-### Why 30 Upstreams for 31 Containers?
-
-- Nginx configured with 30 upstream servers (3020-3049)
-- Container on port 3050 is spare/backup
-- Load distributed evenly across 30 containers
-
 ### Traffic Distribution
 
-**Historical Data (Nov 12, 2025):**
-- Total requests: 36,076
-- All from: 127.0.0.1 (nginx → API containers)
-- Load balanced across all 30 upstreams
-- Average: ~1,203 requests per container
+**Historical Data (Nov 15, 2025):**
+- Total requests: Varies by day
+- All from: 127.0.0.1 (nginx → API container)
+- Single container handles all scraper traffic
+- Average: All requests to single container
 
 **Top Endpoints:**
 - `/api/scraper/online_pharmacy_drugs` - 34,900 requests (96.7%)
@@ -297,9 +285,9 @@ node-fetch/1.0 (+https://github.com/bitinn/node-fetch)
 ./deploy.sh status
 ```
 
-### Scraper API (31 Containers)
+### Scraper API (1 Container)
 
-**Note:** Currently managed through main deployment. Dedicated management script planned.
+**Note:** Managed through main deployment script (`./deploy.sh`).
 
 ### Docker Status Monitoring
 
@@ -324,10 +312,8 @@ The docker-status script provides:
 # Test nginx load balancer
 curl http://localhost:4200/up
 
-# Check backend containers directly
-for port in {3020..3050}; do
-  curl -s http://localhost:$port/up > /dev/null && echo "Port $port: OK" || echo "Port $port: DOWN"
-done
+# Check backend container directly
+curl http://localhost:3020/up
 
 # View nginx logs
 tail -f /var/log/nginx/api-scraper-local-access.log
@@ -377,14 +363,14 @@ ss -tlnp | grep -E ':(30[2-5][0-9])'
 - Functional separation by operation type
 
 **Actual Deployment:**
-- 31 containers (ports 3020-3050)
+- 1 container (port 3020)
 - Nginx load balancer on port 4200
-- Load distributed across 30 upstreams
+- Single upstream server
 
 **Why the difference?**
-- The documented architecture represents an aspirational design
-- The actual deployment uses a different approach for better load distribution
-- Both work, but the load-balanced approach handles traffic spikes better
+- The documented architecture represents an aspirational design with dedicated containers
+- The actual deployment uses a simpler single-container approach
+- Can be scaled up using `./deploy.sh scale <N>` if traffic increases
 
 ### Security
 
@@ -401,12 +387,12 @@ ss -tlnp | grep -E ':(30[2-5][0-9])'
 
 ### Performance Considerations
 
-**Why 31 containers for scraper traffic?**
-- High concurrency: 20+ scrapers running simultaneously
-- Long-running requests: Product updates take 2-10 seconds
+**Scaling for scraper traffic:**
+- Can scale up using: `./deploy.sh scale <N>` if needed
+- Current single container handles moderate traffic
+- Long-running requests: Product updates take 1-2 seconds (optimized)
 - Database locking: Prevents race conditions
-- Traffic spikes: 36,000+ requests per day
-- Least_conn balancing prevents overload
+- Monitor performance and scale up if experiencing slowdowns
 
 **Container Resource Usage:**
 - CPU: Varies by request type (normalization is CPU-intensive)
