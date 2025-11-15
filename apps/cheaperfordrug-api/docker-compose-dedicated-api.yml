@@ -81,7 +81,7 @@ services:
     container_name: cheaperfordrug-api-product-write-sidekiq
     network_mode: host
     restart: unless-stopped
-    env_file: .env.production
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - CONTAINER_NAME=api-product-write-sidekiq
       - RAILS_ENV=production
@@ -164,7 +164,7 @@ services:
     container_name: cheaperfordrug-api-scraper-sidekiq
     network_mode: host
     restart: unless-stopped
-    env_file: .env.production
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - CONTAINER_NAME=api-scraper-sidekiq
       - RAILS_ENV=production
