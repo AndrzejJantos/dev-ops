@@ -418,6 +418,55 @@ show_container_status() {
     printf "  ${BOLD}System Memory:${NC}          %s\n" "$system_memory"
     printf "  ${BOLD}Disk Usage:${NC}             %s\n" "$disk_usage"
 
+    # Scraper API Infrastructure Information
+    echo ""
+    echo -e "${BOLD}${CYAN}SCRAPER API INFRASTRUCTURE${NC}"
+    echo -e "${DIM}────────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
+
+    # Count API containers
+    local api_containers=$(docker ps --filter "name=cheaperfordrug-api_web" --format "{{.ID}}" 2>/dev/null | wc -l | tr -d ' ')
+
+    # Count scraper containers
+    local scraper_containers=$(docker ps --filter "name=scraper" --filter "name=product-update-worker" --format "{{.ID}}" 2>/dev/null | wc -l | tr -d ' ')
+
+    # Check nginx load balancer on port 4200
+    local nginx_status="${RED}DOWN${NC}"
+    local nginx_port_info=""
+    if command -v netstat >/dev/null 2>&1; then
+        if netstat -tlnp 2>/dev/null | grep -q ":4200 "; then
+            nginx_status="${GREEN}UP${NC}"
+        fi
+    elif command -v ss >/dev/null 2>&1; then
+        if ss -tlnp 2>/dev/null | grep -q ":4200 "; then
+            nginx_status="${GREEN}UP${NC}"
+        fi
+    fi
+
+    # Count API containers listening on ports 3020-3050
+    local listening_ports=0
+    if command -v ss >/dev/null 2>&1; then
+        listening_ports=$(ss -tlnp 2>/dev/null | grep -oE ':(30[2-5][0-9])' | grep -oE '[0-9]+' | sort -n | uniq | wc -l | tr -d ' ')
+    fi
+
+    printf "  ${BOLD}API Containers:${NC}         %d running\n" "$api_containers"
+    printf "  ${BOLD}Scraper Containers:${NC}     %d running\n" "$scraper_containers"
+    printf "  ${BOLD}Nginx Load Balancer:${NC}    %b (port 4200)\n" "$nginx_status"
+
+    if [ "$listening_ports" -gt 0 ]; then
+        printf "  ${BOLD}Backend Ports Active:${NC}   %d (ports 3020-3050)\n" "$listening_ports"
+    fi
+
+    # Show scraper endpoint
+    printf "  ${BOLD}Scraper Endpoint:${NC}       http://localhost:4200\n"
+
+    # Check for recent scraper traffic (if log file exists)
+    if [ -f "/var/log/nginx/api-scraper-local-access.log" ]; then
+        local recent_requests=$(tail -1000 /var/log/nginx/api-scraper-local-access.log 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$recent_requests" -gt 0 ]; then
+            printf "  ${BOLD}Recent Requests:${NC}        %s (last 1000 log lines)\n" "$recent_requests"
+        fi
+    fi
+
     echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 }
