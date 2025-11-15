@@ -155,10 +155,21 @@ start_containers() {
         exit 1
     fi
 
-    # Start containers using docker-compose
+    # Display scaling configuration
+    log_info "Scaling configuration from config.sh:"
+    log_info "  - Product Read:      ${SCRAPER_PRODUCT_READ_SCALE} instances"
+    log_info "  - Product Write:     ${SCRAPER_PRODUCT_WRITE_SCALE} instance(s) + worker"
+    log_info "  - Normalizer:        ${SCRAPER_NORMALIZER_SCALE} instances"
+    log_info "  - General Scraper:   ${SCRAPER_GENERAL_SCALE} instances + worker"
+
+    # Start containers using docker-compose with scaling
     log_info "Starting containers with docker-compose..."
     cd "$SCRIPT_DIR"
-    docker-compose -f "$COMPOSE_FILE" up -d
+    docker-compose -f "$COMPOSE_FILE" up -d \
+        --scale api-product-read=${SCRAPER_PRODUCT_READ_SCALE} \
+        --scale api-product-write=${SCRAPER_PRODUCT_WRITE_SCALE} \
+        --scale api-normalizer=${SCRAPER_NORMALIZER_SCALE} \
+        --scale api-scraper=${SCRAPER_GENERAL_SCALE}
 
     if [ $? -ne 0 ]; then
         log_error "Failed to start containers"

@@ -28,15 +28,24 @@ export REPO_BRANCH="master"
 # CONTAINER ARCHITECTURE
 # ============================================================================
 # API needs workers for background processing
-export DEFAULT_SCALE=1              # 1 web container for API
-export WORKER_COUNT=1               # 1 worker container for background jobs
+export DEFAULT_SCALE=2              # 2 web containers for API (internet traffic)
+export WORKER_COUNT=2               # 2 worker containers for background jobs
 export SCHEDULER_ENABLED=false      # No scheduled tasks configured (no config/clock.rb)
 export WORKER_SHUTDOWN_TIMEOUT=90   # Seconds to wait for workers to finish jobs during deployment
 
 # Architecture note:
-# - 1 web container handles API requests (serves public, internal, and admin domains)
-# - 1 worker processes background jobs (emails, data processing, external API calls)
+# - 2 web containers handle API requests (serves public, internal, and admin domains)
+# - 2 workers process background jobs (emails, data processing, external API calls)
 # - No scheduler needed (no recurring tasks configured)
+
+# ============================================================================
+# DEDICATED SCRAPER API CONTAINERS
+# ============================================================================
+# Separate containers for scraper-specific workloads (docker-compose-dedicated-api.yml)
+export SCRAPER_PRODUCT_READ_SCALE=2    # High-frequency polling endpoint
+export SCRAPER_NORMALIZER_SCALE=2      # Drug normalization endpoint
+export SCRAPER_PRODUCT_WRITE_SCALE=1   # Product updates (has dedicated worker)
+export SCRAPER_GENERAL_SCALE=2         # General scraping operations (has dedicated worker)
 
 # ============================================================================
 # DOCKER CONFIGURATION

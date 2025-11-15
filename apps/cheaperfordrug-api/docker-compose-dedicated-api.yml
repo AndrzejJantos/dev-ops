@@ -20,7 +20,7 @@ services:
   # No background worker needed
   api-product-read:
     image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-product-read
+    # container_name removed to support scaling
     network_mode: host
     restart: unless-stopped
     env_file: .env.production
@@ -52,7 +52,7 @@ services:
   # Requires companion Sidekiq worker
   api-product-write:
     image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-product-write
+    # container_name removed to support scaling
     network_mode: host
     restart: unless-stopped
     env_file: .env.production
@@ -104,7 +104,7 @@ services:
   # No background worker needed
   api-normalizer:
     image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-normalizer
+    # container_name removed to support scaling
     network_mode: host
     restart: unless-stopped
     env_file: .env.production
@@ -135,7 +135,7 @@ services:
   # Requires companion Sidekiq worker
   api-scraper:
     image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-scraper
+    # container_name removed to support scaling
     network_mode: host
     restart: unless-stopped
     env_file: .env.production
