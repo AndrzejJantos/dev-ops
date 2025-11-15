@@ -162,10 +162,10 @@ start_containers() {
     log_info "  - Normalizer:        ${SCRAPER_NORMALIZER_SCALE} instances"
     log_info "  - General Scraper:   ${SCRAPER_GENERAL_SCALE} instances + worker"
 
-    # Start containers using docker-compose with scaling
-    log_info "Starting containers with docker-compose..."
+    # Start containers using docker compose with scaling
+    log_info "Starting containers with docker compose..."
     cd "$SCRIPT_DIR"
-    docker-compose -f "$COMPOSE_FILE" up -d \
+    docker compose -f "$COMPOSE_FILE" up -d \
         --scale api-product-read=${SCRAPER_PRODUCT_READ_SCALE} \
         --scale api-product-write=${SCRAPER_PRODUCT_WRITE_SCALE} \
         --scale api-normalizer=${SCRAPER_NORMALIZER_SCALE} \
@@ -234,7 +234,7 @@ stop_containers() {
     log_header "Stopping Dedicated API Containers"
 
     cd "$SCRIPT_DIR"
-    docker-compose -f "$COMPOSE_FILE" down
+    docker compose -f "$COMPOSE_FILE" down
 
     if [ $? -eq 0 ]; then
         log_success "Containers stopped successfully"
@@ -260,7 +260,7 @@ view_logs() {
     if [ -z "$container" ]; then
         log_info "Showing logs for all containers (Ctrl+C to exit)"
         cd "$SCRIPT_DIR"
-        docker-compose -f "$COMPOSE_FILE" logs -f
+        docker compose -f "$COMPOSE_FILE" logs -f
     else
         # Try to match container name
         local full_name=""
