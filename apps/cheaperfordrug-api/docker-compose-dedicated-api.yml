@@ -178,3 +178,27 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # ===========================================================================
+  # SCHEDULER (Clockwork)
+  # ===========================================================================
+  # Runs scheduled tasks (stale lock cleanup every 15 minutes)
+  # Shared across all API containers
+  scheduler:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-scheduler
+    network_mode: host
+    restart: unless-stopped
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
+    environment:
+      - CONTAINER_NAME=scheduler
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    command: /bin/bash -c "cd /app && bundle exec clockwork lib/clock.rb"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

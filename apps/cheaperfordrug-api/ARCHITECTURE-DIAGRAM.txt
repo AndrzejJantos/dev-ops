@@ -19,7 +19,8 @@ CheaperForDrug API - Complete Architecture
 │                  └──► Web Container 3 (localhost:3022)                     │
 │                                                                             │
 │   Background Processing:                                                    │
-│   └──► Sidekiq Worker 1 (general background jobs)                         │
+│   ├──► Sidekiq Worker 1 (general background jobs)                         │
+│   └──► Clockwork Scheduler (stale lock cleanup every 15 minutes)          │
 │                                                                             │
 │   Management: ./deploy.sh deploy|restart|stop|status                       │
 │                                                                             │
@@ -76,6 +77,16 @@ CheaperForDrug API - Complete Architecture
 │   └─────────────────────────────────────────────────────────────┘         │
 │                          │                                                  │
 │                          └──► Sidekiq Worker (scraper-sidekiq)             │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────┐         │
+│   │  SCHEDULER (Clockwork)                                       │         │
+│   │  ──────────────────────                                      │         │
+│   │  Purpose: Recurring scheduled tasks                          │         │
+│   │  Command: bundle exec clockwork lib/clock.rb                │         │
+│   │  Tasks:                                                      │         │
+│   │    - Release stale locks (every 15 minutes)                 │         │
+│   │  Use: Prevents lock deadlocks in scraping system            │         │
+│   └─────────────────────────────────────────────────────────────┘         │
 │                                                                             │
 │   Management: ./deploy-dedicated-api.sh start|stop|restart|status|health   │
 │                                                                             │

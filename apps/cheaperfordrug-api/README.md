@@ -111,6 +111,14 @@ server {
 - product-update-worker-poland-4
 - product-update-worker-poland-5
 
+**Scheduler:**
+- cheaperfordrug-api-scheduler (Clockwork)
+  - Runs scheduled tasks every 15 minutes
+  - Releases stale locks to prevent deadlocks
+  - Prevents CATCH-22 where locked drugs never appear in pending updates
+  - Command: `bundle exec clockwork lib/clock.rb`
+  - Job: `ReleaseStaleLocksJob` (releases locks held >10 minutes)
+
 ### How Scrapers Connect to API
 
 **Configuration (.env):**
@@ -197,6 +205,8 @@ const CONFIG = {
 | 3020 | Main API | 1 | Internet traffic (public/internal/admin) |
 | 3020 | Scraper API | 1 | Internal scraper traffic |
 | 4200 | Nginx | 1 | Scraper entry point (load balancer) |
+| N/A | Scheduler | 1 | Clockwork job scheduler |
+| N/A | Sidekiq Workers | 2 | Background job processors |
 | 5432 | PostgreSQL | 1 | Database |
 | 6379 | Redis | 1 | Cache & background jobs |
 | 9200 | Elasticsearch | 1 | Search engine |
@@ -323,6 +333,22 @@ ss -tnp | grep -E ':(30[2-5][0-9])'
 
 # View listening ports
 ss -tlnp | grep -E ':(30[2-5][0-9])'
+```
+
+### Monitoring Scheduler (Clockwork)
+
+```bash
+# Check if scheduler container is running
+docker ps | grep scheduler
+
+# View scheduler logs
+docker logs -f cheaperfordrug-api-scheduler
+
+# Verify scheduler is triggering jobs (should see log every 15 minutes)
+docker logs --tail 100 cheaperfordrug-api-scheduler | grep "release_stale_locks"
+
+# Check Sidekiq for queued ReleaseStaleLocksJob
+# Visit: http://localhost:3020/sidekiq or check Redis
 ```
 
 ---

@@ -93,6 +93,7 @@ show_status() {
         "cheaperfordrug-api-normalizer:4203"
         "cheaperfordrug-api-scraper:4204"
         "cheaperfordrug-api-scraper-sidekiq:worker"
+        "cheaperfordrug-api-scheduler:scheduler"
     )
 
     echo ""
@@ -217,6 +218,14 @@ start_containers() {
         log_success "Scraper worker is running"
     fi
 
+    # Check if scheduler is running
+    if ! docker ps --filter "name=cheaperfordrug-api-scheduler" --format "{{.Names}}" | grep -q "scheduler"; then
+        log_warning "Scheduler may not be running"
+        health_failed=true
+    else
+        log_success "Scheduler is running"
+    fi
+
     if [ "$health_failed" = true ]; then
         log_warning "Some containers failed health checks. Check logs with: $0 logs"
         echo ""
@@ -276,6 +285,8 @@ view_logs() {
             full_name="cheaperfordrug-api-scraper"
         elif [[ "$container" == "scraper-sidekiq" ]] || [[ "$container" == "scraper-worker" ]]; then
             full_name="cheaperfordrug-api-scraper-sidekiq"
+        elif [[ "$container" == "scheduler" ]]; then
+            full_name="cheaperfordrug-api-scheduler"
         else
             full_name="$container"
         fi
@@ -332,6 +343,25 @@ health_check() {
             all_healthy=false
         fi
     done
+
+    echo ""
+    echo "Scheduler Container:"
+
+    local scheduler_container="cheaperfordrug-api-scheduler"
+    printf "  %-20s: " "Scheduler"
+
+    if docker ps --filter "name=^${scheduler_container}$" --format "{{.Names}}" | grep -q "^${scheduler_container}$"; then
+        local status=$(docker inspect -f '{{.State.Status}}' "$scheduler_container" 2>/dev/null)
+        if [ "$status" = "running" ]; then
+            echo -e "\033[32mRunning\033[0m"
+        else
+            echo -e "\033[31m$status\033[0m"
+            all_healthy=false
+        fi
+    else
+        echo -e "\033[31mNot found\033[0m"
+        all_healthy=false
+    fi
 
     echo ""
     if [ "$all_healthy" = true ]; then
@@ -405,6 +435,7 @@ handle_command() {
             echo "  normalizer                  API Normalizer container"
             echo "  scraper                     API Scraper container"
             echo "  scraper-sidekiq             API Scraper worker"
+            echo "  scheduler                   Clockwork Scheduler (stale lock cleanup)"
             echo ""
             echo "Examples:"
             echo "  $0 start                    # Start all containers"
