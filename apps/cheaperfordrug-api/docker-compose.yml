@@ -1,0 +1,111 @@
+# Main API Containers for CheaperForDrug
+# These containers serve the admin panel, public API, and internal API
+#
+# Architecture:
+# - api-1, api-2: Main API containers handling all internet traffic
+# - sidekiq: Background job processing
+# - scheduler: Optional - may already exist in dedicated compose
+#
+# Network: host mode
+# Database: PostgreSQL on localhost:5432
+# Redis: localhost:6379/2
+
+services:
+  # ===========================================================================
+  # MAIN API CONTAINERS (Ports 3020, 3021)
+  # ===========================================================================
+  api-1:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-web-1
+    network_mode: host
+    restart: unless-stopped
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
+    environment:
+      - PORT=3020
+      - CONTAINER_NAME=api-1
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3020/up"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api-2:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-web-2
+    network_mode: host
+    restart: unless-stopped
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
+    environment:
+      - PORT=3021
+      - CONTAINER_NAME=api-2
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3021/up"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # SIDEKIQ WORKER
+  # ===========================================================================
+  sidekiq:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-sidekiq
+    network_mode: host
+    restart: unless-stopped
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
+    environment:
+      - CONTAINER_NAME=sidekiq
+      - RAILS_ENV=production
+      - RACK_ENV=production
+      - SIDEKIQ_CONCURRENCY=${SIDEKIQ_CONCURRENCY:-10}
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    command: /bin/bash -c "cd /app && bundle exec sidekiq"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # SCHEDULER (Clockwork)
+  # Note: Comment out if already running in docker-compose-dedicated-api.yml
+  # ===========================================================================
+  scheduler:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-main-scheduler
+    network_mode: host
+    restart: unless-stopped
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
+    environment:
+      - CONTAINER_NAME=main-scheduler
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    command: /bin/bash -c "cd /app && bundle exec clockwork lib/clock.rb"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,30 +1,351 @@
 # CheaperForDrug API Infrastructure
 
 ## Table of Contents
-1. [Architecture Overview](#architecture-overview)
-2. [API Container Deployment](#api-container-deployment)
-3. [Scraper System Architecture](#scraper-system-architecture)
-4. [Network Configuration](#network-configuration)
-5. [Load Balancing](#load-balancing)
-6. [Traffic Analysis](#traffic-analysis)
-7. [Management Commands](#management-commands)
+1. [Complete System Architecture](#complete-system-architecture)
+2. [All CheaperForDrug Services](#all-cheaperfordrug-services)
+3. [Port Allocation Reference](#port-allocation-reference)
+4. [Nginx Routing Configuration](#nginx-routing-configuration)
+5. [Public vs Internal Access](#public-vs-internal-access)
+6. [API Container Deployment](#api-container-deployment)
+7. [Scraper System Architecture](#scraper-system-architecture)
+8. [Network Configuration](#network-configuration)
+9. [Load Balancing](#load-balancing)
+10. [Traffic Analysis](#traffic-analysis)
+11. [Management Commands](#management-commands)
 
 ---
 
-## Architecture Overview
+## Complete System Architecture
 
-The CheaperForDrug API infrastructure consists of two main deployment types:
+```
+                    CHEAPERFORDRUG COMPLETE INFRASTRUCTURE
+============================================================================
 
-1. **Main API Deployment** (Internet-facing)
-   - 1 API container serving public and internal APIs
-   - Nginx reverse proxy with SSL/TLS
-   - Port: 3020
+                              INTERNET
+                                 |
+                                 v
+                    +------------------------+
+                    |    NGINX (Port 443)    |
+                    |    SSL Termination     |
+                    +------------------------+
+                    /           |            \
+                   v            v             v
+        +----------------+ +----------+ +------------------+
+        | api-public     | | admin    | | api-internal     |
+        | .cheaperfordrug| | .cheaper | | .cheaperfordrug  |
+        | .com           | | fordrug  | | .com             |
+        |                | | .com     | |                  |
+        | (No Auth)      | | (Basic   | | (JWT Auth)       |
+        |                | |  Auth)   | |                  |
+        +----------------+ +----------+ +------------------+
+                    \          |           /
+                     v         v          v
+              +-----------------------------+
+              |  MAIN API CONTAINERS        |
+              |  (docker-compose.yml)       |
+              |                             |
+              |  api-1 (3020)  api-2 (3021) |
+              |       sidekiq  scheduler    |
+              +-----------------------------+
+                             |
+         +-------------------+-------------------+
+         v                   v                   v
+    +----------+      +------------+      +-------------+
+    | PostgreSQL|     |   Redis    |      | Elasticsearch|
+    | (5432)   |      | (6379/2)   |      | (9200)      |
+    +----------+      +------------+      +-------------+
+                             ^
+         +-------------------+-------------------+
+         |                   |                   |
+         v                   v                   v
+    +----------------------------------------------------+
+    |     DEDICATED API CONTAINERS                        |
+    |     (docker-compose-dedicated-api.yml)              |
+    |                                                     |
+    |  api-product-read-1 (4201)  api-product-read-2 (4211)|
+    |  api-product-write-1 (4202) + sidekiq                |
+    |  api-normalizer-1 (4203)    api-normalizer-2 (4213) |
+    |  api-scraper-1 (4204)       api-scraper-2 (4214)    |
+    |                        + sidekiq                    |
+    +----------------------------------------------------+
+                             ^
+                             |
+                    +----------------+
+                    | Nginx (4200)   |
+                    | Scraper Entry  |
+                    +----------------+
+                             ^
+                             |
+    +----------------------------------------------------+
+    |     SCRAPER CONTAINERS                              |
+    |     (cheaperfordrug-scraper)                        |
+    |                                                     |
+    |  scraper-vpn-poland      product-update-worker-1    |
+    |  scraper-vpn-germany     product-update-worker-2    |
+    |  scraper-vpn-czech       product-update-worker-3    |
+    |                          product-update-worker-4    |
+    |                          product-update-worker-5    |
+    +----------------------------------------------------+
 
-2. **Scraper API Deployment** (Internal traffic only)
-   - **1 API container** load-balanced by Nginx
-   - Localhost-only access for scraper containers
-   - Port: 4200 (nginx entry point)
-   - Backend port: 3020
+
+                     OTHER CHEAPERFORDRUG SERVICES
+    +----------------------------------------------------+
+    |  cheaperfordrug-web (Next.js)     Ports: 3055-3057 |
+    |  cheaperfordrug-landing           Port: 3040       |
+    +----------------------------------------------------+
+```
+
+---
+
+## All CheaperForDrug Services
+
+### 1. cheaperfordrug-api (Rails API)
+**Purpose:** Core backend API serving admin panel, public API, internal API, and scraper endpoints
+
+| Component | Port(s) | Description |
+|-----------|---------|-------------|
+| Main API | 3020-3021 | Internet-facing containers |
+| Dedicated API | 4201-4214 | Scraper-specific endpoints |
+| Sidekiq Workers | N/A | Background job processing |
+| Scheduler | N/A | Clockwork recurring tasks |
+
+### 2. cheaperfordrug-web (Next.js Frontend)
+**Purpose:** Main user-facing web application
+
+| Component | Port(s) | Description |
+|-----------|---------|-------------|
+| Web Containers | 3055-3057 | Next.js SSR containers |
+| Domain | cheaperfordrug.com | Main website |
+
+### 3. cheaperfordrug-landing (Landing Page)
+**Purpose:** Marketing landing page
+
+| Component | Port(s) | Description |
+|-----------|---------|-------------|
+| Landing | 3040 | Static/marketing pages |
+
+### 4. cheaperfordrug-scraper (Node.js Scrapers)
+**Purpose:** Pharmacy data scraping and updates
+
+| Component | Port(s) | Description |
+|-----------|---------|-------------|
+| Scraper VPN | N/A | VPN-based scrapers |
+| Product Workers | N/A | Product update workers |
+| Entry Point | 4200 | Nginx load balancer |
+
+### 5. Infrastructure Services
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| PostgreSQL | 5432 | Primary database |
+| Redis | 6379/2 | Cache, sessions, job queue |
+| Elasticsearch | 9200 | Drug/pharmacy search |
+
+---
+
+## Port Allocation Reference
+
+```
+PORT ALLOCATION MAP
+============================================================================
+
+MAIN API (Internet Traffic)
+------------------------------------
+3020    api-1               Main API container 1
+3021    api-2               Main API container 2
+
+DEDICATED SCRAPER API (Internal Only)
+------------------------------------
+4200    nginx               Scraper load balancer entry point
+4201    api-product-read-1  High-frequency read operations
+4202    api-product-write-1 Product updates with sidekiq
+4203    api-normalizer-1    Drug name normalization
+4204    api-scraper-1       Full scraping operations
+4211    api-product-read-2  Replica for read operations
+4213    api-normalizer-2    Replica for normalization
+4214    api-scraper-2       Replica for scraping
+
+WEB FRONTEND
+------------------------------------
+3055    web-1               Next.js container 1
+3056    web-2               Next.js container 2
+3057    web-3               Next.js container 3
+
+OTHER SERVICES
+------------------------------------
+3040    landing             Landing page
+5432    postgresql          Database
+6379    redis               Cache and queue (DB 2 for API)
+9200    elasticsearch       Search engine
+```
+
+---
+
+## Nginx Routing Configuration
+
+### Domain to Backend Mapping
+
+```
+NGINX ROUTING
+============================================================================
+
+HTTPS (Port 443) - SSL Termination
+------------------------------------
+
+api-public.cheaperfordrug.com
+    |
+    +---> upstream cheaperfordrug_api_backend
+          - 127.0.0.1:3020
+          - 127.0.0.1:3021
+          - least_conn algorithm
+          - No authentication required
+
+api-internal.cheaperfordrug.com
+    |
+    +---> upstream cheaperfordrug_api_backend (same pool)
+          - 127.0.0.1:3020
+          - 127.0.0.1:3021
+          - JWT authentication required
+
+admin.cheaperfordrug.com
+    |
+    +---> upstream cheaperfordrug_api_backend (same pool)
+          - 127.0.0.1:3020
+          - 127.0.0.1:3021
+          - HTTP Basic Auth required
+
+HTTP (Port 4200) - Internal Only
+------------------------------------
+
+localhost:4200 / api-scraper.localtest.me:4200
+    |
+    +---> upstream api_scraper_local_backend
+          - 127.0.0.1:3020
+          - Bearer token authentication
+          - No SSL (internal traffic)
+```
+
+### SSL Certificate Configuration
+
+All three public domains use a shared multi-domain certificate:
+- Primary: `/etc/letsencrypt/live/api-public.cheaperfordrug.com/fullchain.pem`
+- Includes: api-public, api-internal, admin subdomains
+
+---
+
+## Public vs Internal Access
+
+### Internet-Exposed Services
+
+| Domain | Auth Method | Purpose |
+|--------|-------------|---------|
+| api-public.cheaperfordrug.com | None (CORS protected) | Public API endpoints |
+| api-internal.cheaperfordrug.com | JWT Token | Internal service API |
+| admin.cheaperfordrug.com | HTTP Basic Auth | Admin panel |
+| cheaperfordrug.com | None | Main website |
+
+### Internal-Only Services
+
+| Service | Port | Access | Auth |
+|---------|------|--------|------|
+| Scraper API | 4200 | localhost only | Bearer token |
+| PostgreSQL | 5432 | localhost only | Database credentials |
+| Redis | 6379 | localhost only | None |
+| Elasticsearch | 9200 | localhost only | None |
+
+### Authentication Requirements
+
+```
+AUTHENTICATION MATRIX
+============================================================================
+
+Public Endpoints (api-public.cheaperfordrug.com):
+- /api/v1/drugs/**         - No auth, public drug data
+- /api/v1/pharmacies/**    - No auth, public pharmacy data
+- /api/v1/search/**        - No auth, search functionality
+- /up                      - No auth, health check
+
+Internal Endpoints (api-internal.cheaperfordrug.com):
+- /api/internal/**         - JWT required (Authorization: Bearer <token>)
+
+Admin Panel (admin.cheaperfordrug.com):
+- /admin/**                - HTTP Basic Auth (Rails controller level)
+
+Scraper Endpoints (localhost:4200):
+- /api/scraper/**          - Bearer token (SCRAPER_AUTH_TOKEN)
+```
+
+---
+
+## API Container Deployment
+
+### Main API (Internet Traffic)
+
+**Purpose:** Serve public API, internal API, and admin panel
+
+**Configuration (docker-compose.yml):**
+- **Containers:** 2 web containers
+- **Ports:** 3020, 3021 (host network mode)
+- **Workers:** 1 Sidekiq worker
+- **Scheduler:** 1 Clockwork scheduler
+- **Domains:**
+  - api-public.cheaperfordrug.com
+  - api-internal.cheaperfordrug.com
+  - admin.cheaperfordrug.com
+- **SSL:** Handled by Nginx (port 443)
+- **Load Balancing:** Nginx upstream with `least_conn` algorithm
+- **Management:** `./deploy.sh deploy|restart|stop|status`
+
+**Nginx Configuration:**
+```nginx
+upstream cheaperfordrug_api_backend {
+    least_conn;
+    server 127.0.0.1:3020 max_fails=3 fail_timeout=30s;
+    server 127.0.0.1:3021 max_fails=3 fail_timeout=30s;
+}
+```
+
+### Scraper API (Internal Traffic)
+
+**Purpose:** Handle scraper requests with high concurrency
+
+**ACTUAL DEPLOYMENT (as of 2025-11-15):**
+- **Containers:** 1 web container
+- **Backend Port:** 3020 (host network mode)
+- **Entry Point:** http://localhost:4200 (nginx)
+- **Access:** Internal only - no internet exposure
+- **Load Balancing:** Nginx with 1 upstream server using `least_conn`
+- **Traffic Source:** Scraper containers on same host
+
+**Nginx Configuration (Port 4200):**
+```nginx
+upstream api_scraper_local_backend {
+    least_conn;
+    server 127.0.0.1:3020;
+}
+
+server {
+    listen 4200;
+    listen [::]:4200;
+    server_name localhost api-scraper.localtest.me;
+
+    location / {
+        proxy_pass http://api_scraper_local_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+
+        # Timeouts for scraper operations
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
+```
+
+**IMPORTANT:** The `ARCHITECTURE-DIAGRAM.txt` documents a design with 4 dedicated containers on ports 4201-4204, but the **actual production deployment** uses 1 container load-balanced through nginx on port 4200.
 
 ---
 
