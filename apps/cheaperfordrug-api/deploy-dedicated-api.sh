@@ -47,7 +47,7 @@ export LOG_DIR="${LOG_DIR:-$HOME/apps/$APP_NAME/logs}"
 force_cleanup() {
     log_info "Force cleaning up stuck API containers..."
 
-    # List of dedicated API container names
+    # List of dedicated API container names (explicit services with different ports)
     local containers=(
         "cheaperfordrug-api-api-product-read-1"
         "cheaperfordrug-api-api-product-read-2"
@@ -196,21 +196,17 @@ start_containers() {
         exit 1
     fi
 
-    # Display scaling configuration
-    log_info "Scaling configuration from config.sh:"
-    log_info "  - Product Read:      ${SCRAPER_PRODUCT_READ_SCALE} instances"
-    log_info "  - Product Write:     ${SCRAPER_PRODUCT_WRITE_SCALE} instance(s) + worker"
-    log_info "  - Normalizer:        ${SCRAPER_NORMALIZER_SCALE} instances"
-    log_info "  - General Scraper:   ${SCRAPER_GENERAL_SCALE} instances + worker"
+    # Display port configuration
+    log_info "Port configuration:"
+    log_info "  - Product Read:    4201, 4211 (2 instances)"
+    log_info "  - Product Write:   4202 (1 instance + worker)"
+    log_info "  - Normalizer:      4203, 4213 (2 instances)"
+    log_info "  - Scraper:         4204, 4214 (2 instances + worker)"
 
-    # Start containers using docker compose with scaling
+    # Start containers using docker compose
     log_info "Starting containers with docker compose..."
     cd "$SCRIPT_DIR"
-    docker compose -f "$COMPOSE_FILE" up -d \
-        --scale api-product-read=${SCRAPER_PRODUCT_READ_SCALE} \
-        --scale api-product-write=${SCRAPER_PRODUCT_WRITE_SCALE} \
-        --scale api-normalizer=${SCRAPER_NORMALIZER_SCALE} \
-        --scale api-scraper=${SCRAPER_GENERAL_SCALE}
+    docker compose -f "$COMPOSE_FILE" up -d
 
     if [ $? -ne 0 ]; then
         log_error "Failed to start containers"

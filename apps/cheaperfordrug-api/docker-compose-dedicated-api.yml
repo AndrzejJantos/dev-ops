@@ -13,20 +13,17 @@
 
 services:
   # ===========================================================================
-  # API-PRODUCT-READ (Port 4201)
+  # API-PRODUCT-READ (Ports 4201, 4211)
   # ===========================================================================
-  # Handles high-frequency read operations for scraper workers
-  # Endpoints: GET /api/scraper/online_pharmacy_drugs/pending_updates
-  # No background worker needed
-  api-product-read:
+  api-product-read-1:
     image: cheaperfordrug-api:latest
-    # container_name removed to support scaling
+    container_name: cheaperfordrug-api-api-product-read-1
     network_mode: host
     restart: unless-stopped
     env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=4201
-      - CONTAINER_NAME=api-product-read
+      - CONTAINER_NAME=api-product-read-1
       - RAILS_ENV=production
       - RACK_ENV=production
     volumes:
@@ -43,22 +40,43 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  api-product-read-2:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-api-product-read-2
+    network_mode: host
+    restart: unless-stopped
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
+    environment:
+      - PORT=4211
+      - CONTAINER_NAME=api-product-read-2
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4211/up"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ===========================================================================
   # API-PRODUCT-WRITE (Port 4202)
   # ===========================================================================
-  # Handles product update operations with background processing
-  # Endpoints: POST /api/scraper/online_pharmacy_drugs/batch_update
-  #            POST /api/scraper/online_pharmacy_drugs/release_lock
-  # Requires companion Sidekiq worker
-  api-product-write:
+  api-product-write-1:
     image: cheaperfordrug-api:latest
-    # container_name removed to support scaling
+    container_name: cheaperfordrug-api-api-product-write-1
     network_mode: host
     restart: unless-stopped
     env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=4202
-      - CONTAINER_NAME=api-product-write
+      - CONTAINER_NAME=api-product-write-1
       - RAILS_ENV=production
       - RACK_ENV=production
     volumes:
@@ -97,20 +115,17 @@ services:
         max-file: "3"
 
   # ===========================================================================
-  # API-NORMALIZER (Port 4203)
+  # API-NORMALIZER (Ports 4203, 4213)
   # ===========================================================================
-  # Handles drug name normalization operations
-  # Endpoints: POST /api/scraper/online_pharmacy_drugs/update_normalized_attributes
-  # No background worker needed
-  api-normalizer:
+  api-normalizer-1:
     image: cheaperfordrug-api:latest
-    # container_name removed to support scaling
+    container_name: cheaperfordrug-api-api-normalizer-1
     network_mode: host
     restart: unless-stopped
     env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=4203
-      - CONTAINER_NAME=api-normalizer
+      - CONTAINER_NAME=api-normalizer-1
       - RAILS_ENV=production
       - RACK_ENV=production
     volumes:
@@ -127,27 +142,74 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ===========================================================================
-  # API-SCRAPER (Port 4204)
-  # ===========================================================================
-  # Handles full scraping operations with background processing
-  # Endpoints: Full scraping API (create drugs, pharmacies, category scraping, etc.)
-  # Requires companion Sidekiq worker
-  api-scraper:
+  api-normalizer-2:
     image: cheaperfordrug-api:latest
-    # container_name removed to support scaling
+    container_name: cheaperfordrug-api-api-normalizer-2
+    network_mode: host
+    restart: unless-stopped
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
+    environment:
+      - PORT=4213
+      - CONTAINER_NAME=api-normalizer-2
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4213/up"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # API-SCRAPER (Ports 4204, 4214)
+  # ===========================================================================
+  api-scraper-1:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-api-scraper-1
     network_mode: host
     restart: unless-stopped
     env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=4204
-      - CONTAINER_NAME=api-scraper
+      - CONTAINER_NAME=api-scraper-1
       - RAILS_ENV=production
       - RACK_ENV=production
     volumes:
       - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4204/up"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api-scraper-2:
+    image: cheaperfordrug-api:latest
+    container_name: cheaperfordrug-api-api-scraper-2
+    network_mode: host
+    restart: unless-stopped
+    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
+    environment:
+      - PORT=4214
+      - CONTAINER_NAME=api-scraper-2
+      - RAILS_ENV=production
+      - RACK_ENV=production
+    volumes:
+      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4214/up"]
       interval: 30s
       timeout: 10s
       start_period: 40s
@@ -182,8 +244,6 @@ services:
   # ===========================================================================
   # SCHEDULER (Clockwork)
   # ===========================================================================
-  # Runs scheduled tasks (stale lock cleanup every 15 minutes)
-  # Shared across all API containers
   scheduler:
     image: cheaperfordrug-api:latest
     container_name: cheaperfordrug-api-scheduler
