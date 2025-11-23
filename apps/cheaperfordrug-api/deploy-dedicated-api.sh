@@ -43,6 +43,46 @@ export LOG_DIR="${LOG_DIR:-$HOME/apps/$APP_NAME/logs}"
 # HELPER FUNCTIONS
 # ==============================================================================
 
+# Function: Force cleanup stuck containers
+force_cleanup() {
+    log_info "Force cleaning up stuck API containers..."
+
+    # List of dedicated API container names
+    local containers=(
+        "cheaperfordrug-api-api-product-read-1"
+        "cheaperfordrug-api-api-product-read-2"
+        "cheaperfordrug-api-api-product-write-1"
+        "cheaperfordrug-api-product-write-sidekiq"
+        "cheaperfordrug-api-api-normalizer-1"
+        "cheaperfordrug-api-api-normalizer-2"
+        "cheaperfordrug-api-api-scraper-1"
+        "cheaperfordrug-api-api-scraper-2"
+        "cheaperfordrug-api-scraper-sidekiq"
+        "cheaperfordrug-api-scheduler"
+    )
+
+    # Stop and remove containers by name
+    for name in "${containers[@]}"; do
+        docker rm -f "$name" 2>/dev/null || true
+        # Remove any containers containing this name (handles hash-prefixed orphans)
+        docker ps -aq --filter "name=$name" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    done
+
+    # Remove stopped containers with old API images (dangling image references)
+    docker ps -aq --filter "ancestor=cheaperfordrug-api:latest" --filter "status=exited" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -aq --filter "status=restarting" 2>/dev/null | while read id; do
+        local img=$(docker inspect -f '{{.Config.Image}}' "$id" 2>/dev/null || echo "")
+        if [[ "$img" == *"cheaperfordrug-api"* ]] || [[ "$img" =~ ^[a-f0-9]{12}$ ]]; then
+            docker rm -f "$id" 2>/dev/null || true
+        fi
+    done
+
+    # Clean up any containers in "removing" or "dead" state
+    docker container prune -f 2>/dev/null || true
+
+    log_success "Cleanup complete"
+}
+
 # Function: Check if main API image exists
 check_image_exists() {
     local image_name="${DOCKER_IMAGE_NAME}:latest"
@@ -243,13 +283,13 @@ stop_containers() {
     log_header "Stopping Dedicated API Containers"
 
     cd "$SCRIPT_DIR"
-    docker compose -f "$COMPOSE_FILE" down
+    docker compose -f "$COMPOSE_FILE" down --remove-orphans
 
     if [ $? -eq 0 ]; then
         log_success "Containers stopped successfully"
     else
-        log_error "Failed to stop containers"
-        exit 1
+        log_warning "docker compose down failed, attempting force cleanup"
+        force_cleanup
     fi
 }
 
@@ -257,7 +297,9 @@ stop_containers() {
 restart_containers() {
     log_header "Restarting Dedicated API Containers"
 
-    stop_containers
+    cd "$SCRIPT_DIR"
+    docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null || true
+    force_cleanup
     sleep 2
     start_containers
 }
@@ -401,6 +443,9 @@ handle_command() {
         restart)
             restart_containers
             ;;
+        cleanup)
+            force_cleanup
+            ;;
         status)
             show_status
             ;;
@@ -422,6 +467,7 @@ handle_command() {
             echo "  start               Start all dedicated API containers"
             echo "  stop                Stop all dedicated API containers"
             echo "  restart             Restart all dedicated API containers"
+            echo "  cleanup             Force remove stuck/orphaned containers"
             echo "  status              Show status of all containers"
             echo "  logs [container]    Show logs (all or specific container)"
             echo "  health              Check health of all containers"
