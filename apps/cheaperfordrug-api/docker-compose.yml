@@ -1,10 +1,9 @@
 # Main API Containers for CheaperForDrug
-# These containers serve the admin panel, public API, and internal API
+# Simplified Architecture - 4 containers total
 #
-# Architecture:
-# - api-1, api-2: Main API containers handling all internet traffic
-# - sidekiq: Background job processing
-# - scheduler: Optional - may already exist in dedicated compose
+# - web-1, web-2: Public API + Admin (ports 3020, 3021)
+# - sidekiq-1: All background jobs
+# - clockwork: Scheduler
 #
 # Network: host mode
 # Database: PostgreSQL on localhost:5432
@@ -12,17 +11,18 @@
 
 services:
   # ===========================================================================
-  # MAIN API CONTAINERS (Ports 3020, 3021)
+  # WEB CONTAINERS (Ports 3020, 3021)
   # ===========================================================================
-  api-1:
+  web-1:
     image: cheaperfordrug-api:latest
     container_name: cheaperfordrug-api-web-1
     network_mode: host
+    init: true
     restart: unless-stopped
     env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=3020
-      - CONTAINER_NAME=api-1
+      - CONTAINER_NAME=web-1
       - RAILS_ENV=production
       - RACK_ENV=production
     volumes:
@@ -39,15 +39,16 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  api-2:
+  web-2:
     image: cheaperfordrug-api:latest
     container_name: cheaperfordrug-api-web-2
     network_mode: host
+    init: true
     restart: unless-stopped
     env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=3021
-      - CONTAINER_NAME=api-2
+      - CONTAINER_NAME=web-2
       - RAILS_ENV=production
       - RACK_ENV=production
     volumes:
@@ -67,14 +68,15 @@ services:
   # ===========================================================================
   # SIDEKIQ WORKER
   # ===========================================================================
-  sidekiq:
+  sidekiq-1:
     image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-sidekiq
+    container_name: cheaperfordrug-api-sidekiq-1
     network_mode: host
+    init: true
     restart: unless-stopped
     env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
-      - CONTAINER_NAME=sidekiq
+      - CONTAINER_NAME=sidekiq-1
       - RAILS_ENV=production
       - RACK_ENV=production
       - SIDEKIQ_CONCURRENCY=${SIDEKIQ_CONCURRENCY:-10}
@@ -88,17 +90,17 @@ services:
         max-file: "3"
 
   # ===========================================================================
-  # SCHEDULER (Clockwork)
-  # Note: Comment out if already running in docker-compose-dedicated-api.yml
+  # CLOCKWORK (Scheduler)
   # ===========================================================================
-  scheduler:
+  clockwork:
     image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-main-scheduler
+    container_name: cheaperfordrug-api-clockwork
     network_mode: host
+    init: true
     restart: unless-stopped
     env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
-      - CONTAINER_NAME=main-scheduler
+      - CONTAINER_NAME=clockwork
       - RAILS_ENV=production
       - RACK_ENV=production
     volumes:

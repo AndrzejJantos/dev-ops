@@ -1,29 +1,26 @@
-# Dedicated API Containers for CheaperForDrug Scraper System
-# These containers provide specialized API endpoints for different scraper functions
+# Dedicated Scraper API Containers for CheaperForDrug
+# Simplified Architecture - 2 containers
 #
-# Architecture:
-# - api-product-read: Read-only product queries (polling endpoint for workers)
-# - api-product-write: Product updates with background processing
-# - api-normalizer: Drug name normalization
-# - api-scraper: Full scraping operations with background processing
+# - scraper-1, scraper-2: All scraper API endpoints (ports 4201, 4202)
 #
-# Network: host mode (same as main API deployment)
+# Network: host mode
 # Database: PostgreSQL on localhost:5432
 # Redis: localhost:6379/2
 
 services:
   # ===========================================================================
-  # API-PRODUCT-READ (Ports 4201, 4211)
+  # SCRAPER CONTAINERS (Ports 4201, 4202)
   # ===========================================================================
-  api-product-read-1:
+  scraper-1:
     image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-api-product-read-1
+    container_name: cheaperfordrug-api-scraper-1
     network_mode: host
+    init: true
     restart: unless-stopped
     env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=4201
-      - CONTAINER_NAME=api-product-read-1
+      - CONTAINER_NAME=scraper-1
       - RAILS_ENV=production
       - RACK_ENV=production
     volumes:
@@ -40,43 +37,16 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  api-product-read-2:
+  scraper-2:
     image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-api-product-read-2
+    container_name: cheaperfordrug-api-scraper-2
     network_mode: host
-    restart: unless-stopped
-    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
-    environment:
-      - PORT=4211
-      - CONTAINER_NAME=api-product-read-2
-      - RAILS_ENV=production
-      - RACK_ENV=production
-    volumes:
-      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4211/up"]
-      interval: 30s
-      timeout: 10s
-      start_period: 40s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # ===========================================================================
-  # API-PRODUCT-WRITE (Port 4202)
-  # ===========================================================================
-  api-product-write-1:
-    image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-api-product-write-1
-    network_mode: host
+    init: true
     restart: unless-stopped
     env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
     environment:
       - PORT=4202
-      - CONTAINER_NAME=api-product-write-1
+      - CONTAINER_NAME=scraper-2
       - RAILS_ENV=production
       - RACK_ENV=production
     volumes:
@@ -87,176 +57,6 @@ services:
       timeout: 10s
       start_period: 40s
       retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # Background worker for api-product-write
-  api-product-write-sidekiq:
-    image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-product-write-sidekiq
-    network_mode: host
-    restart: unless-stopped
-    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
-    environment:
-      - CONTAINER_NAME=api-product-write-sidekiq
-      - RAILS_ENV=production
-      - RACK_ENV=production
-      - SIDEKIQ_CONCURRENCY=${SIDEKIQ_CONCURRENCY:-10}
-    volumes:
-      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
-    command: /bin/bash -c "cd /app && bundle exec sidekiq"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # ===========================================================================
-  # API-NORMALIZER (Ports 4203, 4213)
-  # ===========================================================================
-  api-normalizer-1:
-    image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-api-normalizer-1
-    network_mode: host
-    restart: unless-stopped
-    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
-    environment:
-      - PORT=4203
-      - CONTAINER_NAME=api-normalizer-1
-      - RAILS_ENV=production
-      - RACK_ENV=production
-    volumes:
-      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4203/up"]
-      interval: 30s
-      timeout: 10s
-      start_period: 40s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  api-normalizer-2:
-    image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-api-normalizer-2
-    network_mode: host
-    restart: unless-stopped
-    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
-    environment:
-      - PORT=4213
-      - CONTAINER_NAME=api-normalizer-2
-      - RAILS_ENV=production
-      - RACK_ENV=production
-    volumes:
-      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4213/up"]
-      interval: 30s
-      timeout: 10s
-      start_period: 40s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # ===========================================================================
-  # API-SCRAPER (Ports 4204, 4214)
-  # ===========================================================================
-  api-scraper-1:
-    image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-api-scraper-1
-    network_mode: host
-    restart: unless-stopped
-    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
-    environment:
-      - PORT=4204
-      - CONTAINER_NAME=api-scraper-1
-      - RAILS_ENV=production
-      - RACK_ENV=production
-    volumes:
-      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4204/up"]
-      interval: 30s
-      timeout: 10s
-      start_period: 40s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  api-scraper-2:
-    image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-api-scraper-2
-    network_mode: host
-    restart: unless-stopped
-    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
-    environment:
-      - PORT=4214
-      - CONTAINER_NAME=api-scraper-2
-      - RAILS_ENV=production
-      - RACK_ENV=production
-    volumes:
-      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4214/up"]
-      interval: 30s
-      timeout: 10s
-      start_period: 40s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # Background worker for api-scraper
-  api-scraper-sidekiq:
-    image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-scraper-sidekiq
-    network_mode: host
-    restart: unless-stopped
-    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
-    environment:
-      - CONTAINER_NAME=api-scraper-sidekiq
-      - RAILS_ENV=production
-      - RACK_ENV=production
-      - SIDEKIQ_CONCURRENCY=${SIDEKIQ_CONCURRENCY:-10}
-    volumes:
-      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
-    command: /bin/bash -c "cd /app && bundle exec sidekiq"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # ===========================================================================
-  # SCHEDULER (Clockwork)
-  # ===========================================================================
-  scheduler:
-    image: cheaperfordrug-api:latest
-    container_name: cheaperfordrug-api-scheduler
-    network_mode: host
-    restart: unless-stopped
-    env_file: /home/andrzej/apps/cheaperfordrug-api/.env.production
-    environment:
-      - CONTAINER_NAME=scheduler
-      - RAILS_ENV=production
-      - RACK_ENV=production
-    volumes:
-      - ${LOG_DIR:-/home/andrzej/apps/cheaperfordrug-api/logs}:/app/log
-    command: /bin/bash -c "cd /app && bundle exec clockwork lib/clock.rb"
     logging:
       driver: "json-file"
       options:
