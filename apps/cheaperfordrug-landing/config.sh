@@ -54,7 +54,7 @@ export SCHEDULER_ENABLED=false # Enable Clockwork scheduler container (false = d
 # SendGrid configuration for application email delivery (not deployment notifications)
 # Note: Application uses SendGrid API (not SMTP) for email delivery
 # API key must be configured in .env.production file
-export SENDGRID_API_KEY="dummy_sendgrid_key_change_me"
+# export SENDGRID_API_KEY="dummy_sendgrid_key_change_me"
 export SENDGRID_FROM_EMAIL="noreply@${DOMAIN}"
 
 # Nginx configuration
