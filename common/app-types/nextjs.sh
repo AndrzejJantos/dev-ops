@@ -313,9 +313,9 @@ nextjs_display_deployment_summary() {
         # Extract domains
         local domains=$(echo "$cert_info" | grep "Domains:" | sed 's/.*Domains: //')
 
-        # Extract expiry date
-        local expiry_date=$(echo "$cert_info" | grep "Expiry Date:" | awk '{print $3}')
-        local expiry_time=$(echo "$cert_info" | grep "Expiry Date:" | awk '{print $4}')
+        # Extract expiry date (take only first match)
+        local expiry_date=$(echo "$cert_info" | grep "Expiry Date:" | head -1 | awk '{print $3}')
+        local expiry_time=$(echo "$cert_info" | grep "Expiry Date:" | head -1 | awk '{print $4}')
 
         # Calculate days remaining
         if [ -n "$expiry_date" ]; then
