@@ -200,6 +200,53 @@ check_and_update_nginx() {
 }
 
 # ==============================================================================
+# POST-DEPLOYMENT: DEDICATED COMPOSE CONTAINERS
+# ==============================================================================
+
+# Function: Restart any dedicated docker-compose containers
+# This automatically finds and restarts all docker-compose-dedicated-*.yml files
+# in the app directory, ensuring they use the newly built :latest image
+restart_dedicated_compose_containers() {
+    local dedicated_files=$(find "$APP_DIR" -maxdepth 1 -name "docker-compose-dedicated-*.yml" 2>/dev/null)
+
+    if [ -z "$dedicated_files" ]; then
+        return 0
+    fi
+
+    log_info "=== Restarting Dedicated Compose Containers ==="
+
+    for compose_file in $dedicated_files; do
+        local file_name=$(basename "$compose_file")
+        log_info "Processing: ${file_name}"
+
+        # Stop and remove existing containers from this compose file
+        log_info "Stopping containers from ${file_name}..."
+        docker compose -f "$compose_file" down 2>/dev/null || true
+
+        # Start new containers with the updated :latest image
+        log_info "Starting containers from ${file_name} with new image..."
+        if docker compose -f "$compose_file" up -d; then
+            log_success "Containers from ${file_name} restarted successfully"
+
+            # Wait for health checks
+            sleep 5
+
+            # Show container status
+            docker compose -f "$compose_file" ps
+        else
+            log_error "Failed to restart containers from ${file_name}"
+            # Don't fail the whole deployment, just warn
+            log_warning "Continuing deployment despite dedicated compose failure"
+        fi
+
+        echo ""
+    done
+
+    log_success "All dedicated compose containers processed"
+    return 0
+}
+
+# ==============================================================================
 # GENERIC DEPLOYMENT WORKFLOW
 # ==============================================================================
 
@@ -320,6 +367,9 @@ deploy_application() {
     if [ "$AUTO_CLEANUP_ENABLED" = "true" ]; then
         cleanup_old_images "$DOCKER_IMAGE_NAME" "$MAX_IMAGE_VERSIONS"
     fi
+
+    # Step 4.5: Restart any dedicated compose containers (e.g., scraper API)
+    restart_dedicated_compose_containers
 
     # Step 5: Check and setup SSL if needed (automated SSL management)
     export SSL_SETUP_STATUS="unknown"
