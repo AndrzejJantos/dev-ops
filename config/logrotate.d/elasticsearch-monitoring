@@ -1,0 +1,89 @@
+# Logrotate configuration for Elasticsearch monitoring logs
+# Location: /etc/logrotate.d/elasticsearch-monitoring
+#
+# This configuration rotates logs from the Elasticsearch monitoring script
+# to prevent disk space issues and maintain manageable log files.
+#
+# DEPLOYMENT:
+#   sudo cp DevOps/config/logrotate.d/elasticsearch-monitoring /etc/logrotate.d/
+#   sudo chmod 644 /etc/logrotate.d/elasticsearch-monitoring
+#   sudo chown root:root /etc/logrotate.d/elasticsearch-monitoring
+#
+# TESTING:
+#   Test the configuration (dry run):
+#     sudo logrotate -d /etc/logrotate.d/elasticsearch-monitoring
+#
+#   Force rotation (for testing):
+#     sudo logrotate -f /etc/logrotate.d/elasticsearch-monitoring
+#
+# VERIFICATION:
+#   Check that logs are being rotated:
+#     ls -lh /home/andrzej/logs/elasticsearch-monitoring/
+#
+#   View logrotate status:
+#     sudo cat /var/lib/logrotate/status | grep elasticsearch
+#
+# SCHEDULE:
+#   Logrotate runs daily via /etc/cron.daily/logrotate
+
+# Rotate monitoring log files
+/home/andrzej/logs/elasticsearch-monitoring/*.log {
+    # Rotate daily
+    daily
+
+    # Keep 30 days of logs
+    rotate 30
+
+    # Don't error if log file is missing
+    missingok
+
+    # Don't rotate if log is empty
+    notifempty
+
+    # Compress rotated logs (saves disk space)
+    compress
+
+    # Delay compression until next rotation (allows reading recent rotated logs)
+    delaycompress
+
+    # Create new log file after rotation with specified permissions
+    create 0644 andrzej andrzej
+
+    # Use date extension for rotated files (e.g., monitor.log-20251202)
+    dateext
+
+    # Date format for rotated files
+    dateformat -%Y%m%d
+
+    # Rotate even if multiple processes have the log file open
+    sharedscripts
+
+    # Don't mail old logs to anyone
+    nomail
+
+    # Commands to run after rotation (optional)
+    postrotate
+        # Signal the monitoring script to reopen log files if needed
+        # Not required for our implementation as it creates/appends on each run
+        :
+    endscript
+}
+
+# Rotate cron log separately (more frequent rotation)
+/home/andrzej/logs/elasticsearch-monitoring/cron.log {
+    # Rotate weekly (cron logs are verbose)
+    weekly
+
+    # Keep 8 weeks
+    rotate 8
+
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0644 andrzej andrzej
+    dateext
+    dateformat -%Y%m%d
+    sharedscripts
+    nomail
+}

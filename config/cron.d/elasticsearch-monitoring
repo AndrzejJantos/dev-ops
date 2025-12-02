@@ -1,0 +1,59 @@
+# Elasticsearch Health Monitoring Crontab
+# Location: /etc/cron.d/elasticsearch-monitoring
+#
+# This file monitors Elasticsearch health and automatically restarts services if needed
+#
+# DEPLOYMENT:
+#   sudo cp DevOps/config/cron.d/elasticsearch-monitoring /etc/cron.d/
+#   sudo chmod 644 /etc/cron.d/elasticsearch-monitoring
+#   sudo chown root:root /etc/cron.d/elasticsearch-monitoring
+#
+# VERIFICATION:
+#   Check the cron job is loaded:
+#     sudo grep -r "monitor-elasticsearch" /etc/cron.d/
+#
+#   View cron logs to verify execution:
+#     sudo tail -f /var/log/syslog | grep CRON
+#     sudo tail -f /var/log/cron.log | grep elasticsearch
+#
+#   Check monitoring logs:
+#     tail -f /home/andrzej/logs/elasticsearch-monitoring/monitor.log
+#
+# TESTING:
+#   Run manually to test:
+#     sudo -u andrzej /home/andrzej/DevOps/scripts/monitor-elasticsearch.sh
+#
+# DISABLE:
+#   To temporarily disable, comment out the line below and reload:
+#     sudo systemctl reload cron
+#
+# SCHEDULE: Every 5 minutes
+# USER: andrzej (must have docker permissions)
+# OUTPUT: Logs to /home/andrzej/logs/elasticsearch-monitoring/monitor.log
+
+# Environment variables for the cron job
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+ELASTICSEARCH_URL=http://172.17.0.1:9200
+
+# Optional: Set these if Elasticsearch is running in docker-compose
+DOCKER_COMPOSE_DIR=/home/andrzej/apps/cheaperfordrug-api/docker
+ES_SERVICE_NAME=cheaperfordrug-elasticsearch
+
+# Optional: Enable email alerts
+# SEND_ALERTS=true
+# ALERT_EMAIL=andrzej@webet.pl
+
+# Run Elasticsearch monitoring every 5 minutes
+# Format: minute hour day month weekday user command
+*/5 * * * * andrzej /home/andrzej/DevOps/scripts/monitor-elasticsearch.sh >> /home/andrzej/logs/elasticsearch-monitoring/cron.log 2>&1
+
+# Alternative schedules (uncomment to use):
+# Every 10 minutes:
+# */10 * * * * andrzej /home/andrzej/DevOps/scripts/monitor-elasticsearch.sh >> /home/andrzej/logs/elasticsearch-monitoring/cron.log 2>&1
+
+# Every 15 minutes:
+# */15 * * * * andrzej /home/andrzej/DevOps/scripts/monitor-elasticsearch.sh >> /home/andrzej/logs/elasticsearch-monitoring/cron.log 2>&1
+
+# Hourly:
+# 0 * * * * andrzej /home/andrzej/DevOps/scripts/monitor-elasticsearch.sh >> /home/andrzej/logs/elasticsearch-monitoring/cron.log 2>&1
