@@ -115,13 +115,12 @@ echo -e "${BLUE}  3. CheaperForDrug Web (cheaperfordrug-web)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
-test_domain "taniejpolek.pl" "/" "Main domain (should redirect to www)"
-test_domain "www.taniejpolek.pl" "/" "Web application"
+test_domain "premiera.taniejpolek.pl" "/" "Web application"
 
 echo -e "${YELLOW}Backend Health:${NC}"
-test_backend_health 3055 "web"
-test_backend_health 3056 "web"
-test_backend_health 3057 "web"
+test_backend_health 3030 "web"
+test_backend_health 3031 "web"
+test_backend_health 3032 "web"
 echo ""
 
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"

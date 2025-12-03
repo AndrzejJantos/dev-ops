@@ -9,8 +9,7 @@
 export APP_TYPE="nextjs"
 export APP_NAME="cheaperfordrug-web"
 export APP_DISPLAY_NAME="CheaperForDrug Web"
-export DOMAIN="taniejpolek.pl"
-export DOMAIN_WWW="www.taniejpolek.pl"
+export DOMAIN="premiera.taniejpolek.pl"
 
 # ============================================================================
 # REPOSITORY CONFIGURATION
