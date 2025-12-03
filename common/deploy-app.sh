@@ -150,6 +150,7 @@ check_and_update_nginx() {
     sed "s/{{APP_NAME}}/$APP_NAME/g" "$nginx_template" | \
     sed "s/{{NGINX_UPSTREAM_NAME}}/${APP_NAME}_backend/g" | \
     sed "s|{{DOMAIN}}|$DOMAIN|g" | \
+    sed "s|{{DOMAIN_WWW}}|${DOMAIN_WWW:-www.$DOMAIN}|g" | \
     sed "s|{{DOMAIN_INTERNAL}}|${DOMAIN_INTERNAL:-}|g" | \
     sed "s|{{DOMAIN_PUBLIC}}|${DOMAIN_PUBLIC:-}|g" | \
     sed "s|{{HEALTH_CHECK_PATH}}|${HEALTH_CHECK_PATH:-/up}|g" | \
