@@ -234,7 +234,7 @@ nextjs_deploy_fresh() {
         local port=$((BASE_PORT + i - 1))
         local container_name="${APP_NAME}_web_${i}"
 
-        start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT"
+        start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT" "bridge" "/app/log"
 
         if [ $? -ne 0 ]; then
             log_error "Failed to start container ${container_name}"
@@ -395,10 +395,12 @@ nextjs_display_deployment_summary() {
     echo "  Deployed app:     cd ~/apps/${APP_NAME}"
     echo "  Quick link:       cd ~/apps/${APP_NAME}/config (→ config dir)"
     echo ""
-    echo "LOGS (Next.js logs to Docker stdout):"
-    echo "  Docker logs:      docker logs ${APP_NAME}_web_1 -f"
+    echo "LOGS:"
+    echo "  Docker stdout:    docker logs ${APP_NAME}_web_1 -f"
     echo "  All containers:   docker logs ${APP_NAME}_web_1 -f --tail=100"
-    echo "  Note: To persist logs to ${LOG_DIR}/, configure a custom logger in your Next.js app"
+    echo "  Aggregated logs:  ${LOG_DIR}/"
+    echo "  Note: Volume mount configured: ${LOG_DIR}/ -> /app/log/ (inside containers)"
+    echo "        Configure your Next.js app to write logs to /app/log/production.log"
     echo ""
     echo "================================================================================"
     echo ""
