@@ -285,8 +285,8 @@ check_container_health() {
 
     log_error "Container ${container_name} failed health check after ${max_attempts} attempts"
     # Show container logs for debugging
-    log_error "Last 20 lines of container logs:"
-    docker logs "${container_name}" --tail 20 2>&1 | sed 's/^/  /'
+    log_error "Last 100 lines of container logs:"
+    docker logs "${container_name}" --tail 100 2>&1 | sed 's/^/  /'
     return 1
 }
 
