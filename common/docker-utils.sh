@@ -99,6 +99,12 @@ start_container() {
             --network host \
             --add-host=host.docker.internal:host-gateway \
             --restart unless-stopped \
+            --read-only \
+            --tmpfs /tmp:size=50M,mode=1777 \
+            --cap-drop=ALL \
+            --security-opt=no-new-privileges:true \
+            --memory=1g \
+            --cpus=1.0 \
             --env-file "$env_file" \
             -e PORT="${host_port}" \
             -e CONTAINER_NAME="${container_name}" \
@@ -116,6 +122,12 @@ start_container() {
             --network "$network" \
             --add-host=host.docker.internal:host-gateway \
             --restart unless-stopped \
+            --read-only \
+            --tmpfs /tmp:size=50M,mode=1777 \
+            --cap-drop=ALL \
+            --security-opt=no-new-privileges:true \
+            --memory=1g \
+            --cpus=1.0 \
             -p "${host_port}:${container_port}" \
             --env-file "$env_file" \
             -e CONTAINER_NAME="${container_name}" \
@@ -174,6 +186,12 @@ start_worker_container() {
         --network "$network" \
         --add-host=host.docker.internal:host-gateway \
         --restart unless-stopped \
+        --read-only \
+        --tmpfs /tmp:size=50M,mode=1777 \
+        --cap-drop=ALL \
+        --security-opt=no-new-privileges:true \
+        --memory=2g \
+        --cpus=1.0 \
         --env-file "$env_file" \
         -e CONTAINER_NAME="${container_name}" \
         -v "${LOG_DIR}:${log_mount_path}" \
@@ -226,6 +244,12 @@ start_scheduler_container() {
         --network "$network" \
         --add-host=host.docker.internal:host-gateway \
         --restart unless-stopped \
+        --read-only \
+        --tmpfs /tmp:size=50M,mode=1777 \
+        --cap-drop=ALL \
+        --security-opt=no-new-privileges:true \
+        --memory=1g \
+        --cpus=0.5 \
         --env-file "$env_file" \
         -e CONTAINER_NAME="${container_name}" \
         -v "${LOG_DIR}:${log_mount_path}" \
