@@ -99,6 +99,7 @@ start_container() {
             --network host \
             --add-host=host.docker.internal:host-gateway \
             --restart unless-stopped \
+            --init \
             --read-only \
             --tmpfs /tmp:size=50M,mode=1777 \
             --cap-drop=ALL \
@@ -122,6 +123,7 @@ start_container() {
             --network "$network" \
             --add-host=host.docker.internal:host-gateway \
             --restart unless-stopped \
+            --init \
             --read-only \
             --tmpfs /tmp:size=50M,mode=1777 \
             --cap-drop=ALL \
@@ -186,6 +188,7 @@ start_worker_container() {
         --network "$network" \
         --add-host=host.docker.internal:host-gateway \
         --restart unless-stopped \
+        --init \
         --read-only \
         --tmpfs /tmp:size=50M,mode=1777 \
         --cap-drop=ALL \
@@ -244,6 +247,7 @@ start_scheduler_container() {
         --network "$network" \
         --add-host=host.docker.internal:host-gateway \
         --restart unless-stopped \
+        --init \
         --read-only \
         --tmpfs /tmp:size=50M,mode=1777 \
         --cap-drop=ALL \
