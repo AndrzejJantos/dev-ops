@@ -31,6 +31,7 @@ services:
     tmpfs:
       - /tmp:size=50M,mode=1777
       - /app/tmp:size=100M,mode=1777
+    command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3010/"]
       interval: 30s
@@ -70,6 +71,7 @@ services:
     tmpfs:
       - /tmp:size=50M,mode=1777
       - /app/tmp:size=100M,mode=1777
+    command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3011/"]
       interval: 30s

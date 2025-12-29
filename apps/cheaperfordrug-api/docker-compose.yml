@@ -35,6 +35,7 @@ services:
     tmpfs:
       - /tmp:size=50M,mode=1777
       - /app/tmp:size=100M,mode=1777
+    command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3020/up"]
       interval: 30s
@@ -74,6 +75,7 @@ services:
     tmpfs:
       - /tmp:size=50M,mode=1777
       - /app/tmp:size=100M,mode=1777
+    command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3021/up"]
       interval: 30s
@@ -116,7 +118,7 @@ services:
     tmpfs:
       - /tmp:size=50M,mode=1777
       - /app/tmp:size=100M,mode=1777
-    command: /bin/bash -c "cd /app && bundle exec sidekiq"
+    command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && cd /app && bundle exec sidekiq"
     deploy:
       resources:
         limits:
@@ -152,7 +154,7 @@ services:
     tmpfs:
       - /tmp:size=50M,mode=1777
       - /app/tmp:size=100M,mode=1777
-    command: /bin/bash -c "cd /app && bundle exec clockwork lib/clock.rb"
+    command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && cd /app && bundle exec clockwork lib/clock.rb"
     deploy:
       resources:
         limits:

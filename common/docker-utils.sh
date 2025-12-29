@@ -95,60 +95,118 @@ start_container() {
     # - /tmp is needed by all apps for general temporary files
     # - /app/tmp is needed by Rails apps for pids, cache, and sockets
     local tmpfs_args="--tmpfs /tmp:size=50M,mode=1777"
+    local startup_cmd=""
     if [ "$APP_TYPE" = "rails" ]; then
         tmpfs_args="$tmpfs_args --tmpfs /app/tmp:size=100M,mode=1777"
+        # Create required directories in tmpfs before starting Puma
+        # tmpfs mounts as empty, so we need to create subdirectories
+        startup_cmd="/bin/bash -c 'mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb'"
     fi
 
     # Use host network for Rails apps to access PostgreSQL on localhost
     # For other apps, use bridge network with port mapping
     if [ "$network" = "host" ]; then
-        docker run -d \
-            --name "$container_name" \
-            --network host \
-            --add-host=host.docker.internal:host-gateway \
-            --restart unless-stopped \
-            --init \
-            --read-only \
-            ${tmpfs_args} \
-            --cap-drop=ALL \
-            --security-opt=no-new-privileges:true \
-            --memory=1g \
-            --cpus=1.0 \
-            --env-file "$env_file" \
-            -e PORT="${host_port}" \
-            -e CONTAINER_NAME="${container_name}" \
-            -v "${LOG_DIR}:${log_mount_path}" \
-            ${storage_volume_args} \
-            --health-cmd "curl -f http://localhost:${host_port}/ || exit 1" \
-            --health-interval=30s \
-            --health-timeout=10s \
-            --health-start-period=40s \
-            --health-retries=3 \
-            "$image_name"
+        if [ -n "$startup_cmd" ]; then
+            docker run -d \
+                --name "$container_name" \
+                --network host \
+                --add-host=host.docker.internal:host-gateway \
+                --restart unless-stopped \
+                --init \
+                --read-only \
+                ${tmpfs_args} \
+                --cap-drop=ALL \
+                --security-opt=no-new-privileges:true \
+                --memory=1g \
+                --cpus=1.0 \
+                --env-file "$env_file" \
+                -e PORT="${host_port}" \
+                -e CONTAINER_NAME="${container_name}" \
+                -v "${LOG_DIR}:${log_mount_path}" \
+                ${storage_volume_args} \
+                --health-cmd "curl -f http://localhost:${host_port}/ || exit 1" \
+                --health-interval=30s \
+                --health-timeout=10s \
+                --health-start-period=40s \
+                --health-retries=3 \
+                "$image_name" \
+                $startup_cmd
+        else
+            docker run -d \
+                --name "$container_name" \
+                --network host \
+                --add-host=host.docker.internal:host-gateway \
+                --restart unless-stopped \
+                --init \
+                --read-only \
+                ${tmpfs_args} \
+                --cap-drop=ALL \
+                --security-opt=no-new-privileges:true \
+                --memory=1g \
+                --cpus=1.0 \
+                --env-file "$env_file" \
+                -e PORT="${host_port}" \
+                -e CONTAINER_NAME="${container_name}" \
+                -v "${LOG_DIR}:${log_mount_path}" \
+                ${storage_volume_args} \
+                --health-cmd "curl -f http://localhost:${host_port}/ || exit 1" \
+                --health-interval=30s \
+                --health-timeout=10s \
+                --health-start-period=40s \
+                --health-retries=3 \
+                "$image_name"
+        fi
     else
-        docker run -d \
-            --name "$container_name" \
-            --network "$network" \
-            --add-host=host.docker.internal:host-gateway \
-            --restart unless-stopped \
-            --init \
-            --read-only \
-            ${tmpfs_args} \
-            --cap-drop=ALL \
-            --security-opt=no-new-privileges:true \
-            --memory=1g \
-            --cpus=1.0 \
-            -p "${host_port}:${container_port}" \
-            --env-file "$env_file" \
-            -e CONTAINER_NAME="${container_name}" \
-            -v "${LOG_DIR}:${log_mount_path}" \
-            ${storage_volume_args} \
-            --health-cmd "curl -f http://localhost:${container_port}/ || exit 1" \
-            --health-interval=30s \
-            --health-timeout=10s \
-            --health-start-period=40s \
-            --health-retries=3 \
-            "$image_name"
+        if [ -n "$startup_cmd" ]; then
+            docker run -d \
+                --name "$container_name" \
+                --network "$network" \
+                --add-host=host.docker.internal:host-gateway \
+                --restart unless-stopped \
+                --init \
+                --read-only \
+                ${tmpfs_args} \
+                --cap-drop=ALL \
+                --security-opt=no-new-privileges:true \
+                --memory=1g \
+                --cpus=1.0 \
+                -p "${host_port}:${container_port}" \
+                --env-file "$env_file" \
+                -e CONTAINER_NAME="${container_name}" \
+                -v "${LOG_DIR}:${log_mount_path}" \
+                ${storage_volume_args} \
+                --health-cmd "curl -f http://localhost:${container_port}/ || exit 1" \
+                --health-interval=30s \
+                --health-timeout=10s \
+                --health-start-period=40s \
+                --health-retries=3 \
+                "$image_name" \
+                $startup_cmd
+        else
+            docker run -d \
+                --name "$container_name" \
+                --network "$network" \
+                --add-host=host.docker.internal:host-gateway \
+                --restart unless-stopped \
+                --init \
+                --read-only \
+                ${tmpfs_args} \
+                --cap-drop=ALL \
+                --security-opt=no-new-privileges:true \
+                --memory=1g \
+                --cpus=1.0 \
+                -p "${host_port}:${container_port}" \
+                --env-file "$env_file" \
+                -e CONTAINER_NAME="${container_name}" \
+                -v "${LOG_DIR}:${log_mount_path}" \
+                ${storage_volume_args} \
+                --health-cmd "curl -f http://localhost:${container_port}/ || exit 1" \
+                --health-interval=30s \
+                --health-timeout=10s \
+                --health-start-period=40s \
+                --health-retries=3 \
+                "$image_name"
+        fi
     fi
 
     if [ $? -eq 0 ]; then
@@ -195,8 +253,11 @@ start_worker_container() {
     # - /tmp is needed by all apps for general temporary files
     # - /app/tmp is needed by Rails apps for pids, cache, and sockets
     local tmpfs_args="--tmpfs /tmp:size=50M,mode=1777"
+    local mkdir_cmd=""
     if [ "$APP_TYPE" = "rails" ]; then
         tmpfs_args="$tmpfs_args --tmpfs /app/tmp:size=100M,mode=1777"
+        # Create required directories in tmpfs before starting worker
+        mkdir_cmd="mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && "
     fi
 
     docker run -d \
@@ -216,7 +277,7 @@ start_worker_container() {
         -v "${LOG_DIR}:${log_mount_path}" \
         ${storage_volume_args} \
         "$image_name" \
-        /bin/bash -c "cd ${workdir} && $worker_command"
+        /bin/bash -c "${mkdir_cmd}cd ${workdir} && $worker_command"
 
     if [ $? -eq 0 ]; then
         log_success "Worker container started successfully"
@@ -262,8 +323,11 @@ start_scheduler_container() {
     # - /tmp is needed by all apps for general temporary files
     # - /app/tmp is needed by Rails apps for pids, cache, and sockets
     local tmpfs_args="--tmpfs /tmp:size=50M,mode=1777"
+    local mkdir_cmd=""
     if [ "$APP_TYPE" = "rails" ]; then
         tmpfs_args="$tmpfs_args --tmpfs /app/tmp:size=100M,mode=1777"
+        # Create required directories in tmpfs before starting scheduler
+        mkdir_cmd="mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && "
     fi
 
     docker run -d \
@@ -283,7 +347,7 @@ start_scheduler_container() {
         -v "${LOG_DIR}:${log_mount_path}" \
         ${storage_volume_args} \
         "$image_name" \
-        /bin/bash -c "cd ${workdir} && $scheduler_command"
+        /bin/bash -c "${mkdir_cmd}cd ${workdir} && $scheduler_command"
 
     if [ $? -eq 0 ]; then
         log_success "Scheduler container started successfully"
