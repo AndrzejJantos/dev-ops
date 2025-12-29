@@ -95,18 +95,17 @@ start_container() {
     # - /tmp is needed by all apps for general temporary files
     # - /app/tmp is needed by Rails apps for pids, cache, and sockets
     local tmpfs_args="--tmpfs /tmp:size=50M,mode=1777"
-    local startup_cmd=""
+    local is_rails=false
     if [ "$APP_TYPE" = "rails" ]; then
         tmpfs_args="$tmpfs_args --tmpfs /app/tmp:size=100M,mode=1777"
-        # Create required directories in tmpfs before starting Puma
-        # tmpfs mounts as empty, so we need to create subdirectories
-        startup_cmd="/bin/bash -c 'mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb'"
+        is_rails=true
     fi
 
     # Use host network for Rails apps to access PostgreSQL on localhost
     # For other apps, use bridge network with port mapping
     if [ "$network" = "host" ]; then
-        if [ -n "$startup_cmd" ]; then
+        if [ "$is_rails" = true ]; then
+            # Rails apps need to create tmp directories in tmpfs before starting Puma
             docker run -d \
                 --name "$container_name" \
                 --network host \
@@ -130,7 +129,7 @@ start_container() {
                 --health-start-period=40s \
                 --health-retries=3 \
                 "$image_name" \
-                $startup_cmd
+                /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
         else
             docker run -d \
                 --name "$container_name" \
@@ -157,7 +156,8 @@ start_container() {
                 "$image_name"
         fi
     else
-        if [ -n "$startup_cmd" ]; then
+        if [ "$is_rails" = true ]; then
+            # Rails apps need to create tmp directories in tmpfs before starting Puma
             docker run -d \
                 --name "$container_name" \
                 --network "$network" \
@@ -181,7 +181,7 @@ start_container() {
                 --health-start-period=40s \
                 --health-retries=3 \
                 "$image_name" \
-                $startup_cmd
+                /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
         else
             docker run -d \
                 --name "$container_name" \
