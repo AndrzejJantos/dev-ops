@@ -13,7 +13,13 @@ services:
     image: cheaperfordrug-landing:latest
     container_name: cheaperfordrug-landing_web_1
     network_mode: host
+    init: true
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     env_file: /home/andrzej/apps/cheaperfordrug-landing/.env.production
     environment:
       - PORT=3010
@@ -22,12 +28,20 @@ services:
       - RACK_ENV=production
     volumes:
       - /home/andrzej/apps/cheaperfordrug-landing/logs:/app/log
+    tmpfs:
+      - /tmp:size=50M,mode=1777
+      - /app/tmp:size=100M,mode=1777
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3010/"]
       interval: 30s
       timeout: 10s
       start_period: 40s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
     logging:
       driver: "json-file"
       options:
@@ -38,7 +52,13 @@ services:
     image: cheaperfordrug-landing:latest
     container_name: cheaperfordrug-landing_web_2
     network_mode: host
+    init: true
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     env_file: /home/andrzej/apps/cheaperfordrug-landing/.env.production
     environment:
       - PORT=3011
@@ -47,12 +67,20 @@ services:
       - RACK_ENV=production
     volumes:
       - /home/andrzej/apps/cheaperfordrug-landing/logs:/app/log
+    tmpfs:
+      - /tmp:size=50M,mode=1777
+      - /app/tmp:size=100M,mode=1777
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3011/"]
       interval: 30s
       timeout: 10s
       start_period: 40s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
     logging:
       driver: "json-file"
       options:

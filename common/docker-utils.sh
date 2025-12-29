@@ -91,6 +91,14 @@ start_container() {
         log_info "Mounting Active Storage: ${ACTIVE_STORAGE_HOST_PATH}"
     fi
 
+    # Prepare tmpfs mounts based on app type
+    # - /tmp is needed by all apps for general temporary files
+    # - /app/tmp is needed by Rails apps for pids, cache, and sockets
+    local tmpfs_args="--tmpfs /tmp:size=50M,mode=1777"
+    if [ "$APP_TYPE" = "rails" ]; then
+        tmpfs_args="$tmpfs_args --tmpfs /app/tmp:size=100M,mode=1777"
+    fi
+
     # Use host network for Rails apps to access PostgreSQL on localhost
     # For other apps, use bridge network with port mapping
     if [ "$network" = "host" ]; then
@@ -101,7 +109,7 @@ start_container() {
             --restart unless-stopped \
             --init \
             --read-only \
-            --tmpfs /tmp:size=50M,mode=1777 \
+            ${tmpfs_args} \
             --cap-drop=ALL \
             --security-opt=no-new-privileges:true \
             --memory=1g \
@@ -125,7 +133,7 @@ start_container() {
             --restart unless-stopped \
             --init \
             --read-only \
-            --tmpfs /tmp:size=50M,mode=1777 \
+            ${tmpfs_args} \
             --cap-drop=ALL \
             --security-opt=no-new-privileges:true \
             --memory=1g \
@@ -183,6 +191,14 @@ start_worker_container() {
     # Extract the workdir from log_mount_path (e.g., /app/log -> /app)
     local workdir=$(dirname "$log_mount_path")
 
+    # Prepare tmpfs mounts based on app type
+    # - /tmp is needed by all apps for general temporary files
+    # - /app/tmp is needed by Rails apps for pids, cache, and sockets
+    local tmpfs_args="--tmpfs /tmp:size=50M,mode=1777"
+    if [ "$APP_TYPE" = "rails" ]; then
+        tmpfs_args="$tmpfs_args --tmpfs /app/tmp:size=100M,mode=1777"
+    fi
+
     docker run -d \
         --name "$container_name" \
         --network "$network" \
@@ -190,7 +206,7 @@ start_worker_container() {
         --restart unless-stopped \
         --init \
         --read-only \
-        --tmpfs /tmp:size=50M,mode=1777 \
+        ${tmpfs_args} \
         --cap-drop=ALL \
         --security-opt=no-new-privileges:true \
         --memory=2g \
@@ -242,6 +258,14 @@ start_scheduler_container() {
     # Extract the workdir from log_mount_path (e.g., /app/log -> /app)
     local workdir=$(dirname "$log_mount_path")
 
+    # Prepare tmpfs mounts based on app type
+    # - /tmp is needed by all apps for general temporary files
+    # - /app/tmp is needed by Rails apps for pids, cache, and sockets
+    local tmpfs_args="--tmpfs /tmp:size=50M,mode=1777"
+    if [ "$APP_TYPE" = "rails" ]; then
+        tmpfs_args="$tmpfs_args --tmpfs /app/tmp:size=100M,mode=1777"
+    fi
+
     docker run -d \
         --name "$container_name" \
         --network "$network" \
@@ -249,7 +273,7 @@ start_scheduler_container() {
         --restart unless-stopped \
         --init \
         --read-only \
-        --tmpfs /tmp:size=50M,mode=1777 \
+        ${tmpfs_args} \
         --cap-drop=ALL \
         --security-opt=no-new-privileges:true \
         --memory=1g \
