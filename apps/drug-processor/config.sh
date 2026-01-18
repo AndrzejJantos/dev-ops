@@ -20,10 +20,11 @@ export DOCKER_IMAGE_TAG="${DOCKER_IMAGE_TAG:-latest}"
 # SOURCE REPOSITORIES
 # ============================================================================
 # Paths to the repositories that this app depends on (on the server)
-# These are pulled/synced during deployment
+# These are synced during deployment
+# Note: API is in repo/ subdir, Scraper is directly in app dir
 export API_REPO_DIR="$HOME/apps/cheaperfordrug-api/repo"
 export API_REPO_BRANCH="master"
-export SCRAPER_REPO_DIR="$HOME/apps/cheaperfordrug-scraper/repo"
+export SCRAPER_REPO_DIR="$HOME/apps/cheaperfordrug-scraper"
 export SCRAPER_REPO_BRANCH="master"
 
 # Source directory names in build context
