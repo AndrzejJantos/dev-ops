@@ -1,0 +1,14 @@
+# Drug Processor Pipeline - Cron Schedule (Self-Contained Container)
+# Location: /etc/cron.d/drug-processor
+#
+# Runs the drug name normalizers (PL, DE, CZ) and batch variant processor
+# Schedule: 2 AM on Wednesday, Thursday, Friday, Saturday, Sunday
+#
+# Note: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+
+SHELL=/bin/bash
+PATH=/opt/python-venv/bin:/usr/local/bundle/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
+# Load environment and run at 2:00 AM on Wed(3), Thu(4), Fri(5), Sat(6), Sun(0)
+0 2 * * 0,3,4,5,6 root . /etc/environment && /app/scripts/run-drug-processor.sh >> /var/log/drug-processor/cron.log 2>&1

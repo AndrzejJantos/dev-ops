@@ -1,0 +1,96 @@
+# =============================================================================
+# Drug Processor Pipeline - Docker Compose (Self-Contained)
+# =============================================================================
+#
+# Self-contained container with:
+# - Python environment for drug name normalizers (PL, DE, CZ)
+# - Ruby/Rails environment for BatchVariantProcessorService
+#
+# Connects to the same database as production API.
+#
+# Schedule: 2 AM on Wednesday, Thursday, Friday, Saturday, Sunday
+#
+# Usage:
+#   docker-compose up -d                  # Start the container
+#   docker-compose logs -f                # View logs
+#   docker-compose exec drug-processor /app/scripts/run-drug-processor.sh  # Manual run
+#
+# =============================================================================
+
+version: '3.8'
+
+services:
+  drug-processor:
+    image: drug-processor:latest
+    container_name: drug-processor
+    build:
+      context: ../../../  # Root of the project (to access api/, scraper/, DevOps/)
+      dockerfile: DevOps/apps/drug-processor/Dockerfile
+    restart: unless-stopped
+    network_mode: host  # Same network as API for database access
+
+    volumes:
+      - /var/log/drug-processor:/var/log/drug-processor
+
+    environment:
+      # Timezone
+      - TZ=Europe/Warsaw
+
+      # Rails environment
+      - RAILS_ENV=production
+      - RACK_ENV=production
+
+      # Database (same as production API)
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+
+      # Rails secrets
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE}
+      - RAILS_MASTER_KEY=${RAILS_MASTER_KEY}
+
+      # API configuration (for Python scripts to call API endpoints)
+      - API_BASE_URL=${API_BASE_URL:-http://localhost:3020}
+      - SCRAPER_AUTH_TOKEN=${SCRAPER_AUTH_TOKEN}
+
+      # Elasticsearch (for variant reindexing)
+      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-http://localhost:9200}
+
+      # Email notifications (SendGrid)
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - DEPLOYMENT_EMAIL_FROM=${DEPLOYMENT_EMAIL_FROM:-biuro@webet.pl}
+      - DEPLOYMENT_EMAIL_TO=${DEPLOYMENT_EMAIL_TO:-andrzej@webet.pl}
+      - DEPLOYMENT_EMAIL_ENABLED=${DEPLOYMENT_EMAIL_ENABLED:-true}
+
+    env_file:
+      - .env
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# =============================================================================
+# Build & Deploy Commands
+# =============================================================================
+#
+# Build (from DevOps/apps/drug-processor directory):
+#   docker-compose build
+#
+# Or build from project root:
+#   docker build -f DevOps/apps/drug-processor/Dockerfile -t drug-processor:latest .
+#
+# Deploy:
+#   docker-compose up -d
+#
+# View logs:
+#   docker-compose logs -f drug-processor
+#   tail -f /var/log/drug-processor/cron.log
+#
+# Manual test run:
+#   docker-compose exec drug-processor /app/scripts/run-drug-processor.sh
+#
+# Stop:
+#   docker-compose down
+#
+# =============================================================================
