@@ -2,7 +2,8 @@
 
 # Deployment Orchestrator Script
 # Location: DevOps/scripts/deploy.sh
-# Usage: ./deploy.sh app1 app2 app3 ...
+# Usage: ./deploy.sh [app1 app2 ...]
+# If no arguments: deploys all whitelisted apps
 # Example: ./deploy.sh cheaperfordrug-api cheaperfordrug-web brokik-api
 
 set -e
@@ -25,28 +26,66 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVOPS_DIR="$(dirname "$SCRIPT_DIR")"
 APPS_DIR="$DEVOPS_DIR/apps"
 
-# Check arguments
+# =============================================================================
+# BLACKLIST - Apps that won't be deployed automatically
+# =============================================================================
+BLACKLISTED_APPS=(
+    "cheaperfordrug-landing"
+)
+
+# Function to check if app is blacklisted
+is_blacklisted() {
+    local app="$1"
+    for blacklisted in "${BLACKLISTED_APPS[@]}"; do
+        if [ "$app" = "$blacklisted" ]; then
+            return 0  # true, is blacklisted
+        fi
+    done
+    return 1  # false, not blacklisted
+}
+
+# Function to get all whitelisted apps
+get_whitelisted_apps() {
+    local apps=()
+    for app_dir in "$APPS_DIR"/*/; do
+        if [ -f "$app_dir/deploy.sh" ]; then
+            local app_name=$(basename "$app_dir")
+            if ! is_blacklisted "$app_name"; then
+                apps+=("$app_name")
+            fi
+        fi
+    done
+    echo "${apps[@]}"
+}
+
+# If no arguments, deploy all whitelisted apps
 if [ $# -eq 0 ]; then
+    APPS=($(get_whitelisted_apps))
+
+    if [ ${#APPS[@]} -eq 0 ]; then
+        log_error "No apps available for deployment"
+        exit 1
+    fi
+
     echo ""
     echo "Deployment Orchestrator"
     echo "======================="
     echo ""
-    echo "Usage: $0 app1 [app2] [app3] ..."
-    echo ""
-    echo "Available apps:"
-    for app_dir in "$APPS_DIR"/*/; do
-        if [ -f "$app_dir/deploy.sh" ]; then
-            app_name=$(basename "$app_dir")
-            echo "  - $app_name"
-        fi
+    echo "No apps specified - will deploy all whitelisted apps:"
+    for app in "${APPS[@]}"; do
+        echo "  - $app"
     done
     echo ""
-    echo "Example: $0 cheaperfordrug-api cheaperfordrug-web brokik-api"
-    echo ""
-    exit 1
+    if [ ${#BLACKLISTED_APPS[@]} -gt 0 ]; then
+        echo "Blacklisted (skipped):"
+        for app in "${BLACKLISTED_APPS[@]}"; do
+            echo "  - $app"
+        done
+        echo ""
+    fi
+else
+    APPS=("$@")
 fi
-
-APPS=("$@")
 TOTAL_APPS=${#APPS[@]}
 SUCCESSFUL=()
 FAILED=()
