@@ -14,6 +14,7 @@ set -e
 
 # Configuration
 LOG_FILE="${LOG_FILE:-/home/andrzej/apps/cheaperfordrug-scraper/logs/poland-product-workers.log}"
+API_DIR="${API_DIR:-/home/andrzej/apps/cheaperfordrug-api}"
 HOURS_BACK=1
 
 # Get script directory for loading modules
@@ -36,6 +37,19 @@ NC='\033[0m'
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $(date '+%Y-%m-%d %H:%M:%S') $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $(date '+%Y-%m-%d %H:%M:%S') $1"; }
+
+# Query shopping lists created in the last hour from API database
+get_shopping_lists() {
+    cd "$API_DIR" 2>/dev/null || return 1
+
+    docker compose exec -T scraper-1 bundle exec rails runner '
+lists = ShoppingList.where("created_at > ?", 1.hour.ago).includes(:shopping_list_items => :drug_variant).order(created_at: :desc)
+lists.each do |list|
+  items = list.shopping_list_items.map { |i| i.drug_variant&.name }.compact.join("; ")
+  puts "#{list.created_at.strftime("%H:%M:%S")}|#{list.shopping_list_items.count}|#{items}"
+end
+' 2>/dev/null
+}
 
 # Calculate time threshold (1 hour ago in ISO format, UTC to match log timestamps)
 get_time_threshold() {
@@ -130,6 +144,11 @@ generate_report() {
     local urls=$(echo "$analysis" | sed -n '/^URLS_START$/,/^URLS_END$/p' | grep -v "^URLS_" | sort -t'|' -k2 -rn | head -100)
     local url_count=$(echo "$urls" | grep -c "." || echo 0)
 
+    # Get shopping lists created in last hour
+    log_info "Querying shopping lists from database..."
+    local shopping_lists=$(get_shopping_lists)
+    local shopping_list_count=$(echo "$shopping_lists" | grep -c "." || echo 0)
+
     # Build report
     local subject="[Scraper Report] ${updated:-0} products updated ($(date '+%Y-%m-%d %H:00'))"
 
@@ -144,8 +163,24 @@ Summary
 Products Updated: ${updated:-0}
 Scrape Jobs Completed: ${completed:-0}
 Unique URLs Scraped: ${url_count:-0}
+Shopping Lists Created: ${shopping_list_count:-0}
 
 "
+
+    # Add shopping lists section
+    if [ -n "$shopping_lists" ] && [ "$shopping_list_count" -gt 0 ]; then
+        body="${body}Shopping Lists (triggered scraping)
+------------------------------------
+"
+        while IFS='|' read -r time count items; do
+            if [ -n "$time" ]; then
+                body="${body}[$time] $count product(s): $items
+"
+            fi
+        done <<< "$shopping_lists"
+        body="${body}
+"
+    fi
 
     if [ -n "$urls" ] && [ "$url_count" -gt 0 ]; then
         body="${body}URLs Scraped (top 100 by frequency)
