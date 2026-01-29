@@ -71,20 +71,21 @@ analyze_logs() {
             line = $0
 
             # Count completed scrapes
-            # Pattern: "✅ Scraper for drug 123 completed successfully"
-            if (line ~ /Scraper for drug [0-9]+ completed successfully/) {
+            # Pattern: "✅ Scraper for drug UUID completed successfully"
+            if (line ~ /Scraper for drug [a-f0-9-]+ completed successfully/) {
                 completed++
             }
 
             # Count drug updates (from product scraper output)
-            # Pattern: "[scraper_name:123] ✅ Drug updated successfully"
-            if (line ~ /\[[^:]+:[0-9]+\].*Drug updated successfully/) {
+            # Pattern: "[poland_scraper:UUID] ✅ Drug updated successfully"
+            if (line ~ /\[[^:]+:[a-f0-9-]+\].*Drug updated successfully/) {
                 updated++
             }
 
-            # Extract URLs from worker logs
-            # Pattern: "   URL: https://example.com/product"
-            if (line ~ /   URL: /) {
+            # Extract URLs from worker logs (external URLs only, not API calls)
+            # Pattern: "   URL: https://example.com/product" (3 leading spaces)
+            # Exclude internal API URLs like http://172.17.0.1:4201/api/...
+            if (line ~ /   URL: https?:\/\// && line !~ /172\.17\.0\.1/) {
                 # Use sub() to extract URL - compatible with all awk versions
                 url = line
                 sub(/.*   URL: /, "", url)
