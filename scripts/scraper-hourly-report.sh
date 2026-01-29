@@ -13,7 +13,7 @@
 set -e
 
 # Configuration
-LOG_FILE="/home/andrzej/apps/cheaperfordrug-scraper/logs/poland-product-workers.log"
+LOG_FILE="${LOG_FILE:-/home/andrzej/apps/cheaperfordrug-scraper/logs/poland-product-workers.log}"
 HOURS_BACK=1
 
 # Get script directory for loading modules
@@ -55,36 +55,44 @@ analyze_logs() {
 
     # Get logs from the last hour
     # Filter by timestamp >= threshold
+    # Log format: 2026-01-29T10:30:45.123Z INFO [worker-xyz] message
     awk -v threshold="$threshold" '
     BEGIN {
         completed = 0
         updated = 0
     }
 
-    # Match timestamp at start of line
+    # Match timestamp at start of line (ISO format with milliseconds)
     /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}/ {
+        # Extract timestamp (first 19 chars: YYYY-MM-DDTHH:MM:SS)
         timestamp = substr($1, 1, 19)
+
         if (timestamp >= threshold) {
             line = $0
 
             # Count completed scrapes
-            if (line ~ /completed successfully/) {
+            # Pattern: "✅ Scraper for drug 123 completed successfully"
+            if (line ~ /Scraper for drug [0-9]+ completed successfully/) {
                 completed++
             }
 
-            # Count drug updates
-            if (line ~ /Drug updated successfully/) {
+            # Count drug updates (from product scraper output)
+            # Pattern: "[scraper_name:123] ✅ Drug updated successfully"
+            if (line ~ /\[[^:]+:[0-9]+\].*Drug updated successfully/) {
                 updated++
             }
-        }
-    }
 
-    # Extract URLs from "link": lines within time range
-    /"link":/ {
-        if (timestamp >= threshold) {
-            match($0, /"link": "([^"]+)"/, arr)
-            if (arr[1] != "") {
-                urls[arr[1]]++
+            # Extract URLs from worker logs
+            # Pattern: "   URL: https://example.com/product"
+            if (line ~ /   URL: /) {
+                # Use sub() to extract URL - compatible with all awk versions
+                url = line
+                sub(/.*   URL: /, "", url)
+                # Remove trailing whitespace
+                gsub(/[[:space:]]+$/, "", url)
+                if (url != "") {
+                    urls[url]++
+                }
             }
         }
     }
