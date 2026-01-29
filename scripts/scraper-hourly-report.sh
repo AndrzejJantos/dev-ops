@@ -37,10 +37,10 @@ NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $(date '+%Y-%m-%d %H:%M:%S') $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $(date '+%Y-%m-%d %H:%M:%S') $1"; }
 
-# Calculate time threshold (1 hour ago in ISO format)
+# Calculate time threshold (1 hour ago in ISO format, UTC to match log timestamps)
 get_time_threshold() {
-    date -d "-${HOURS_BACK} hour" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || \
-    date -v-${HOURS_BACK}H '+%Y-%m-%dT%H:%M:%S' 2>/dev/null
+    TZ=UTC date -d "-${HOURS_BACK} hour" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || \
+    TZ=UTC date -v-${HOURS_BACK}H '+%Y-%m-%dT%H:%M:%S' 2>/dev/null
 }
 
 # Extract scraping activity from logs
