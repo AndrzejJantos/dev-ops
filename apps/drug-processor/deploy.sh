@@ -288,6 +288,37 @@ run_test() {
     docker exec -it "$CONTAINER_NAME" /app/scripts/run-drug-processor.sh
 }
 
+enqueue_run() {
+    log_info "=== Enqueuing Pipeline Run (background) ==="
+
+    if ! docker ps -q -f "name=${CONTAINER_NAME}" | grep -q .; then
+        log_error "Container not running. Start it first: ./deploy.sh start"
+        return 1
+    fi
+
+    docker exec -d "$CONTAINER_NAME" /app/scripts/run-drug-processor.sh
+
+    log_success "Pipeline enqueued in background"
+    log_info "Monitor with: ./deploy.sh logs"
+    log_info "Or: tail -f $LOG_DIR/drug-processor-\$(date +%Y%m%d).log"
+}
+
+do_rebuild_and_run() {
+    log_info "=== Rebuild & Run Drug Processor ==="
+    echo ""
+
+    do_deploy
+
+    log_info "Waiting 10s for container to stabilize..."
+    sleep 10
+
+    enqueue_run
+
+    echo ""
+    log_success "=== Rebuild & Run Complete ==="
+    log_info "Pipeline is running in background"
+}
+
 do_deploy() {
     log_info "=== Deploying Drug Processor ==="
     echo ""
@@ -326,14 +357,16 @@ show_usage() {
     echo "Usage: $0 <command>"
     echo ""
     echo "Commands:"
-    echo "  deploy    Build and deploy (pulls latest code, builds image, starts container)"
-    echo "  build     Build Docker image only (syncs repos and builds)"
-    echo "  start     Start container (uses existing image)"
-    echo "  stop      Stop container"
-    echo "  status    Show status"
-    echo "  logs      View logs (follow mode)"
-    echo "  test      Run pipeline manually"
-    echo "  help      Show this help"
+    echo "  deploy          Build and deploy (pulls latest code, builds image, starts container)"
+    echo "  rebuild-and-run Rebuild image, deploy, and immediately enqueue processing"
+    echo "  build           Build Docker image only (syncs repos and builds)"
+    echo "  start           Start container (uses existing image)"
+    echo "  stop            Stop container"
+    echo "  enqueue         Enqueue pipeline run in background (container must be running)"
+    echo "  status          Show status"
+    echo "  logs            View logs (follow mode)"
+    echo "  test            Run pipeline manually (interactive, waits for completion)"
+    echo "  help            Show this help"
     echo ""
     echo "Quick deploy from DevOps:"
     echo "  cd ~/DevOps && ./scripts/deploy.sh drug-processor"
@@ -364,6 +397,12 @@ case "${1:-help}" in
         ;;
     logs)
         show_logs
+        ;;
+    rebuild-and-run)
+        do_rebuild_and_run
+        ;;
+    enqueue)
+        enqueue_run
         ;;
     test)
         run_test
