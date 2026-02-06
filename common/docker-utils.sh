@@ -148,7 +148,7 @@ start_container() {
                 -e CONTAINER_NAME="${container_name}" \
                 -v "${LOG_DIR}:${log_mount_path}" \
                 ${storage_volume_args} \
-                --health-cmd "curl -f http://localhost:${host_port}/ || exit 1" \
+                --health-cmd "node -e \"require('http').get('http://127.0.0.1:${host_port}/', (r) => {const ok = r.statusCode >= 200 && r.statusCode < 400; process.exit(ok ? 0 : 1)}).on('error', () => process.exit(1))\"" \
                 --health-interval=30s \
                 --health-timeout=10s \
                 --health-start-period=40s \
@@ -200,7 +200,7 @@ start_container() {
                 -e CONTAINER_NAME="${container_name}" \
                 -v "${LOG_DIR}:${log_mount_path}" \
                 ${storage_volume_args} \
-                --health-cmd "curl -f http://localhost:${container_port}/ || exit 1" \
+                --health-cmd "node -e \"require('http').get('http://127.0.0.1:${container_port}/', (r) => {const ok = r.statusCode >= 200 && r.statusCode < 400; process.exit(ok ? 0 : 1)}).on('error', () => process.exit(1))\"" \
                 --health-interval=30s \
                 --health-timeout=10s \
                 --health-start-period=40s \
