@@ -31,17 +31,19 @@ if [ -f /etc/environment ]; then
     set +a
 fi
 
-# IMPORTANT: Unset GEM_HOME, GEM_PATH, BUNDLE_PATH, BUNDLE_APP_CONFIG.
-# The Ruby base image sets these to /usr/local/bundle, but the Dockerfile
-# builds with `bundle config set --local deployment 'true'` which installs
-# gems into /app/api/vendor/bundle and records that in /app/api/.bundle/config.
-# If these env vars are set, they OVERRIDE the local .bundle/config and
-# bundler looks in /usr/local/bundle (where gems are NOT installed), causing
-# "bundler: command not found: rails".
+# IMPORTANT: Unset GEM_HOME, GEM_PATH, BUNDLE_PATH so they don't override
+# bundler's own config. The Ruby base image sets GEM_HOME=/usr/local/bundle
+# but gems are installed in /app/api/vendor/bundle via deployment mode.
+# If GEM_HOME or BUNDLE_PATH are set, bundler looks in the wrong place.
+#
+# KEEP BUNDLE_APP_CONFIG=/usr/local/bundle -- this is critical! It tells
+# bundler to read config from /usr/local/bundle/config (which has the
+# deployment=true setting and correct paths) instead of the source repo's
+# stale .bundle/config (which has BUNDLE_PATH: ".bundle/vendor").
 unset GEM_HOME
 unset GEM_PATH
 unset BUNDLE_PATH
-unset BUNDLE_APP_CONFIG
+export BUNDLE_APP_CONFIG="${BUNDLE_APP_CONFIG:-/usr/local/bundle}"
 
 # Ensure PATH includes bundler/ruby/python bin directories
 export PATH="/usr/local/bundle/bin:/usr/local/bin:/opt/python-venv/bin:${PATH}"

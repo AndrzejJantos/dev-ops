@@ -130,11 +130,12 @@ echo "Rails Environment: $RAILS_ENV"
 echo ""
 
 # Export environment variables for cron (which starts with minimal env).
-# EXCLUDE GEM_HOME, GEM_PATH, BUNDLE_PATH, BUNDLE_APP_CONFIG because the
-# Ruby base image sets these to /usr/local/bundle, but our Dockerfile builds
-# with `bundle config set --local deployment` which puts gems in vendor/bundle.
-# If these vars leak into cron, they override .bundle/config and break bundler.
-printenv | grep -v '^GEM_HOME=' | grep -v '^GEM_PATH=' | grep -v '^BUNDLE_PATH=' | grep -v '^BUNDLE_APP_CONFIG=' | sed 's/^\([^=]*\)=\(.*\)$/\1="\2"/' > /etc/environment
+# EXCLUDE GEM_HOME, GEM_PATH, BUNDLE_PATH because the Ruby base image sets
+# these to /usr/local/bundle, but our Dockerfile builds with deployment mode
+# which puts gems in vendor/bundle. These vars would override .bundle/config.
+# KEEP BUNDLE_APP_CONFIG -- it tells bundler where to find its global config
+# (/usr/local/bundle/config) which has the correct deployment settings.
+printenv | grep -v '^GEM_HOME=' | grep -v '^GEM_PATH=' | grep -v '^BUNDLE_PATH=' | sed 's/^\([^=]*\)=\(.*\)$/\1="\2"/' > /etc/environment
 
 # Validate database connection
 echo "Checking database connection..."
