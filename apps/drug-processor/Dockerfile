@@ -129,8 +129,11 @@ echo "Timezone: $TZ"
 echo "Rails Environment: $RAILS_ENV"
 echo ""
 
-# Export environment variables for cron
-printenv | grep -E '^(SENDGRID_|DEPLOYMENT_|API_|SCRAPER_|DATABASE_|REDIS_|RAILS_|RACK_|PATH|HOME|TZ|SECRET_|ELASTICSEARCH_)' > /etc/environment
+# Export ALL environment variables for cron
+# Cron starts with a minimal environment, so we dump everything the container has.
+# This ensures GEM_HOME, GEM_PATH, BUNDLE_PATH, BUNDLE_APP_CONFIG, and all other
+# Ruby/Bundler/Python vars are available when cron triggers run-drug-processor.sh.
+printenv | sed 's/^\([^=]*\)=\(.*\)$/\1="\2"/' > /etc/environment
 
 # Validate database connection
 echo "Checking database connection..."

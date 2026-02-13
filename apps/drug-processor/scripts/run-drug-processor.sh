@@ -19,6 +19,25 @@
 set -e
 
 # =============================================================================
+# ENVIRONMENT SETUP (for cron execution)
+# =============================================================================
+# Cron starts with a minimal environment. Source /etc/environment which the
+# container entrypoint populates with ALL env vars (including GEM_HOME,
+# GEM_PATH, BUNDLE_PATH, BUNDLE_APP_CONFIG, PATH, etc.).
+
+if [ -f /etc/environment ]; then
+    set -a
+    . /etc/environment
+    set +a
+fi
+
+# Ensure Ruby/Bundler paths are set (safety net for ruby:3.4.5-bookworm image)
+export GEM_HOME="${GEM_HOME:-/usr/local/bundle}"
+export BUNDLE_PATH="${BUNDLE_PATH:-/usr/local/bundle}"
+export BUNDLE_APP_CONFIG="${BUNDLE_APP_CONFIG:-/usr/local/bundle}"
+export PATH="/usr/local/bundle/bin:/usr/local/bundle/gems/bin:/opt/python-venv/bin:${PATH}"
+
+# =============================================================================
 # CONFIGURATION
 # =============================================================================
 
@@ -246,6 +265,40 @@ main() {
     local pipeline_start=$(date +%s)
     local overall_status="SUCCESS"
     local normalizer_failures=0
+
+    # Pre-flight check: verify bundle exec rails is available
+    log_info "Pre-flight check: verifying Rails environment..."
+    cd "$API_PATH"
+    if bundle exec rails runner "puts 'Pre-flight OK'" > /dev/null 2>&1; then
+        log_success "Pre-flight check passed: bundle exec rails is available"
+    else
+        log_error "Pre-flight check FAILED: 'bundle exec rails' not working"
+        log_error "Environment dump:"
+        log_error "  GEM_HOME=$GEM_HOME"
+        log_error "  BUNDLE_PATH=$BUNDLE_PATH"
+        log_error "  BUNDLE_APP_CONFIG=${BUNDLE_APP_CONFIG:-unset}"
+        log_error "  PATH=$PATH"
+        log_error "  which bundle: $(which bundle 2>&1 || echo 'not found')"
+        log_error "  which rails: $(which rails 2>&1 || echo 'not found')"
+        log_error "Aborting pipeline to avoid wasting time on normalizers"
+
+        send_notification \
+            "[FAILED] Drug Processor Pre-flight Check Failed - $(date '+%Y-%m-%d')" \
+            "Drug Processor Pipeline ABORTED during pre-flight check.
+
+The 'bundle exec rails' command is not working in the cron environment.
+This means Phase 2 (BatchVariantProcessorService) would fail.
+
+Environment:
+  GEM_HOME=$GEM_HOME
+  BUNDLE_PATH=$BUNDLE_PATH
+  PATH=$PATH
+
+Please check the container environment and /etc/environment.
+Log file: $LOG_FILE"
+
+        return 2
+    fi
 
     # Send start notification
     send_notification \
