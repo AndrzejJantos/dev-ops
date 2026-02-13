@@ -80,7 +80,7 @@ RUN bundle config set --local deployment 'true' \
 
 # Copy API application code (exclude .bundle to keep container-compiled gems)
 COPY cheaperfordrug-api/ ./
-RUN rm -rf .bundle/vendor && bundle install --jobs 4 --retry 3
+RUN rm -rf .bundle/vendor && rm -f .bundle/config && bundle install --jobs 4 --retry 3
 
 # =============================================================================
 # SETUP PYTHON SCRIPTS (SCRAPER)
