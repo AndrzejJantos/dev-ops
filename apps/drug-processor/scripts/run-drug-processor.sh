@@ -22,8 +22,8 @@ set -e
 # ENVIRONMENT SETUP (for cron execution)
 # =============================================================================
 # Cron starts with a minimal environment. Source /etc/environment which the
-# container entrypoint populates with ALL env vars (including GEM_HOME,
-# GEM_PATH, BUNDLE_PATH, BUNDLE_APP_CONFIG, PATH, etc.).
+# container entrypoint populates with ALL env vars (DATABASE_URL, REDIS_URL,
+# SENDGRID_API_KEY, RAILS_ENV, PATH, etc.).
 
 if [ -f /etc/environment ]; then
     set -a
@@ -31,11 +31,20 @@ if [ -f /etc/environment ]; then
     set +a
 fi
 
-# Ensure Ruby/Bundler paths are set (safety net for ruby:3.4.5-bookworm image)
-export GEM_HOME="${GEM_HOME:-/usr/local/bundle}"
-export BUNDLE_PATH="${BUNDLE_PATH:-/usr/local/bundle}"
-export BUNDLE_APP_CONFIG="${BUNDLE_APP_CONFIG:-/usr/local/bundle}"
-export PATH="/usr/local/bundle/bin:/usr/local/bundle/gems/bin:/opt/python-venv/bin:${PATH}"
+# IMPORTANT: Unset GEM_HOME, GEM_PATH, BUNDLE_PATH, BUNDLE_APP_CONFIG.
+# The Ruby base image sets these to /usr/local/bundle, but the Dockerfile
+# builds with `bundle config set --local deployment 'true'` which installs
+# gems into /app/api/vendor/bundle and records that in /app/api/.bundle/config.
+# If these env vars are set, they OVERRIDE the local .bundle/config and
+# bundler looks in /usr/local/bundle (where gems are NOT installed), causing
+# "bundler: command not found: rails".
+unset GEM_HOME
+unset GEM_PATH
+unset BUNDLE_PATH
+unset BUNDLE_APP_CONFIG
+
+# Ensure PATH includes bundler/ruby/python bin directories
+export PATH="/usr/local/bundle/bin:/usr/local/bin:/opt/python-venv/bin:${PATH}"
 
 # =============================================================================
 # CONFIGURATION
@@ -274,12 +283,13 @@ main() {
     else
         log_error "Pre-flight check FAILED: 'bundle exec rails' not working"
         log_error "Environment dump:"
-        log_error "  GEM_HOME=$GEM_HOME"
-        log_error "  BUNDLE_PATH=$BUNDLE_PATH"
-        log_error "  BUNDLE_APP_CONFIG=${BUNDLE_APP_CONFIG:-unset}"
+        log_error "  GEM_HOME=${GEM_HOME:-<unset>}"
+        log_error "  BUNDLE_PATH=${BUNDLE_PATH:-<unset>}"
+        log_error "  BUNDLE_APP_CONFIG=${BUNDLE_APP_CONFIG:-<unset>}"
         log_error "  PATH=$PATH"
         log_error "  which bundle: $(which bundle 2>&1 || echo 'not found')"
         log_error "  which rails: $(which rails 2>&1 || echo 'not found')"
+        log_error "  .bundle/config: $(cat /app/api/.bundle/config 2>&1 || echo 'not found')"
         log_error "Aborting pipeline to avoid wasting time on normalizers"
 
         send_notification \
@@ -290,9 +300,10 @@ The 'bundle exec rails' command is not working in the cron environment.
 This means Phase 2 (BatchVariantProcessorService) would fail.
 
 Environment:
-  GEM_HOME=$GEM_HOME
-  BUNDLE_PATH=$BUNDLE_PATH
+  GEM_HOME=${GEM_HOME:-<unset>}
+  BUNDLE_PATH=${BUNDLE_PATH:-<unset>}
   PATH=$PATH
+  .bundle/config contents: $(cat /app/api/.bundle/config 2>&1 || echo 'not found')
 
 Please check the container environment and /etc/environment.
 Log file: $LOG_FILE"

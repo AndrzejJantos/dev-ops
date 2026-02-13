@@ -129,11 +129,12 @@ echo "Timezone: $TZ"
 echo "Rails Environment: $RAILS_ENV"
 echo ""
 
-# Export ALL environment variables for cron
-# Cron starts with a minimal environment, so we dump everything the container has.
-# This ensures GEM_HOME, GEM_PATH, BUNDLE_PATH, BUNDLE_APP_CONFIG, and all other
-# Ruby/Bundler/Python vars are available when cron triggers run-drug-processor.sh.
-printenv | sed 's/^\([^=]*\)=\(.*\)$/\1="\2"/' > /etc/environment
+# Export environment variables for cron (which starts with minimal env).
+# EXCLUDE GEM_HOME, GEM_PATH, BUNDLE_PATH, BUNDLE_APP_CONFIG because the
+# Ruby base image sets these to /usr/local/bundle, but our Dockerfile builds
+# with `bundle config set --local deployment` which puts gems in vendor/bundle.
+# If these vars leak into cron, they override .bundle/config and break bundler.
+printenv | grep -v '^GEM_HOME=' | grep -v '^GEM_PATH=' | grep -v '^BUNDLE_PATH=' | grep -v '^BUNDLE_APP_CONFIG=' | sed 's/^\([^=]*\)=\(.*\)$/\1="\2"/' > /etc/environment
 
 # Validate database connection
 echo "Checking database connection..."
