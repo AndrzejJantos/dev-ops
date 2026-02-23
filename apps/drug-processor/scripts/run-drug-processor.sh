@@ -5,11 +5,9 @@
 # =============================================================================
 #
 # Self-contained execution (no docker exec):
-# 1. Runs Python drug_name_normalizer.py for Poland (full version)
-# 2. Runs Python drug_name_normalizer.py for Germany (initial version)
-# 3. Runs Python drug_name_normalizer.py for Czech (initial version)
-# 4. Runs BatchVariantProcessorService.new.call - ONCE for all countries
-# 5. Sends email notifications on start/finish
+# 1. Runs Python drug_name_normalizer.py for each country (PL/DE/AT/CZ/IT/ES/FI/ZA/PK/DK/NO)
+# 2. Runs BatchVariantProcessorService.new.call - ONCE for all countries
+# 3. Sends email notifications on start/finish
 #
 # Schedule: 2 AM on Wednesday, Thursday, Friday, Saturday, Sunday
 # Cron: 0 2 * * 0,3,4,5,6
@@ -71,9 +69,17 @@ EMAIL_ENABLED="${DEPLOYMENT_EMAIL_ENABLED:-true}"
 declare -A COUNTRIES=(
     ["PL"]="Poland|${SCRAPER_PATH}/python_scripts/poland/drug_name_normalizer.py|full"
     ["DE"]="Germany|${SCRAPER_PATH}/python_scripts/germany/drug_name_normalizer.py|initial"
+    ["AT"]="Austria|${SCRAPER_PATH}/python_scripts/austria/drug_name_normalizer.py|initial"
     ["CZ"]="Czech|${SCRAPER_PATH}/python_scripts/czech/drug_name_normalizer.py|initial"
+    ["IT"]="Italy|${SCRAPER_PATH}/python_scripts/italy/drug_name_normalizer.py|initial"
+    ["ES"]="Spain|${SCRAPER_PATH}/python_scripts/spain/drug_name_normalizer.py|initial"
+    ["FI"]="Finland|${SCRAPER_PATH}/python_scripts/finland/drug_name_normalizer.py|initial"
+    ["ZA"]="South Africa|${SCRAPER_PATH}/python_scripts/south_africa/drug_name_normalizer.py|initial"
+    ["PK"]="Pakistan|${SCRAPER_PATH}/python_scripts/pakistan/drug_name_normalizer.py|initial"
+    ["DK"]="Denmark|${SCRAPER_PATH}/python_scripts/denmark/drug_name_normalizer.py|initial"
+    ["NO"]="Norway|${SCRAPER_PATH}/python_scripts/norway/drug_name_normalizer.py|initial"
 )
-COUNTRY_ORDER=("PL" "DE" "CZ")
+COUNTRY_ORDER=("PL" "DE" "AT" "CZ" "IT" "ES" "FI" "ZA" "PK" "DK" "NO")
 
 # Results tracking
 declare -A NORMALIZER_RESULTS
@@ -324,10 +330,8 @@ Day: $DAY_OF_WEEK
 Mode: Self-contained container
 
 Steps to execute:
-1. Python Drug Name Normalizer - Poland (full version)
-2. Python Drug Name Normalizer - Germany (initial version)
-3. Python Drug Name Normalizer - Czech (initial version)
-4. Rails BatchVariantProcessorService (all countries)
+1. Python Drug Name Normalizers - 11 countries (PL/DE/AT/CZ/IT/ES/FI/ZA/PK/DK/NO)
+2. Rails BatchVariantProcessorService (all countries)
 
 You will receive another notification when the process completes."
 

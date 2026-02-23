@@ -38,7 +38,6 @@ SETUP_SSL=true
 APPS_TO_DEPLOY=(
     "cheaperfordrug-api"
     "cheaperfordrug-web"
-    "cheaperfordrug-landing"
 )
 
 # ==============================================================================

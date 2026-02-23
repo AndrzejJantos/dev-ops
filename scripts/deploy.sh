@@ -30,7 +30,6 @@ APPS_DIR="$DEVOPS_DIR/apps"
 # BLACKLIST - Apps that won't be deployed automatically
 # =============================================================================
 BLACKLISTED_APPS=(
-    "cheaperfordrug-landing"
 )
 
 # Function to check if app is blacklisted

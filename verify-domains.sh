@@ -97,21 +97,7 @@ test_backend_health 3021 "api"
 echo ""
 
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  2. CheaperForDrug Landing (cheaperfordrug-landing)${NC}"
-echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo ""
-
-test_domain "taniejpolek.pl" "/" "Main domain (should redirect to www)"
-test_domain "www.taniejpolek.pl" "/" "Main landing page"
-test_domain "presale.taniejpolek.pl" "/" "Presale landing page"
-
-echo -e "${YELLOW}Backend Health:${NC}"
-test_backend_health 3010 "landing"
-test_backend_health 3011 "landing"
-echo ""
-
-echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  3. CheaperForDrug Web (cheaperfordrug-web)${NC}"
+echo -e "${BLUE}  2. CheaperForDrug Web (cheaperfordrug-web)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 

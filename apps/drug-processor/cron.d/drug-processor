@@ -1,7 +1,7 @@
 # Drug Processor Pipeline - Cron Schedule (Self-Contained Container)
 # Location: /etc/cron.d/drug-processor
 #
-# Runs the drug name normalizers (PL, DE, CZ) and batch variant processor
+# Runs the drug name normalizers (PL, DE, AT, CZ, IT, ES, FI, ZA, PK, DK, NO) and batch variant processor
 # Schedule: Every 4 hours, every day
 #
 
