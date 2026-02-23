@@ -101,7 +101,7 @@ for app_dir in "$APPS_DIR"/*; do
         OLD_DB_BACKUPS=$(find "$BACKUP_DIR" -name "*.sql.gz" -mtime +${BACKUP_RETENTION_DAYS:-30} 2>/dev/null | wc -l | tr -d ' ')
 
         if [ "$OLD_DB_BACKUPS" -gt 0 ]; then
-            cleanup_old_backups "$BACKUP_DIR" "${BACKUP_RETENTION_DAYS:-30}"
+            cleanup_old_backups "$BACKUP_DIR" "${BACKUP_RETENTION_DAYS:-30}" "${BACKUP_MAX_COUNT:-0}"
             log "  Removed $OLD_DB_BACKUPS old database backups"
         else
             log "  Database backups: no old backups to remove"

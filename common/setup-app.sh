@@ -301,7 +301,7 @@ cleanup_old_images "$DOCKER_IMAGE_NAME" "${MAX_IMAGE_VERSIONS:-20}"
 
 # Cleanup database backups (Rails only)
 if [ "$APP_TYPE" = "rails" ] && [ -d "$BACKUP_DIR" ]; then
-    cleanup_old_backups "$BACKUP_DIR" "${BACKUP_RETENTION_DAYS:-30}"
+    cleanup_old_backups "$BACKUP_DIR" "${BACKUP_RETENTION_DAYS:-30}" "${BACKUP_MAX_COUNT:-0}"
 fi
 
 echo "[$(date)] Cleanup completed for ${APP_NAME}"

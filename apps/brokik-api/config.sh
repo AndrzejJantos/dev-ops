@@ -72,13 +72,14 @@ export HEALTH_CHECK_TIMEOUT=60
 # ============================================================================
 export BACKUP_ENABLED=true
 export MIGRATION_BACKUP_ENABLED=true
-export BACKUP_RETENTION_DAYS=30
+export BACKUP_RETENTION_DAYS=7
+export BACKUP_MAX_COUNT=48
 
 # ============================================================================
 # IMAGE BACKUP CONFIGURATION
 # ============================================================================
 export SAVE_IMAGE_BACKUPS=true
-export MAX_IMAGE_BACKUPS=20         # Keep last 20 versions for rollback
+export MAX_IMAGE_BACKUPS=5          # Keep last 5 versions for rollback
 
 # ============================================================================
 # AUTO CLEANUP

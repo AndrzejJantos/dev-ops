@@ -325,22 +325,34 @@ backup_database() {
 cleanup_old_backups() {
     local backup_dir="$1"
     local retention_days="${2:-30}"
-
-    log_info "Cleaning up database backups older than ${retention_days} days"
+    local max_count="${3:-0}"
 
     if [ ! -d "$backup_dir" ]; then
         log_info "Backup directory doesn't exist: ${backup_dir}"
         return 0
     fi
 
-    # Find and delete backups older than retention days
-    local old_backups=$(find "$backup_dir" -name "*.sql.gz" -mtime +${retention_days} 2>/dev/null)
-
-    if [ -n "$old_backups" ]; then
-        echo "$old_backups" | xargs rm -f
-        log_success "Cleaned up old database backups"
+    # Count-based cleanup: keep only the N most recent backups
+    if [ "$max_count" -gt 0 ] 2>/dev/null; then
+        local total=$(find "$backup_dir" -name "*.sql.gz" 2>/dev/null | wc -l)
+        if [ "$total" -gt "$max_count" ]; then
+            local to_delete=$((total - max_count))
+            log_info "Removing ${to_delete} old backups (keeping ${max_count} most recent)"
+            find "$backup_dir" -name "*.sql.gz" -printf '%T+ %p\n' 2>/dev/null | sort | head -n "$to_delete" | cut -d' ' -f2- | xargs rm -f
+            log_success "Cleaned up ${to_delete} old database backups"
+        else
+            log_info "No old backups to clean up (${total}/${max_count})"
+        fi
     else
-        log_info "No old backups to clean up"
+        # Time-based cleanup: delete backups older than retention_days
+        log_info "Cleaning up database backups older than ${retention_days} days"
+        local old_backups=$(find "$backup_dir" -name "*.sql.gz" -mtime +${retention_days} 2>/dev/null)
+        if [ -n "$old_backups" ]; then
+            echo "$old_backups" | xargs rm -f
+            log_success "Cleaned up old database backups"
+        else
+            log_info "No old backups to clean up"
+        fi
     fi
 
     return 0
