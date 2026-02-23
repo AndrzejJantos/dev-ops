@@ -81,10 +81,9 @@
     |     (cheaperfordrug-scraper)                        |
     |                                                     |
     |  scraper-vpn-poland      product-update-worker-1    |
-    |  scraper-vpn-germany     product-update-worker-2    |
-    |  scraper-vpn-czech       product-update-worker-3    |
-    |                          product-update-worker-4    |
-    |                          product-update-worker-5    |
+    |                          product-update-worker-2    |
+    |                          ...                        |
+    |                          product-update-worker-10   |
     +----------------------------------------------------+
 
 
@@ -422,15 +421,9 @@ server {
 
 ### Scraper Containers
 
-**Active Scrapers (8 containers):**
+**Active Scrapers (11 containers):**
 - scraper-vpn-poland
-- scraper-vpn-germany
-- scraper-vpn-czech
-- product-update-worker-poland-1
-- product-update-worker-poland-2
-- product-update-worker-poland-3
-- product-update-worker-poland-4
-- product-update-worker-poland-5
+- product-update-worker-poland-1 through product-update-worker-poland-10
 
 **Scheduler:**
 - cheaperfordrug-api-scheduler (Clockwork)

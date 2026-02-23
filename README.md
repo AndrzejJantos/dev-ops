@@ -104,17 +104,11 @@ Production Environment (hetzner-andrzej: 65.109.22.232)
 ┌─────────────────────────────────────────────────────────────┐
 │                    SCRAPER SYSTEM                            │
 ├─────────────────────────────────────────────────────────────┤
-│ VPN Scrapers (3 containers)                                 │
+│ VPN Scrapers (1 container)                                  │
 │   • scraper-vpn-poland (NordVPN PL)                        │
-│   • scraper-vpn-germany (NordVPN DE)                       │
-│   • scraper-vpn-czech (NordVPN CZ)                         │
 │                                                              │
-│ Product Update Workers (5 containers)                       │
-│   • product-update-worker-poland-1                          │
-│   • product-update-worker-poland-2                          │
-│   • product-update-worker-poland-3                          │
-│   • product-update-worker-poland-4                          │
-│   • product-update-worker-poland-5                          │
+│ Product Update Workers (10 containers)                      │
+│   • product-update-worker-poland-1 through -10             │
 │   • All connect to: http://localhost:3020-3022            │
 └─────────────────────────────────────────────────────────────┘
 
@@ -606,21 +600,7 @@ Health Check: nordvpn status (every 60s)
 
 **Operation:** Continuous scraping with 5-minute VPN rotation
 
-#### 2. Germany VPN Scraper
-```
-Container Name: scraper-vpn-germany
-VPN Country: Germany
-Status: Standby (German pharmacies not yet configured)
-```
-
-#### 3. Czech Republic VPN Scraper
-```
-Container Name: scraper-vpn-czech
-VPN Country: Czech Republic
-Status: Standby (Czech pharmacies not yet configured)
-```
-
-### Product Update Workers (5 containers)
+### Product Update Workers (10 containers)
 
 **All connect to Poland VPN, call CheaperForDrug API**
 
