@@ -36,7 +36,7 @@ services:
     command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
     healthcheck:
       # Check both HTTP endpoint AND Redis connectivity
-      test: ["CMD-SHELL", "curl -sf http://localhost:4201/up > /dev/null && ruby -e \"require 'redis'; Redis.new(url: ENV['REDIS_URL'] || 'redis://127.0.0.1:6379/2').ping\" > /dev/null 2>&1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4201/up > /dev/null && bundle exec ruby -e \"require 'redis'; Redis.new(url: ENV['REDIS_URL'] || 'redis://127.0.0.1:6379/2').ping\" > /dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       start_period: 40s
@@ -77,7 +77,7 @@ services:
     command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
     healthcheck:
       # Check both HTTP endpoint AND Redis connectivity
-      test: ["CMD-SHELL", "curl -sf http://localhost:4202/up > /dev/null && ruby -e \"require 'redis'; Redis.new(url: ENV['REDIS_URL'] || 'redis://127.0.0.1:6379/2').ping\" > /dev/null 2>&1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4202/up > /dev/null && bundle exec ruby -e \"require 'redis'; Redis.new(url: ENV['REDIS_URL'] || 'redis://127.0.0.1:6379/2').ping\" > /dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       start_period: 40s
