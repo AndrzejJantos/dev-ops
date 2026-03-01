@@ -34,7 +34,9 @@
 # Environment variables for the cron job
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-ELASTICSEARCH_URL=http://172.17.0.1:9200
+# IMPORTANT: Use localhost, NOT 172.17.0.1 (Docker bridge).
+# All services use host networking and access each other via localhost.
+ELASTICSEARCH_URL=http://localhost:9200
 
 # Optional: Set these if Elasticsearch is running in docker-compose
 DOCKER_COMPOSE_DIR=/home/andrzej/apps/cheaperfordrug-api/docker

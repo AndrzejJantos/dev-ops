@@ -3,6 +3,21 @@
 # Docker-specific utility functions for deployment
 # Location: /home/andrzej/DevOps/common/docker-utils.sh
 # This file should be sourced by deployment scripts
+#
+# IMPORTANT: Container Naming Convention
+# =======================================
+# All containers MUST use HYPHEN naming: ${app_name}-web-${i}
+# This matches docker compose conventions.
+#
+# NEVER use underscore naming (${app_name}_web_${i}) as this creates
+# "legacy" containers that conflict with compose-managed containers
+# and cause port binding failures.
+#
+# WARNING: The start_container(), start_worker_container(), and
+# start_scheduler_container() functions use raw "docker run" and bypass
+# docker compose. Prefer using docker compose files for container management.
+# These functions are kept for backward compatibility but docker compose
+# should be preferred for all new deployments.
 
 # Build Docker image
 build_docker_image() {
@@ -431,6 +446,76 @@ check_pending_migrations() {
     return 1  # No migrations pending
 }
 
+# Validate that REDIS_URL uses localhost/127.0.0.1, not Docker bridge IP
+# This prevents a common misconfiguration when using host networking
+validate_redis_url() {
+    local env_file="$1"
+
+    if [ ! -f "$env_file" ]; then
+        return 0  # No env file to check
+    fi
+
+    local redis_url=$(grep "^REDIS_URL=" "$env_file" 2>/dev/null | head -1 | cut -d'=' -f2-)
+
+    if [ -z "$redis_url" ]; then
+        return 0  # No REDIS_URL configured
+    fi
+
+    # Check for Docker bridge IP (172.17.0.1) which is wrong for host networking
+    if echo "$redis_url" | grep -q "172\.17\.0\.1"; then
+        log_error "================================================================"
+        log_error "INVALID REDIS_URL DETECTED in $env_file"
+        log_error "================================================================"
+        log_error "Current:  REDIS_URL=$redis_url"
+        log_error "Problem:  172.17.0.1 is the Docker bridge IP."
+        log_error "          With --network host, containers access Redis directly"
+        log_error "          on the host at 127.0.0.1, not via Docker bridge."
+        log_error ""
+        log_error "Fix:      Change REDIS_URL to use 127.0.0.1 instead:"
+        log_error "          REDIS_URL=redis://127.0.0.1:6379/2"
+        log_error "================================================================"
+        return 1  # Invalid URL
+    fi
+
+    return 0  # URL looks OK
+}
+
+# Detect and warn about legacy underscore-named containers
+# Legacy containers (app_web_1) conflict with compose containers (app-web-1)
+# and can cause port binding failures. This function finds and reports them.
+detect_legacy_containers() {
+    local app_name="$1"
+    local found_legacy=false
+
+    # Look for containers with underscore naming pattern: app_web_N, app_worker_N, app_scheduler
+    local legacy_containers=$(docker ps -a --format "{{.Names}}" 2>/dev/null | grep -E "^${app_name}_(web|worker|scheduler|migration)" || true)
+
+    if [ -n "$legacy_containers" ]; then
+        found_legacy=true
+        log_warning "================================================================"
+        log_warning "LEGACY CONTAINERS DETECTED (underscore naming)"
+        log_warning "================================================================"
+        log_warning "The following containers use the old underscore naming convention"
+        log_warning "and may conflict with docker compose containers (hyphen naming):"
+        echo ""
+        echo "$legacy_containers" | while read -r name; do
+            local status=$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || echo "unknown")
+            log_warning "  ${name} (status: ${status})"
+        done
+        echo ""
+        log_warning "To clean up legacy containers:"
+        log_warning "  docker stop \$(docker ps -q --filter 'name=${app_name}_') 2>/dev/null"
+        log_warning "  docker rm \$(docker ps -aq --filter 'name=${app_name}_') 2>/dev/null"
+        log_warning "================================================================"
+    fi
+
+    if [ "$found_legacy" = true ]; then
+        return 0  # Legacy containers found
+    else
+        return 1  # No legacy containers
+    fi
+}
+
 # Clean up old Docker images
 cleanup_old_images() {
     local app_name="$1"
@@ -578,9 +663,10 @@ rolling_restart() {
     if [ $current_count -eq 0 ]; then
         log_warning "No running containers found, starting fresh"
         # Start new containers
+        # NOTE: Uses hyphen naming (app-web-1) to match docker compose convention
         for i in $(seq 1 $scale); do
             local port=$((base_port + i - 1))
-            local container_name="${app_name}_web_${i}"
+            local container_name="${app_name}-web-${i}"
 
             start_container "$container_name" "$new_image" "$port" "$env_file" "$container_port" "$network"
 
@@ -605,8 +691,8 @@ rolling_restart() {
     # This ensures the new container is fully operational before removing the old one
     for i in $(seq 1 $scale); do
         local port=$((base_port + i - 1))
-        local container_name="${app_name}_web_${i}"
-        local temp_container_name="${app_name}_web_${i}_new"
+        local container_name="${app_name}-web-${i}"
+        local temp_container_name="${app_name}-web-${i}-new"
 
         log_info "Restarting container ${i}/${scale} on port ${port} (zero-downtime deployment)"
 
@@ -778,7 +864,7 @@ scale_application() {
 
         for i in $(seq $((current_count + 1)) $target_scale); do
             local port=$(get_next_available_port "$base_port")
-            local container_name="${app_name}_web_${i}"
+            local container_name="${app_name}-web-${i}"
 
             start_container "$container_name" "$image_name" "$port" "$env_file" "$container_port"
 
@@ -801,7 +887,7 @@ scale_application() {
         log_info "Scaling down: removing ${to_remove} instances"
 
         for i in $(seq $((target_scale + 1)) $current_count); do
-            local container_name="${app_name}_web_${i}"
+            local container_name="${app_name}-web-${i}"
             stop_container "$container_name" 30
         done
     fi

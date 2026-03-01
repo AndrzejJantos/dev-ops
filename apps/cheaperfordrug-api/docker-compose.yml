@@ -5,9 +5,9 @@
 # - sidekiq-1: All background jobs
 # - clockwork: Scheduler
 #
-# Network: host mode
+# Network: host mode (containers share host network stack)
 # Database: PostgreSQL on localhost:5432
-# Redis: localhost:6379/2
+# Redis: 127.0.0.1:6379/2 (NEVER use 172.17.0.1 Docker bridge with host networking)
 
 services:
   # ===========================================================================
@@ -37,7 +37,8 @@ services:
       - /app/tmp:size=100M,mode=1777
     command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3020/up"]
+      # Check both HTTP endpoint AND Redis connectivity
+      test: ["CMD-SHELL", "curl -sf http://localhost:3020/up > /dev/null && ruby -e \"require 'redis'; Redis.new(url: ENV['REDIS_URL'] || 'redis://127.0.0.1:6379/2').ping\" > /dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       start_period: 40s
@@ -77,7 +78,8 @@ services:
       - /app/tmp:size=100M,mode=1777
     command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3021/up"]
+      # Check both HTTP endpoint AND Redis connectivity
+      test: ["CMD-SHELL", "curl -sf http://localhost:3021/up > /dev/null && ruby -e \"require 'redis'; Redis.new(url: ENV['REDIS_URL'] || 'redis://127.0.0.1:6379/2').ping\" > /dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       start_period: 40s
@@ -95,6 +97,7 @@ services:
 
   # ===========================================================================
   # SIDEKIQ WORKER
+  # Health check verifies Redis connectivity (Sidekiq depends entirely on Redis)
   # ===========================================================================
   sidekiq-1:
     image: cheaperfordrug-api:latest
@@ -119,6 +122,13 @@ services:
       - /tmp:size=50M,mode=1777
       - /app/tmp:size=100M,mode=1777
     command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && cd /app && bundle exec sidekiq"
+    healthcheck:
+      # Verify Redis is reachable (Sidekiq is useless without Redis)
+      test: ["CMD-SHELL", "ruby -e \"require 'redis'; Redis.new(url: ENV['REDIS_URL'] || 'redis://127.0.0.1:6379/2').ping\" > /dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -132,6 +142,7 @@ services:
 
   # ===========================================================================
   # CLOCKWORK (Scheduler)
+  # Health check verifies Redis connectivity (Clockwork enqueues jobs to Redis)
   # ===========================================================================
   clockwork:
     image: cheaperfordrug-api:latest
@@ -155,6 +166,13 @@ services:
       - /tmp:size=50M,mode=1777
       - /app/tmp:size=100M,mode=1777
     command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && cd /app && bundle exec clockwork lib/clock.rb"
+    healthcheck:
+      # Verify Redis is reachable (Clockwork enqueues Sidekiq jobs via Redis)
+      test: ["CMD-SHELL", "ruby -e \"require 'redis'; Redis.new(url: ENV['REDIS_URL'] || 'redis://127.0.0.1:6379/2').ping\" > /dev/null 2>&1"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     deploy:
       resources:
         limits:

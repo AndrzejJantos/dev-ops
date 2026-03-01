@@ -308,6 +308,15 @@ deploy_application() {
         return 1
     fi
 
+    # Validate REDIS_URL is not using Docker bridge IP (common misconfiguration)
+    if ! validate_redis_url "$ENV_FILE"; then
+        send_deployment_failure_notification "Invalid REDIS_URL in $ENV_FILE (uses 172.17.0.1 instead of 127.0.0.1)"
+        return 1
+    fi
+
+    # Warn about legacy underscore-named containers that may cause port conflicts
+    detect_legacy_containers "$APP_NAME" || true  # Non-fatal, just a warning
+
     # Step 1: Pull latest code (app-type specific)
     if ! ${APP_TYPE}_pull_code; then
         send_deployment_failure_notification "Failed to pull latest code from repository"
@@ -614,7 +623,12 @@ list_image_versions() {
 # Function: Get currently deployed image tag
 get_current_image_tag() {
     # Check first running container to see what version is deployed
-    local first_container="${APP_NAME}_web_1"
+    # Check both naming conventions (hyphen = current, underscore = legacy)
+    local first_container="${APP_NAME}-web-1"
+    if ! docker ps --filter "name=^${first_container}$" --format "{{.Names}}" | grep -q "^${first_container}$"; then
+        # Fallback to legacy underscore naming
+        first_container="${APP_NAME}_web_1"
+    fi
 
     if docker ps --filter "name=^${first_container}$" --format "{{.Names}}" | grep -q "^${first_container}$"; then
         local current_image=$(docker inspect -f '{{.Image}}' "$first_container" 2>/dev/null)
@@ -814,7 +828,7 @@ handle_status() {
     echo "  Running containers: $(docker ps --filter "name=${APP_NAME}" --format "{{.Names}}" | wc -l | tr -d ' ')"
     echo ""
     echo "Useful commands:"
-    echo "  View logs:     docker logs ${APP_NAME}_web_1 -f"
+    echo "  View logs:     docker logs ${APP_NAME}-web-1 -f"
     echo "  Check health:  curl https://${DOMAIN}"
     echo "  Scale:         ./deploy.sh scale <number>"
     echo "  Deploy:        ./deploy.sh deploy"
@@ -1115,7 +1129,7 @@ handle_deploy_command() {
             handle_status
             ;;
         logs)
-            local container="${2:-${APP_NAME}_web_1}"
+            local container="${2:-${APP_NAME}-web-1}"
             log_info "Showing logs for $container (Ctrl+C to exit)"
             docker logs -f "$container"
             ;;
@@ -1124,10 +1138,16 @@ handle_deploy_command() {
                 log_error "Console command is only available for Rails applications"
                 exit 1
             fi
-            local container_name="${APP_NAME}_web_1"
+            # Check both naming conventions (hyphen = current, underscore = legacy)
+            local container_name="${APP_NAME}-web-1"
             if ! docker ps --filter "name=${container_name}" --format "{{.Names}}" | grep -q "^${container_name}$"; then
-                log_error "Container ${container_name} is not running"
-                exit 1
+                # Fallback to legacy underscore naming
+                container_name="${APP_NAME}_web_1"
+                if ! docker ps --filter "name=${container_name}" --format "{{.Names}}" | grep -q "^${container_name}$"; then
+                    log_error "Container ${APP_NAME}-web-1 is not running"
+                    exit 1
+                fi
+                log_warning "Using legacy underscore-named container. Redeploy to use hyphen naming."
             fi
             log_info "Starting Rails console in ${container_name}..."
             docker exec -it "$container_name" /bin/bash -c "cd /app && bundle exec rails console"
@@ -1144,7 +1164,7 @@ handle_deploy_command() {
             echo "  rollback            Rollback to a previous version (interactive)"
             echo "  scale <N>           Scale web containers to N instances (1-10)"
             echo "  status              Show status of all containers"
-            echo "  logs [container]    Show logs (default: ${APP_NAME}_web_1)"
+            echo "  logs [container]    Show logs (default: ${APP_NAME}-web-1)"
             if [ "$APP_TYPE" = "rails" ]; then
                 echo "  console             Open Rails console"
             fi
@@ -1155,7 +1175,7 @@ handle_deploy_command() {
             echo "  $0 rollback         # Rollback to previous version"
             echo "  $0 scale 3          # Scale to 3 web containers"
             echo "  $0 status           # Show container status"
-            echo "  $0 logs web_2       # Show logs for web_2"
+            echo "  $0 logs ${APP_NAME}-web-2  # Show logs for web-2"
             echo ""
             exit 0
             ;;

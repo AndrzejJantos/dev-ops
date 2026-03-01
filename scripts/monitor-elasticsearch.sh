@@ -47,7 +47,9 @@ if [ -f "${COMMON_DIR}/elasticsearch-check.sh" ]; then
 fi
 
 # Elasticsearch configuration
-ES_URL="${ELASTICSEARCH_URL:-http://172.17.0.1:9200}"
+# IMPORTANT: Use localhost, NOT 172.17.0.1 (Docker bridge).
+# Elasticsearch runs on the host network, accessible at localhost.
+ES_URL="${ELASTICSEARCH_URL:-http://localhost:9200}"
 ES_USERNAME="${ELASTICSEARCH_USERNAME:-}"
 ES_PASSWORD="${ELASTICSEARCH_PASSWORD:-}"
 

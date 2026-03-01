@@ -177,6 +177,15 @@ start_container() {
         return 1
     fi
 
+    # Validate REDIS_URL is not using Docker bridge IP
+    local redis_url=$(grep "^REDIS_URL=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2-)
+    if echo "$redis_url" | grep -q "172\.17\.0\.1" 2>/dev/null; then
+        log_error "REDIS_URL uses Docker bridge IP (172.17.0.1). With --network host, use 127.0.0.1 instead."
+        log_error "Current: REDIS_URL=$redis_url"
+        log_error "Fix: Change to redis://127.0.0.1:6379/2 in $ENV_FILE"
+        return 1
+    fi
+
     # Stop existing container if running
     if docker ps -q -f "name=${CONTAINER_NAME}" | grep -q .; then
         log_info "Stopping existing container..."

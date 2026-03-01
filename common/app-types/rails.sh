@@ -170,7 +170,8 @@ RAILS_ENV=production
 RAILS_SERVE_STATIC_FILES=true
 
 # Redis Configuration (Dedicated database)
-REDIS_URL=${REDIS_URL:-redis://localhost:6379/0}
+# IMPORTANT: Use 127.0.0.1 (NOT 172.17.0.1 Docker bridge). Host networking = localhost access.
+REDIS_URL=${REDIS_URL:-redis://127.0.0.1:6379/0}
 
 # Mailgun Configuration (for application emails)
 MAILGUN_API_KEY=${MAILGUN_API_KEY:-dummy_mailgun_key}
@@ -569,9 +570,10 @@ rails_deploy_fresh() {
     log_info "No running containers found, starting fresh deployment"
 
     # Start web containers with host network for database access
+    # NOTE: Uses hyphen naming (app-web-1) to match docker compose convention
     for i in $(seq 1 $scale); do
         local port=$((BASE_PORT + i - 1))
-        local container_name="${APP_NAME}_web_${i}"
+        local container_name="${APP_NAME}-web-${i}"
 
         start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT" "host" "/app/log"
 
@@ -591,9 +593,9 @@ rails_deploy_fresh() {
 
     # Always check and run migrations after first container is up
     log_info "Checking for pending migrations..."
-    if check_pending_migrations "${APP_NAME}_web_1"; then
+    if check_pending_migrations "${APP_NAME}-web-1"; then
         log_info "Running database migrations..."
-        run_migrations "${APP_NAME}_web_1"
+        run_migrations "${APP_NAME}-web-1"
 
         if [ $? -ne 0 ]; then
             log_error "Migrations failed"
@@ -606,7 +608,7 @@ rails_deploy_fresh() {
     if [ $worker_count -gt 0 ]; then
         log_info "Starting ${worker_count} worker container(s)..."
         for i in $(seq 1 $worker_count); do
-            local worker_name="${APP_NAME}_worker_${i}"
+            local worker_name="${APP_NAME}-worker-${i}"
             start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host" "/app/log"
 
             if [ $? -ne 0 ]; then
@@ -620,7 +622,7 @@ rails_deploy_fresh() {
     # Start scheduler container if enabled (also use host network)
     if [ "${SCHEDULER_ENABLED:-false}" = "true" ]; then
         log_info "Starting scheduler container..."
-        local scheduler_name="${APP_NAME}_scheduler"
+        local scheduler_name="${APP_NAME}-scheduler"
         local scheduler_cmd="${SCHEDULER_COMMAND:-bundle exec clockwork config/clock.rb}"
         start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "$scheduler_cmd" "host" "/app/log"
 
@@ -687,6 +689,7 @@ rails_deploy_rolling() {
     fi
 
     # Restart worker containers if configured (use host network)
+    # NOTE: Uses hyphen naming (app-worker-1) to match docker compose convention
     local worker_count="${WORKER_COUNT:-0}"
     if [ $worker_count -gt 0 ]; then
         log_info "Restarting ${worker_count} worker container(s)..."
@@ -696,23 +699,30 @@ rails_deploy_rolling() {
         log_info "Stopping workers gracefully (allowing time to finish current jobs)..."
 
         for i in $(seq 1 $worker_count); do
-            local worker_name="${APP_NAME}_worker_${i}"
-            if docker ps -a --filter "name=${worker_name}" --format "{{.Names}}" | grep -q "^${worker_name}$"; then
-                # Send TSTP signal to stop accepting new jobs (quiet mode)
-                log_info "Putting ${worker_name} into quiet mode..."
-                docker exec "$worker_name" pkill -TSTP -f sidekiq 2>/dev/null || true
-                sleep 2
+            local worker_name="${APP_NAME}-worker-${i}"
+            # Also check for legacy underscore-named containers
+            local legacy_name="${APP_NAME}_worker_${i}"
+            for name_to_check in "$worker_name" "$legacy_name"; do
+                if docker ps -a --filter "name=${name_to_check}" --format "{{.Names}}" | grep -q "^${name_to_check}$"; then
+                    if [ "$name_to_check" = "$legacy_name" ]; then
+                        log_warning "Found legacy underscore-named container: ${legacy_name} (replacing with ${worker_name})"
+                    fi
+                    # Send TSTP signal to stop accepting new jobs (quiet mode)
+                    log_info "Putting ${name_to_check} into quiet mode..."
+                    docker exec "$name_to_check" pkill -TSTP -f sidekiq 2>/dev/null || true
+                    sleep 2
 
-                # Stop container with extended timeout (default: 90 seconds)
-                local worker_timeout="${WORKER_SHUTDOWN_TIMEOUT:-90}"
-                log_info "Stopping ${worker_name} (timeout: ${worker_timeout}s)..."
-                stop_container "$worker_name" "$worker_timeout"
-            fi
+                    # Stop container with extended timeout (default: 90 seconds)
+                    local worker_timeout="${WORKER_SHUTDOWN_TIMEOUT:-90}"
+                    log_info "Stopping ${name_to_check} (timeout: ${worker_timeout}s)..."
+                    stop_container "$name_to_check" "$worker_timeout"
+                fi
+            done
         done
 
-        # Start new workers
+        # Start new workers (always with hyphen naming)
         for i in $(seq 1 $worker_count); do
-            local worker_name="${APP_NAME}_worker_${i}"
+            local worker_name="${APP_NAME}-worker-${i}"
             start_worker_container "$worker_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "bundle exec sidekiq" "host" "/app/log"
 
             if [ $? -ne 0 ]; then
@@ -726,14 +736,20 @@ rails_deploy_rolling() {
     # Restart scheduler container if enabled (use host network)
     if [ "${SCHEDULER_ENABLED:-false}" = "true" ]; then
         log_info "Restarting scheduler container..."
-        local scheduler_name="${APP_NAME}_scheduler"
+        local scheduler_name="${APP_NAME}-scheduler"
+        local legacy_scheduler_name="${APP_NAME}_scheduler"
 
-        # Stop old scheduler
-        if docker ps -a --filter "name=${scheduler_name}" --format "{{.Names}}" | grep -q "^${scheduler_name}$"; then
-            stop_container "$scheduler_name"
-        fi
+        # Stop old scheduler (check both naming conventions)
+        for name_to_check in "$scheduler_name" "$legacy_scheduler_name"; do
+            if docker ps -a --filter "name=${name_to_check}" --format "{{.Names}}" | grep -q "^${name_to_check}$"; then
+                if [ "$name_to_check" = "$legacy_scheduler_name" ]; then
+                    log_warning "Found legacy underscore-named container: ${legacy_scheduler_name} (replacing with ${scheduler_name})"
+                fi
+                stop_container "$name_to_check"
+            fi
+        done
 
-        # Start new scheduler
+        # Start new scheduler (always with hyphen naming)
         local scheduler_cmd="${SCHEDULER_COMMAND:-bundle exec clockwork config/clock.rb}"
         start_scheduler_container "$scheduler_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$ENV_FILE" "$scheduler_cmd" "host" "/app/log"
 
@@ -858,8 +874,8 @@ rails_display_deployment_summary() {
     done
     echo ""
 
-    # Worker Information (if applicable)
-    local worker_containers=($(docker ps --filter "name=${APP_NAME}_worker" --format "{{.Names}}" 2>/dev/null))
+    # Worker Information (if applicable) -- check both naming conventions
+    local worker_containers=($(docker ps --filter "name=${APP_NAME}-worker" --format "{{.Names}}" 2>/dev/null) $(docker ps --filter "name=${APP_NAME}_worker" --format "{{.Names}}" 2>/dev/null))
     if [ ${#worker_containers[@]} -gt 0 ]; then
         echo "WORKER CONTAINERS:"
         echo "  Count: ${#worker_containers[@]} instances"
@@ -871,11 +887,19 @@ rails_display_deployment_summary() {
     fi
 
     # Scheduler Information (if applicable)
-    local scheduler_container="${APP_NAME}_scheduler"
+    # Check both naming conventions for scheduler
+    local scheduler_container="${APP_NAME}-scheduler"
+    local legacy_scheduler="${APP_NAME}_scheduler"
+    local found_scheduler=""
     if docker ps --filter "name=${scheduler_container}" --format "{{.Names}}" 2>/dev/null | grep -q "^${scheduler_container}$"; then
+        found_scheduler="$scheduler_container"
+    elif docker ps --filter "name=${legacy_scheduler}" --format "{{.Names}}" 2>/dev/null | grep -q "^${legacy_scheduler}$"; then
+        found_scheduler="$legacy_scheduler"
+    fi
+    if [ -n "$found_scheduler" ]; then
         echo "SCHEDULER CONTAINER:"
-        local status=$(docker inspect -f '{{.State.Status}}' "$scheduler_container" 2>/dev/null)
-        echo "  Container: ${scheduler_container}"
+        local status=$(docker inspect -f '{{.State.Status}}' "$found_scheduler" 2>/dev/null)
+        echo "  Container: ${found_scheduler}"
         echo "  Status: ${status}"
         echo "  Type: Clockwork (scheduled tasks)"
         echo ""
@@ -920,8 +944,8 @@ rails_display_deployment_summary() {
     echo "LOGS (persisted on host at ${LOG_DIR}/):"
     echo "  All logs:         tail -f ${LOG_DIR}/production.log"
     echo "  Sidekiq only:     tail -f ${LOG_DIR}/production.log | grep Sidekiq"
-    echo "  Container logs:   docker logs ${APP_NAME}_web_1 -f"
-    echo "  Inside container: docker exec ${APP_NAME}_web_1 tail -f /app/log/production.log"
+    echo "  Container logs:   docker logs ${APP_NAME}-web-1 -f"
+    echo "  Inside container: docker exec ${APP_NAME}-web-1 tail -f /app/log/production.log"
     echo ""
 
     echo "================================================================================"

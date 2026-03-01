@@ -232,7 +232,7 @@ nextjs_deploy_fresh() {
     # Start web containers
     for i in $(seq 1 $scale); do
         local port=$((BASE_PORT + i - 1))
-        local container_name="${APP_NAME}_web_${i}"
+        local container_name="${APP_NAME}-web-${i}"
 
         start_container "$container_name" "${DOCKER_IMAGE_NAME}:${image_tag}" "$port" "$ENV_FILE" "$CONTAINER_PORT" "bridge" "/app/log"
 
@@ -396,8 +396,8 @@ nextjs_display_deployment_summary() {
     echo "  Quick link:       cd ~/apps/${APP_NAME}/config (→ config dir)"
     echo ""
     echo "LOGS:"
-    echo "  Docker stdout:    docker logs ${APP_NAME}_web_1 -f"
-    echo "  All containers:   docker logs ${APP_NAME}_web_1 -f --tail=100"
+    echo "  Docker stdout:    docker logs ${APP_NAME}-web-1 -f"
+    echo "  All containers:   docker logs ${APP_NAME}-web-1 -f --tail=100"
     echo "  Aggregated logs:  ${LOG_DIR}/"
     echo "  Note: Volume mount configured: ${LOG_DIR}/ -> /app/log/ (inside containers)"
     echo "        Configure your Next.js app to write logs to /app/log/production.log"

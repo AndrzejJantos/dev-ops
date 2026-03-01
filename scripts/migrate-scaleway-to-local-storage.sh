@@ -144,7 +144,7 @@ migrate_files() {
     log_info "=== Migrating Files from Scaleway to Local Storage ==="
 
     # Get container name
-    local container_name="${APP_NAME}_web_1"
+    local container_name="${APP_NAME}-web-1"
 
     # Count files in Scaleway
     log_info "Counting files in Scaleway..."
@@ -314,7 +314,7 @@ verify_migration() {
     log_info "Files in local storage: ${local_count}"
 
     # Get count from database
-    local container_name="${APP_NAME}_web_1"
+    local container_name="${APP_NAME}-web-1"
     local db_count=$(docker exec "$container_name" bundle exec rails runner "puts ActiveStorage::Blob.count" 2>/dev/null || echo "0")
     log_info "Files in database: ${db_count}"
 
@@ -353,7 +353,7 @@ ${YELLOW}Next Steps:${NC}
 2. Test file uploads/downloads to ensure everything works
 
 3. Monitor logs for any issues:
-   ${BLUE}docker logs ${APP_NAME}_web_1 -f${NC}
+   ${BLUE}docker logs ${APP_NAME}-web-1 -f${NC}
 
 ${YELLOW}Rollback (if needed):${NC}
 If you need to rollback to Scaleway:

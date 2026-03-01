@@ -200,10 +200,10 @@ LOGS & MONITORING
     tail -f ~/apps/${app_name}/logs/production.log | grep Sidekiq
 
   Container Logs:
-    docker logs ${app_name}_web_1 -f
+    docker logs ${app_name}-web-1 -f
 
   Inside Container:
-    docker exec ${app_name}_web_1 tail -f /app/log/production.log
+    docker exec ${app_name}-web-1 tail -f /app/log/production.log
 
 ================================================================
 
@@ -363,7 +363,7 @@ TROUBLESHOOTING COMMANDS
 ------------------------------------------------------------
 
   View Container Logs:
-    docker logs ${app_name}_web_1 -f
+    docker logs ${app_name}-web-1 -f
 
   Check Deployment Status:
     cd ~/DevOps/apps/${app_name} && ./deploy.sh status

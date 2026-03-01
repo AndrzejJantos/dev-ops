@@ -32,7 +32,7 @@
 ## Deployment Architecture (as of 2026-02-23)
 - **Deploy scripts**: `~/DevOps/apps/{app-name}/deploy.sh` -- supports: `deploy`, `restart`, `stop`, `scale N`, `rollback`
 - **Common deploy**: `~/DevOps/common/deploy-app.sh` has `handle_deploy_command` function
-- **Container naming**: New deploy system uses underscores (`cheaperfordrug-api_web_1`), old docker-compose v1 used hyphens (`cheaperfordrug-api-web-1`). After full redeploy, old hyphen-style containers must be manually stopped/removed.
+- **Container naming**: HYPHENS are the correct convention (`cheaperfordrug-api-web-1`), matching docker compose. OLD underscore naming (`cheaperfordrug-api_web_1`) was created by docker-utils.sh `start_container()` and is LEGACY. Fixed 2026-03-01: all code now uses hyphen naming. Legacy underscore containers must be manually stopped/removed after redeploy.
 - **VPN container gotcha**: `scraper-vpn-poland` holds filesystem locks on `resolv.conf` in its network namespace. `docker compose down` may fail to remove it. Fix: `sudo systemctl restart docker` (all containers with `restart: always` come back automatically).
 
 ## Container Inventory (as of 2026-02-23 full redeploy)

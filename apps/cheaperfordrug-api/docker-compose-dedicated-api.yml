@@ -3,9 +3,9 @@
 #
 # - scraper-1, scraper-2: All scraper API endpoints (ports 4201, 4202)
 #
-# Network: host mode
+# Network: host mode (containers share host network stack)
 # Database: PostgreSQL on localhost:5432
-# Redis: localhost:6379/2
+# Redis: 127.0.0.1:6379/2 (NEVER use 172.17.0.1 Docker bridge with host networking)
 
 services:
   # ===========================================================================
@@ -35,7 +35,8 @@ services:
       - /app/tmp:size=100M,mode=1777
     command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4201/up"]
+      # Check both HTTP endpoint AND Redis connectivity
+      test: ["CMD-SHELL", "curl -sf http://localhost:4201/up > /dev/null && ruby -e \"require 'redis'; Redis.new(url: ENV['REDIS_URL'] || 'redis://127.0.0.1:6379/2').ping\" > /dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       start_period: 40s
@@ -75,7 +76,8 @@ services:
       - /app/tmp:size=100M,mode=1777
     command: /bin/bash -c "mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets && exec bundle exec puma -C config/puma.rb"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4202/up"]
+      # Check both HTTP endpoint AND Redis connectivity
+      test: ["CMD-SHELL", "curl -sf http://localhost:4202/up > /dev/null && ruby -e \"require 'redis'; Redis.new(url: ENV['REDIS_URL'] || 'redis://127.0.0.1:6379/2').ping\" > /dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       start_period: 40s

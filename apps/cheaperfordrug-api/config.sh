@@ -67,9 +67,11 @@ export DB_PORT="5432"
 
 # ============================================================================
 # REDIS CONFIGURATION
+# IMPORTANT: Use 127.0.0.1, NOT 172.17.0.1 (Docker bridge).
+# With --network host, containers access Redis on the host directly.
 # ============================================================================
 export REDIS_DB_NUMBER=2               # Dedicated Redis database for API
-export REDIS_URL="redis://localhost:6379/${REDIS_DB_NUMBER}"
+export REDIS_URL="redis://127.0.0.1:6379/${REDIS_DB_NUMBER}"
 
 # ============================================================================
 # DEPLOYMENT CONFIGURATION

@@ -89,7 +89,7 @@ docker-compose exec drug-processor /app/scripts/run-drug-processor.sh
 | `DEPLOYMENT_EMAIL_TO` | Recipient email address | andrzej@webet.pl |
 | `DEPLOYMENT_EMAIL_ENABLED` | Enable/disable emails | true |
 | `SCRAPER_CONTAINER` | Name of scraper container | scraper-vpn-poland |
-| `API_CONTAINER` | Name of API container | cheaperfordrug-api_web_1 |
+| `API_CONTAINER` | Name of API container | cheaperfordrug-api-web-1 |
 
 ## Logs
 

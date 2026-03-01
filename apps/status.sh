@@ -301,7 +301,7 @@ for app_dir in "${app_dirs[@]}"; do
     echo -e "  ${BOLD}Logs:${NC}"
     echo -e "    Location:       ${log_location}"
     echo -e "    Host:           tail -f ${log_location}/production.log"
-    echo -e "    Docker:         docker logs ${APP_NAME}_web_1 -f"
+    echo -e "    Docker:         docker logs ${APP_NAME}-web-1 -f"
 
     echo ""
     echo -e "  ${BOLD}Backups:${NC}"
