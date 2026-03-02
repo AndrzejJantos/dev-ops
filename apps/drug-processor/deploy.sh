@@ -94,7 +94,7 @@ pull_and_sync_repos() {
 
         log_info "Copying Scraper to build context..."
         rm -rf "$BUILD_CONTEXT_DIR/$SCRAPER_SOURCE_DIR"
-        cp -r "$SCRAPER_REPO_DIR" "$BUILD_CONTEXT_DIR/$SCRAPER_SOURCE_DIR"
+        rsync -a --exclude='nordvpn-data' "$SCRAPER_REPO_DIR/" "$BUILD_CONTEXT_DIR/$SCRAPER_SOURCE_DIR/"
         log_success "Scraper synced"
     else
         log_error "Scraper repository not found: $SCRAPER_REPO_DIR"
