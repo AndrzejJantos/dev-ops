@@ -234,7 +234,8 @@ get_or_generate_secret() {
 # Docker image management
 get_running_containers() {
     local app_name="$1"
-    docker ps --filter "name=${app_name}_web" --format "{{.Names}}"
+    # Match both underscore (legacy: app_web_1) and hyphen (compose: app-web-1) naming
+    docker ps --format "{{.Names}}" | grep -E "^${app_name}[-_]web[-_][0-9]+" || true
 }
 
 get_container_count() {

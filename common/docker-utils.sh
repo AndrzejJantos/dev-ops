@@ -721,8 +721,13 @@ rolling_restart() {
 
         log_success "New container is healthy, now switching traffic..."
 
-        # Step 3: Stop old container (only after new one is verified healthy)
-        if docker ps --filter "name=^${container_name}$" --format "{{.Names}}" | grep -q "^${container_name}$"; then
+        # Step 3: Stop old container on the target port (only after new one is verified healthy)
+        # Check both hyphen and underscore naming conventions to handle legacy containers
+        local old_container=$(docker ps --filter "publish=${port}" --format "{{.Names}}" | head -1)
+        if [ -n "$old_container" ]; then
+            log_info "Stopping old container ${old_container} on port ${port}"
+            stop_container "$old_container" 30
+        elif docker ps --filter "name=^${container_name}$" --format "{{.Names}}" | grep -q "^${container_name}$"; then
             log_info "Stopping old container ${container_name}"
             stop_container "$container_name" 30
         fi
