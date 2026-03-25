@@ -88,6 +88,143 @@ run_scraper_deploy() {
 }
 
 # =============================================================================
+# WORKER MANAGEMENT
+# =============================================================================
+
+# Read scraper-config.env and return list of enabled worker container names
+get_enabled_workers() {
+    local config_file="$SCRAPER_REPO_DIR/scraper-config.env"
+    local country_filter="${1:-}"
+
+    if [ ! -f "$config_file" ]; then
+        log_error "Config file not found: $config_file"
+        return 1
+    fi
+
+    grep -E '^ENABLE_WORKER_.*=true' "$config_file" | while IFS='=' read -r key _; do
+        # ENABLE_WORKER_POLAND_1 -> poland 1
+        local stripped="${key#ENABLE_WORKER_}"
+        local num="${stripped##*_}"
+        local country="${stripped%_*}"
+        country=$(echo "$country" | tr '[:upper:]' '[:lower:]')
+
+        if [ -n "$country_filter" ] && [ "$country" != "$country_filter" ]; then
+            continue
+        fi
+
+        echo "product-update-worker-${country}-${num}"
+    done
+}
+
+do_start_workers() {
+    local country_filter="${1:-}"
+    local filter_msg=""
+    [ -n "$country_filter" ] && filter_msg=" for $country_filter"
+
+    log_info "=== Starting Product Update Workers${filter_msg} ==="
+
+    local workers
+    workers=$(get_enabled_workers "$country_filter")
+
+    if [ -z "$workers" ]; then
+        log_warning "No enabled workers found${filter_msg}"
+        log_info "Configure workers in: $SCRAPER_REPO_DIR/scraper-config.env"
+        return 0
+    fi
+
+    local count
+    count=$(echo "$workers" | wc -l | tr -d ' ')
+    log_info "Found $count enabled worker(s)${filter_msg}:"
+    echo "$workers" | while read -r w; do
+        echo "  - $w"
+    done
+    echo ""
+
+    cd "$SCRAPER_REPO_DIR"
+
+    # Ensure required directories exist
+    echo "$workers" | while read -r w; do
+        local country=$(echo "$w" | sed 's/product-update-worker-//' | sed 's/-[0-9]*$//')
+        mkdir -p "logs/$country" "logs/product-worker-${country}-$(echo "$w" | grep -oP '\d+$')" \
+                 "nordvpn-data/$w" 2>/dev/null || true
+    done
+
+    # Start all enabled workers
+    # shellcheck disable=SC2086
+    docker compose up -d $workers
+
+    echo ""
+    log_success "Started $count worker(s)${filter_msg}"
+
+    # Show status
+    docker ps --format 'table {{.Names}}\t{{.Status}}' | grep product-update-worker || true
+}
+
+do_stop_workers() {
+    local country_filter="${1:-}"
+    local filter_msg=""
+    [ -n "$country_filter" ] && filter_msg=" for $country_filter"
+
+    log_info "=== Stopping Product Update Workers${filter_msg} ==="
+
+    cd "$SCRAPER_REPO_DIR"
+
+    if [ -n "$country_filter" ]; then
+        local workers
+        workers=$(docker ps --format '{{.Names}}' | grep "product-update-worker-${country_filter}" || true)
+        if [ -z "$workers" ]; then
+            log_warning "No running workers found${filter_msg}"
+            return 0
+        fi
+        # shellcheck disable=SC2086
+        docker stop $workers
+        log_success "Stopped workers${filter_msg}"
+    else
+        local workers
+        workers=$(docker ps --format '{{.Names}}' | grep "product-update-worker" || true)
+        if [ -z "$workers" ]; then
+            log_warning "No running workers found"
+            return 0
+        fi
+        # shellcheck disable=SC2086
+        docker stop $workers
+        log_success "Stopped all workers"
+    fi
+}
+
+do_rebuild_workers() {
+    local country_filter="${1:-}"
+    local filter_msg=""
+    [ -n "$country_filter" ] && filter_msg=" for $country_filter"
+
+    log_info "=== Rebuilding Product Update Workers${filter_msg} ==="
+
+    check_requirements
+    pull_latest_code
+
+    cd "$SCRAPER_REPO_DIR"
+
+    # Rebuild the shared scraper image
+    log_info "Building Docker image..."
+    docker compose build product-update-worker-poland-1 2>&1 | tail -5
+    log_success "Image rebuilt"
+
+    # Stop existing workers
+    do_stop_workers "$country_filter"
+
+    # Remove dead containers
+    log_info "Cleaning dead containers..."
+    sudo find /var/lib/docker/containers/ -name 'resolv.conf' -exec chattr -i {} \; 2>/dev/null || true
+    docker ps -a --filter 'status=dead' --format '{{.Names}}' | grep product-update-worker | xargs docker rm -f 2>/dev/null || true
+
+    # Start enabled workers
+    do_start_workers "$country_filter"
+
+    echo ""
+    log_success "=== Worker Rebuild Complete${filter_msg} ==="
+}
+
+# =============================================================================
 # COMMANDS
 # =============================================================================
 
@@ -148,16 +285,18 @@ show_usage() {
     echo "  logs [container]    View logs (all or specific container)"
     echo "  help                Show this help"
     echo ""
-    echo "Country-specific commands (passed to scraper deploy.sh):"
-    echo "  start-<country>           Start VPN + worker for country"
-    echo "  stop-<country>            Stop VPN + worker for country"
-    echo "  start-workers-<country>   Start only worker for country"
-    echo "  stop-workers-<country>    Stop only worker for country"
+    echo "Worker commands (reads ENABLE_WORKER_* from scraper-config.env):"
+    echo "  start-workers [country]     Start enabled product update workers"
+    echo "  stop-workers [country]      Stop product update workers"
+    echo "  rebuild-workers [country]   Pull code, rebuild image, restart workers"
     echo ""
     echo "Examples:"
-    echo "  $0 deploy                 # Full deployment (pull + start)"
-    echo "  $0 start-poland           # Start Poland VPN + worker"
-    echo "  $0 status                 # Show all container status"
+    echo "  $0 deploy                   # Full deployment (pull + start)"
+    echo "  $0 rebuild-workers          # Rebuild and restart all enabled workers"
+    echo "  $0 rebuild-workers poland   # Rebuild and restart only Poland workers"
+    echo "  $0 start-workers italy      # Start only Italy workers"
+    echo "  $0 stop-workers             # Stop all workers"
+    echo "  $0 status                   # Show all container status"
     echo ""
     echo "Configuration:"
     echo "  Workers config: $SCRAPER_REPO_DIR/scraper-config.env"
@@ -187,6 +326,17 @@ case "${1:-help}" in
         ;;
     logs)
         do_logs "${2:-}"
+        ;;
+    start-workers)
+        check_requirements
+        do_start_workers "${2:-}"
+        ;;
+    stop-workers)
+        check_requirements
+        do_stop_workers "${2:-}"
+        ;;
+    rebuild-workers)
+        do_rebuild_workers "${2:-}"
         ;;
     rebuild|cleanup|countries)
         check_requirements
