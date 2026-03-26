@@ -235,9 +235,15 @@ do_deploy() {
     check_requirements
     pull_latest_code
 
+    cd "$SCRAPER_REPO_DIR"
+
+    # Build Docker image first
+    log_info "Building Docker image..."
+    docker compose build --quiet 2>&1 | tail -5
+    log_success "Docker image built"
+
     # Force kill all scraper containers to avoid immutable resolv.conf issues from NordVPN
     log_info "Stopping and removing all scraper containers..."
-    cd "$SCRAPER_REPO_DIR"
     docker compose down --remove-orphans 2>/dev/null || true
 
     # Clean up any stuck containers (NordVPN sets immutable flag on resolv.conf)
@@ -253,11 +259,58 @@ do_deploy() {
         done
     fi
 
-    log_info "Starting all enabled containers..."
-    run_scraper_deploy start
+    # Get list of enabled services from scraper-config.env
+    local config_file="$SCRAPER_REPO_DIR/scraper-config.env"
+    if [ ! -f "$config_file" ]; then
+        log_error "Config file not found: $config_file"
+        exit 1
+    fi
+    source "$config_file"
+
+    local services=()
+
+    # Collect enabled VPN containers
+    for key in $(env | grep -oP '^ENABLE_VPN_\w+(?==true)'); do
+        local country="${key#ENABLE_VPN_}"
+        country=$(echo "$country" | tr '[:upper:]' '[:lower:]')
+        services+=("scraper-vpn-${country}")
+    done
+
+    # Collect enabled worker containers
+    for key in $(env | grep -oP '^ENABLE_WORKER_\w+(?==true)'); do
+        local stripped="${key#ENABLE_WORKER_}"
+        local num="${stripped##*_}"
+        local country="${stripped%_*}"
+        country=$(echo "$country" | tr '[:upper:]' '[:lower:]')
+        services+=("product-update-worker-${country}-${num}")
+    done
+
+    if [ ${#services[@]} -eq 0 ]; then
+        log_error "No services enabled in $config_file"
+        exit 1
+    fi
+
+    local total=${#services[@]}
+    log_info "Starting $total containers with 1-minute delay between each..."
+    echo ""
+
+    local current=0
+    for svc in "${services[@]}"; do
+        current=$((current + 1))
+        log_info "[$current/$total] Starting $svc..."
+        docker compose up -d "$svc" 2>&1 | grep -v "^$" || true
+
+        if [ $current -lt $total ]; then
+            log_info "Waiting 60s before next container..."
+            sleep 60
+        fi
+    done
 
     echo ""
-    log_success "=== Scraper Deployment Complete ==="
+    log_info "All $total containers started. Checking status..."
+    docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E '(scraper-vpn-|product-update-worker-)' | sort
+    echo ""
+    log_success "=== Scraper Deployment Complete ($total containers) ==="
 }
 
 do_start() {
