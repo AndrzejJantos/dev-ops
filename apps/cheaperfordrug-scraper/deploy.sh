@@ -235,6 +235,24 @@ do_deploy() {
     check_requirements
     pull_latest_code
 
+    # Force kill all scraper containers to avoid immutable resolv.conf issues from NordVPN
+    log_info "Stopping and removing all scraper containers..."
+    cd "$SCRAPER_REPO_DIR"
+    docker compose down --remove-orphans 2>/dev/null || true
+
+    # Clean up any stuck containers (NordVPN sets immutable flag on resolv.conf)
+    local stuck_ids=$(docker ps -aq --filter "status=removing" --filter "status=dead" 2>/dev/null)
+    if [ -n "$stuck_ids" ]; then
+        log_warning "Cleaning up stuck containers..."
+        for cid in $stuck_ids; do
+            local full_id=$(docker inspect -f '{{.ID}}' "$cid" 2>/dev/null || echo "")
+            if [ -n "$full_id" ]; then
+                sudo chattr -i "/var/lib/docker/containers/${full_id}/resolv.conf" 2>/dev/null || true
+            fi
+            docker rm -f "$cid" 2>/dev/null || true
+        done
+    fi
+
     log_info "Starting all enabled containers..."
     run_scraper_deploy start
 
