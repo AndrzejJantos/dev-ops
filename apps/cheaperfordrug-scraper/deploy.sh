@@ -259,31 +259,30 @@ do_deploy() {
         done
     fi
 
-    # Get list of enabled services from scraper-config.env
+    # Get list of enabled services by parsing scraper-config.env directly
     local config_file="$SCRAPER_REPO_DIR/scraper-config.env"
     if [ ! -f "$config_file" ]; then
         log_error "Config file not found: $config_file"
         exit 1
     fi
-    source "$config_file"
 
     local services=()
 
     # Collect enabled VPN containers
-    for key in $(env | grep -oP '^ENABLE_VPN_\w+(?==true)'); do
+    while IFS='=' read -r key _; do
         local country="${key#ENABLE_VPN_}"
         country=$(echo "$country" | tr '[:upper:]' '[:lower:]')
         services+=("scraper-vpn-${country}")
-    done
+    done < <(grep -E '^ENABLE_VPN_\w+=true' "$config_file")
 
     # Collect enabled worker containers
-    for key in $(env | grep -oP '^ENABLE_WORKER_\w+(?==true)'); do
+    while IFS='=' read -r key _; do
         local stripped="${key#ENABLE_WORKER_}"
         local num="${stripped##*_}"
         local country="${stripped%_*}"
         country=$(echo "$country" | tr '[:upper:]' '[:lower:]')
         services+=("product-update-worker-${country}-${num}")
-    done
+    done < <(grep -E '^ENABLE_WORKER_\w+=true' "$config_file")
 
     if [ ${#services[@]} -eq 0 ]; then
         log_error "No services enabled in $config_file"
