@@ -228,6 +228,22 @@ do_rebuild_workers() {
 # COMMANDS
 # =============================================================================
 
+# Remove dead/stuck containers caused by NordVPN's immutable resolv.conf
+cleanup_dead_containers() {
+    local stuck_ids=$(docker ps -aq --filter "status=removing" --filter "status=dead" 2>/dev/null)
+    if [ -n "$stuck_ids" ]; then
+        log_warning "Cleaning up dead/stuck containers..."
+        for cid in $stuck_ids; do
+            local full_id=$(docker inspect -f '{{.ID}}' "$cid" 2>/dev/null || echo "")
+            if [ -n "$full_id" ]; then
+                sudo chattr -i "/var/lib/docker/containers/${full_id}/resolv.conf" 2>/dev/null || true
+            fi
+            docker rm -f "$cid" 2>/dev/null || true
+        done
+        log_success "Dead containers removed"
+    fi
+}
+
 do_deploy() {
     log_info "=== Deploying CheaperForDrug Scraper ==="
     echo ""
@@ -243,21 +259,14 @@ do_deploy() {
     log_success "Docker image built"
 
     # Force kill all scraper containers to avoid immutable resolv.conf issues from NordVPN
+    # Clean up dead/stuck containers BEFORE docker compose down (they block name reuse)
+    cleanup_dead_containers
+
     log_info "Stopping and removing all scraper containers..."
     docker compose down --remove-orphans 2>/dev/null || true
 
-    # Clean up any stuck containers (NordVPN sets immutable flag on resolv.conf)
-    local stuck_ids=$(docker ps -aq --filter "status=removing" --filter "status=dead" 2>/dev/null)
-    if [ -n "$stuck_ids" ]; then
-        log_warning "Cleaning up stuck containers..."
-        for cid in $stuck_ids; do
-            local full_id=$(docker inspect -f '{{.ID}}' "$cid" 2>/dev/null || echo "")
-            if [ -n "$full_id" ]; then
-                sudo chattr -i "/var/lib/docker/containers/${full_id}/resolv.conf" 2>/dev/null || true
-            fi
-            docker rm -f "$cid" 2>/dev/null || true
-        done
-    fi
+    # Clean again after docker compose down (it may leave new dead containers)
+    cleanup_dead_containers
 
     # Get list of enabled services by parsing scraper-config.env directly
     local config_file="$SCRAPER_REPO_DIR/scraper-config.env"
