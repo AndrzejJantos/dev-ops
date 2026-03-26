@@ -305,6 +305,20 @@ do_deploy() {
     local current=0
     for svc in "${services[@]}"; do
         current=$((current + 1))
+
+        # Remove any dead/stuck container holding this name
+        local existing=$(docker ps -aq --filter "name=^${svc}$" --filter "status=dead" --filter "status=exited" --filter "status=removing" 2>/dev/null)
+        if [ -n "$existing" ]; then
+            log_warning "Removing stuck container $svc before starting..."
+            for cid in $existing; do
+                local full_id=$(docker inspect -f '{{.ID}}' "$cid" 2>/dev/null || echo "")
+                if [ -n "$full_id" ]; then
+                    sudo chattr -i "/var/lib/docker/containers/${full_id}/resolv.conf" 2>/dev/null || true
+                fi
+                docker rm -f "$cid" 2>/dev/null || true
+            done
+        fi
+
         log_info "[$current/$total] Starting $svc..."
         docker compose up -d "$svc" 2>&1 | grep -v "^$" || true
 
