@@ -277,14 +277,9 @@ do_deploy() {
 
     local services=()
 
-    # Collect enabled VPN containers
-    while IFS='=' read -r key _; do
-        local country="${key#ENABLE_VPN_}"
-        country=$(echo "$country" | tr '[:upper:]' '[:lower:]')
-        services+=("scraper-vpn-${country}")
-    done < <(grep -E '^ENABLE_VPN_\w+=true' "$config_file")
-
-    # Collect enabled worker containers
+    # Only start product-update-workers during deploy.
+    # VPN containers are managed by the cron orchestrator (scraper-orchestrator.sh)
+    # which starts/stops them on their scheduled days to avoid CPU load spikes.
     while IFS='=' read -r key _; do
         local stripped="${key#ENABLE_WORKER_}"
         local num="${stripped##*_}"
@@ -294,12 +289,13 @@ do_deploy() {
     done < <(grep -E '^ENABLE_WORKER_\w+=true' "$config_file")
 
     if [ ${#services[@]} -eq 0 ]; then
-        log_error "No services enabled in $config_file"
+        log_error "No workers enabled in $config_file"
         exit 1
     fi
 
     local total=${#services[@]}
-    log_info "Starting $total containers with 1-minute delay between each..."
+    log_info "Starting $total worker containers with 1-minute delay between each..."
+    log_info "(VPN containers are managed by cron orchestrator - not started during deploy)"
     echo ""
 
     local current=0
@@ -329,10 +325,10 @@ do_deploy() {
     done
 
     echo ""
-    log_info "All $total containers started. Checking status..."
-    docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E '(scraper-vpn-|product-update-worker-)' | sort
+    log_info "All $total workers started. Checking status..."
+    docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'product-update-worker-' | sort
     echo ""
-    log_success "=== Scraper Deployment Complete ($total containers) ==="
+    log_success "=== Scraper Deployment Complete ($total workers, VPN managed by cron) ==="
 }
 
 do_start() {
